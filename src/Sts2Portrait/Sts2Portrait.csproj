@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <AssemblyName>Sts2Portrait</AssemblyName>
+    <RootNamespace>Sts2Portrait</RootNamespace>
+    <!-- Oyun dizini: dotnet build -p:GameDir="..." ile geçersiz kılınabilir -->
+    <GameDir Condition="'$(GameDir)' == ''">/home/whispersgone/Downloads/Slay-the-Spire-2-AnkerGames/Slay the Spire 2</GameDir>
+    <GameData>$(GameDir)/data_sts2_windows_x86_64</GameData>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Oyunla gelen assembly'ler — mod paketine kopyalanmaz (Private=false) -->
+    <Reference Include="sts2">
+      <HintPath>$(GameData)/sts2.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GodotSharp">
+      <HintPath>$(GameData)/GodotSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameData)/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

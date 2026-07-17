@@ -1,0 +1,19 @@
+# Decompile çıktıları ve oyun verisi — ASLA commit edilmez
+notes/sts2-src/
+notes/pck-project/
+vendor/
+tools/
+proton-prefix/
+
+# Build çıktıları
+**/bin/
+**/obj/
+
+# Oyun assembly'leri / paketleri / APK'lar (kullanıcı sağlar)
+*.pck
+*.apk
+# Not: manifest/Sts2Portrait.json commit EDİLİR; oyun DLL'leri edilmez
+data_sts2_windows_x86_64/
+sts2.dll
+GodotSharp.dll
+0Harmony.dll
