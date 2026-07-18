@@ -45,6 +45,11 @@ public static class PortraitMod
                     Log($"WARN patch skipped [{type?.Name}]: {e.InnerException?.Message ?? e.Message}");
                 }
             }
+            // Our own portrait launcher — replaces the reused landscape launcher UI when present
+            // (Android). No-op on PC where the launcher type doesn't exist.
+            try { Launcher.PortraitLauncher.TryInstall(harmony); }
+            catch (System.Exception e) { Log("launcher install: " + e.Message); }
+
             if (ok > 0) _done = true;   // only latch once patches actually applied (game present)
             Log($"initialized — {ok} patch class(es) applied, {fail} skipped; " +
                 $"{harmony.GetPatchedMethods().Count()} method(s) patched");
