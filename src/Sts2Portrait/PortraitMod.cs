@@ -49,6 +49,8 @@ public static class PortraitMod
             // (Android). No-op on PC where the launcher type doesn't exist.
             try { Launcher.PortraitLauncher.TryInstall(harmony); }
             catch (System.Exception e) { Log("launcher install: " + e.Message); }
+            try { Launcher.WarmupRestyle.TryInstall(harmony); }
+            catch (System.Exception e) { Log("warmup restyle install: " + e.Message); }
 
             if (ok > 0) _done = true;   // only latch once patches actually applied (game present)
             Log($"initialized — {ok} patch class(es) applied, {fail} skipped; " +
