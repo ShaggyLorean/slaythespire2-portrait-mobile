@@ -1,27 +1,14 @@
-#!/usr/bin/env python3
 """
-Build a standalone, portrait "Slay the Spire 2" Android app.
+Assemble the portrait Android app.
 
-Same idea as balatro-portrait-mobile: this repo ships only our patch code. You bring
-the two things we're not allowed to redistribute:
+You provide two things this repo cannot ship: a community StS2 mobile launcher APK
+(the engine runtime) and your own Slay the Spire 2 install. The script builds the
+portrait mod, injects it into the launcher's managed entry, rebrands the APK
+(name, icon, portrait orientation) and signs it.
 
-  1. a community StS2 mobile launcher APK  -> the ARM engine runtime (Godot fork +
-     FMOD + Spine + .NET), which can't be rebuilt from scratch without proprietary SDKs.
-  2. your own Slay the Spire 2 install     -> the reference assemblies the mod links
-     against (and the game files you copy to the phone / it downloads at first run).
+    python3 build.py --launcher-apk /path/StS2Launcher.apk --game-dir "/path/Slay the Spire 2"
 
-We never touch the game logic. We inject a call to our portrait mod into the launcher's
-own managed entry point, drop our mod beside it, and rebrand the wrapper to a portrait
-app literally called "Slay the Spire 2". Nothing of the game or the launcher is
-redistributed by this repo.
-
-Usage:
-    python3 build.py --launcher-apk /path/StS2Launcher.apk \
-                     --game-dir "/path/Slay the Spire 2" \
-                     [--app-name "Slay the Spire 2"] [--output dist/SlayTheSpire2-Portrait.apk]
-
-Requires: java, dotnet 9 SDK. apktool.jar + uber-apk-signer.jar are in tools/bin
-(run tools/fetch-tools.sh once if missing).
+Needs python3, java 11+ and the .NET 9 SDK. Run tools/fetch-tools.sh once first.
 """
 import argparse, os, re, shutil, subprocess, sys, tempfile, zipfile
 from pathlib import Path
