@@ -32,7 +32,15 @@ public static class MapBgSeamFixPatch
             tr.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
             tr.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
         }
-        PortraitMod.Log("map bg: sections -> KeepAspectCovered (dikişler kapandı)");
+        // Parşömen dikeyde sadece üst yarıyı kaplıyor; MapMid'i uzatıp alt node'ları da
+        // parşömenle kapla (node'lar ayrı olduğundan hizalama bozulmaz).
+        var mid = bg.GetNodeOrNull<TextureRect>("MapMid");
+        if (mid is not null)
+        {
+            mid.CustomMinimumSize = new Vector2(0, 2400f); // 1080 → 2400 (VBox ~1320 uzar)
+            mid.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+        }
+        PortraitMod.Log("map bg: KeepAspectCovered + MapMid uzatıldı");
     }
 }
 
@@ -66,35 +74,19 @@ public static class MapBgFillPatch
             if (!PortraitConfig.IsPortrait(PortraitConfig.CanvasSize)) return;
             if (screen.GetNodeOrNull(FillName) is not null) return;
 
-            // Dikey mağara gradyanı: üstte hafif daha aydınlık, altta koyulaşan koyu yeşil-teal.
             // Görünür koyu mağara tonu (siyah değil) — parşömen ötesi alan kasıtlı dursun.
-            var grad = new Gradient();
-            grad.SetColor(0, new Color(0.13f, 0.15f, 0.12f));  // üst
-            grad.SetColor(1, new Color(0.06f, 0.07f, 0.055f)); // alt
-            grad.AddPoint(0.5f, new Color(0.095f, 0.11f, 0.085f)); // orta
-
-            var gtex = new GradientTexture2D
-            {
-                Gradient = grad,
-                Fill = GradientTexture2D.FillEnum.Linear,
-                FillFrom = new Vector2(0.5f, 0f),
-                FillTo = new Vector2(0.5f, 1f),
-                Width = 8, Height = 256,
-            };
-
-            var fill = new TextureRect
+            // ColorRect garanti render eder (GradientTexture2D bazen görünmüyordu).
+            var fill = new ColorRect
             {
                 Name = FillName,
-                Texture = gtex,
-                StretchMode = TextureRect.StretchModeEnum.Scale,
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                Color = new Color(0.11f, 0.13f, 0.10f), // koyu yeşil-kahve mağara ~srgb(28,33,26)
                 AnchorRight = 1f, AnchorBottom = 1f,
                 OffsetLeft = 0, OffsetTop = 0, OffsetRight = 0, OffsetBottom = 0,
                 MouseFilter = Control.MouseFilterEnum.Ignore,
             };
             screen.AddChild(fill);
             screen.MoveChild(fill, 0); // en arkaya (TheMap ve legend önde kalır)
-            PortraitMod.Log("map bg fill: gradient added");
+            PortraitMod.Log("map bg fill: colorrect added");
         };
     }
 }

@@ -60,7 +60,7 @@ public static class TopBarReflow
         {
             TopBarLayout.Flatten(timer);
             float tw = TopBarLayout.WidthOr(timer, 164f);
-            timer.Position = new Vector2((leftEnd + rightStart) * 0.5f - tw * 0.5f, TopBarLayout.Row1Y);
+            timer.GlobalPosition = new Vector2((leftEnd + rightStart) * 0.5f - tw * 0.5f, TopBarLayout.Row1Y);
         }
 
         // --- Satır 2 sağ: Boss/Floor/Room ikonları (sağdan içe) ---
@@ -75,11 +75,13 @@ public static class TopBarReflow
         PortraitMod.Log($"topbar reflow: W={W} leftEnd={leftEnd:F0} rightStart={rightStart:F0}");
     }
 
+    // NOT: GlobalPosition kullanıyoruz — bazı öğelerin (ör. PotionContainer'ın PotionMarginifier'ı)
+    // ara parent'ı var; Position parent-relative olduğundan kayıyor. GlobalPosition mutlaktır.
     private static void PlaceRow1(Control c, ref float x, float fallbackW)
     {
         if (c is null) return;
         TopBarLayout.Flatten(c);
-        c.Position = new Vector2(x, TopBarLayout.Row1Y);
+        c.GlobalPosition = new Vector2(x, TopBarLayout.Row1Y);
         x += TopBarLayout.WidthOr(c, fallbackW) + TopBarLayout.LeftGap;
     }
 
@@ -88,7 +90,7 @@ public static class TopBarReflow
         if (c is null) return;
         TopBarLayout.Flatten(c);
         rx -= TopBarLayout.BtnW;
-        c.Position = new Vector2(rx, TopBarLayout.Row1Y);
+        c.GlobalPosition = new Vector2(rx, TopBarLayout.Row1Y);
         rx -= TopBarLayout.BtnGap;
     }
 
@@ -97,7 +99,7 @@ public static class TopBarReflow
         if (c is null || !c.Visible) return;
         TopBarLayout.Flatten(c);
         rx -= TopBarLayout.IconW;
-        c.Position = new Vector2(rx, TopBarLayout.Row2Y);
+        c.GlobalPosition = new Vector2(rx, TopBarLayout.Row2Y);
         rx -= TopBarLayout.IconGap;
     }
 
@@ -106,24 +108,23 @@ public static class TopBarReflow
     {
         if (pc is null) return;
         TopBarLayout.Flatten(pc);
-        pc.Position = new Vector2(startX, TopBarLayout.Row2Y);
+        pc.GlobalPosition = new Vector2(startX, TopBarLayout.Row2Y);
 
-        var holdersRoot = pc.GetNodeOrNull<Control>("MarginContainer/PotionHolders");
         var holders = Traverse.Create(pc).Field("_holders").GetValue<IList>();
         int n = holders?.Count ?? 0;
-        if (n == 0 || holdersRoot is null) return;
+        if (n == 0) return;
 
         float avail = endX - startX;
         float step = Mathf.Min(TopBarLayout.SlotW + TopBarLayout.SlotGap, avail / n);
         step = Mathf.Max(step, TopBarLayout.SlotW * 0.85f);
 
-        holdersRoot.Position = Vector2.Zero;
+        // Her holder'ı MUTLAK global konuma yerleştir (parent margin'lerinden bağımsız).
         for (int i = 0; i < n; i++)
         {
             if (holders[i] is Control h)
             {
                 TopBarLayout.Flatten(h);
-                h.Position = new Vector2(i * step, 0f);
+                h.GlobalPosition = new Vector2(startX + i * step, TopBarLayout.Row2Y + 4f);
             }
         }
     }
