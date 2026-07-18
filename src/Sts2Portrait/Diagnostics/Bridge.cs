@@ -94,6 +94,7 @@ public static class Bridge
                 case "move": Move(F(p, 1), F(p, 2)); WriteDone(cmd, "ok"); break;
                 case "drag": Drag(F(p, 1), F(p, 2), F(p, 3), F(p, 4)); WriteDone(cmd, "ok"); break;
                 case "key": KeyPress(p[1]); WriteDone(cmd, "ok"); break;
+                case "dev": DevCmd(cmd.Substring(3).Trim()); break;
                 default: WriteDone(cmd, "unknown"); break;
             }
         }
@@ -101,6 +102,19 @@ public static class Bridge
     }
 
     private static float F(string[] p, int i) => float.Parse(p[i], CultureInfo.InvariantCulture);
+
+    // Dev console komutunu doğrudan çalıştır (yazmaya gerek yok). Örn: "dev room boss", "dev win".
+    private static void DevCmd(string command)
+    {
+        try
+        {
+            var console = new MegaCrit.Sts2.Core.DevConsole.DevConsole(true);
+            var result = console.ProcessCommand(command);
+            WriteDone("dev " + command, result.ToString());
+            PortraitMod.Log($"dev cmd '{command}' -> {result}");
+        }
+        catch (Exception e) { WriteDone("dev " + command, "ERR: " + e.Message); }
+    }
 
     private static void Shot(string name)
     {
@@ -144,6 +158,34 @@ public static class Bridge
                 Input.ParseInputEvent(new InputEventMouseMotion { Position = mid, GlobalPosition = mid, ButtonMask = MouseButtonMask.Left })));
         }
         _pending.Add((_time + 0.04 * 7, () => Press(b, false)));
+    }
+
+    // --- GERÇEK touch event'leri (mouse değil) — mobil davranışı PC'de test etmek için ---
+    private static void Tap(float x, float y)
+    {
+        var pos = new Vector2(x, y);
+        TouchPress(pos, true);
+        _pending.Add((_time + 0.09, () => TouchPress(pos, false)));
+    }
+
+    private static void TouchPress(Vector2 pos, bool pressed) =>
+        Input.ParseInputEvent(new InputEventScreenTouch { Index = 0, Pressed = pressed, Position = pos });
+
+    private static void TouchDrag(float x1, float y1, float x2, float y2)
+    {
+        var a = new Vector2(x1, y1);
+        var b = new Vector2(x2, y2);
+        TouchPress(a, true);
+        var prev = a;
+        for (int i = 1; i <= 8; i++)
+        {
+            var mid = a.Lerp(b, i / 8f);
+            var from = prev;
+            _pending.Add((_time + 0.04 * i, () =>
+                Input.ParseInputEvent(new InputEventScreenDrag { Index = 0, Position = mid, Relative = mid - from })));
+            prev = mid;
+        }
+        _pending.Add((_time + 0.04 * 9, () => TouchPress(b, false)));
     }
 
     private static void KeyPress(string keyName)

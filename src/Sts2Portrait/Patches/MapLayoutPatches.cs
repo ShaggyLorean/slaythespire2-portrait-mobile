@@ -5,6 +5,48 @@ using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 namespace Sts2Portrait.Patches;
 
 /// <summary>
+/// KÖK SEBEP: map_screen.tscn, MapTop/MapMid/MapBot'a stretch_mode=KeepAspectCentered veriyor.
+/// Portrait genişliğinde (~1129) 2036x1440 parşömen 1129x799'a aspect-fit edilip 1080 slot'ta
+/// ORTALANIYOR → her bölümün üst/altında ~141px şeffaf bant → bölümler arası ~281px SİYAH gap.
+/// FIX: KeepAspectCovered — texture 1080 yüksekliği tam kaplar (landscape'in ürettiği 1527x1080 ile
+/// aynı), yırtık yan kenarlar kırpılır, komşu opak kenarlar dikişsiz buluşur → sürekli parşömen.
+/// Node-güvenli: sadece TextureRect'in nasıl boyandığını değiştirir, hiçbir node geometrisine dokunmaz.
+/// </summary>
+[HarmonyPatch(typeof(NMapBg), "_Ready")]
+public static class MapBgSeamFixPatch
+{
+    private static readonly string[] Sections = { "MapTop", "MapMid", "MapBot" };
+
+    public static void Postfix(NMapBg __instance)
+    {
+        if (!PortraitConfig.IsPortrait(PortraitConfig.CanvasSize)) return;
+        ApplyCovered(__instance);
+    }
+
+    public static void ApplyCovered(NMapBg bg)
+    {
+        foreach (var name in Sections)
+        {
+            var tr = bg.GetNodeOrNull<TextureRect>(name);
+            if (tr is null) continue;
+            tr.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
+            tr.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+        }
+        PortraitMod.Log("map bg: sections -> KeepAspectCovered (dikişler kapandı)");
+    }
+}
+
+[HarmonyPatch(typeof(NMapBg), "OnWindowChange")]
+public static class MapBgSeamReassertPatch
+{
+    public static void Postfix(NMapBg __instance)
+    {
+        if (!PortraitConfig.IsPortrait(PortraitConfig.CanvasSize)) return;
+        MapBgSeamFixPatch.ApplyCovered(__instance);
+    }
+}
+
+/// <summary>
 /// Harita parşömen scroll'u yatay tasarlandığından dikey ekranda etrafı/altı kapkara kalıyor.
 /// Haritanın EN ARKASINA tam-ekran, KAYMAYAN, oyunun mağara temasına uygun bir DİKEY GRADYAN
 /// ekliyoruz → siyah kaybolur, yamalı görünmez, kasıtlı bir mağara zemini gibi durur.
@@ -25,10 +67,11 @@ public static class MapBgFillPatch
             if (screen.GetNodeOrNull(FillName) is not null) return;
 
             // Dikey mağara gradyanı: üstte hafif daha aydınlık, altta koyulaşan koyu yeşil-teal.
+            // Görünür koyu mağara tonu (siyah değil) — parşömen ötesi alan kasıtlı dursun.
             var grad = new Gradient();
-            grad.SetColor(0, new Color(0.06f, 0.10f, 0.11f));  // üst
-            grad.SetColor(1, new Color(0.02f, 0.045f, 0.05f)); // alt
-            grad.AddPoint(0.5f, new Color(0.04f, 0.07f, 0.075f)); // orta
+            grad.SetColor(0, new Color(0.13f, 0.15f, 0.12f));  // üst
+            grad.SetColor(1, new Color(0.06f, 0.07f, 0.055f)); // alt
+            grad.AddPoint(0.5f, new Color(0.095f, 0.11f, 0.085f)); // orta
 
             var gtex = new GradientTexture2D
             {
