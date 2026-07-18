@@ -7,6 +7,9 @@ of punch hole cameras, a full screen shop, bigger cards, buttons that stay on
 screen, and a launcher that installs your own game files and then boots straight
 into the game.
 
+This is a work in progress. The game is in early access and so is this mod,
+expect rough edges and report what you hit.
+
 **Jump to:**
 [Install](#install) ·
 [First run](#first-run) ·
@@ -16,6 +19,27 @@ into the game.
 [Planned](#planned) ·
 [Troubleshooting](#troubleshooting) ·
 [Credits](#credits)
+
+## Demo
+
+<p align="center">
+  <img src="docs/demo.gif" width="320" alt="demo"/>
+</p>
+
+## Screenshots
+
+<table align="center">
+<tr>
+  <td><img src="docs/launcher.png" width="280"/></td>
+  <td><img src="docs/menu.png" width="280"/></td>
+  <td><img src="docs/map.png" width="280"/></td>
+</tr>
+<tr>
+  <td><img src="docs/combat.png" width="280"/></td>
+  <td><img src="docs/cards.png" width="280"/></td>
+  <td><img src="docs/shaders.png" width="280"/></td>
+</tr>
+</table>
 
 ## What you need
 
