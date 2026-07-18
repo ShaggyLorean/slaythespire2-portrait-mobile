@@ -77,3 +77,7 @@ Merkezi ayarlar: `PortraitConfig.cs` + her patch sınıfının başındaki sabit
 - **Teslimat**: README.md (yasal duruş + iki Android yolu + sürüm uyarısı), scripts/android-repack.sh
   (apktool -s, realpath guard, hiçbir şey indirmez/rehost etmez). Kişisel oyun yolu repo'dan temizlendi
   (scripts/local.env git-ignored; csproj GameDir zorunlu, net hata mesajı).
+- **Son ekran taraması**: RestSite bg cover (üst siyah bant giderildi, sanat-merkezi sabit ölçek);
+  Event metin bloğu ortalandı (800px blok landscape'te x=526'daydı, sağdan taşıyordu — Title-parent
+  yöntemiyle tüm event layout'larında jenerik); hazine odası vanilya spot-ışık estetiği (dokunulmadı);
+  potion popup tap ✓ (Drink/Discard + tooltip ekran içinde). Toplam 25 patch sınıfı, 0 atlanan.
