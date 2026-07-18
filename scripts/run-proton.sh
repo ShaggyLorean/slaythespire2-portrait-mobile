@@ -7,7 +7,7 @@ GAME_DIR="${GAME_DIR:-/home/whispersgone/Downloads/Slay-the-Spire-2-AnkerGames/S
 EXE="$GAME_DIR/SlayTheSpire2.exe"
 PROTON="${PROTON:-$HOME/.steam/steam/compatibilitytools.d/GE-Proton11-1/proton}"
 PREFIX="${PREFIX:-$HOME/sts2-portrait/proton-prefix}"
-LOGDIR="${LOGDIR:-/tmp/claude-1000/-home-whispersgone/d17e17a8-955d-4d3d-a8a1-06a439a9f294/scratchpad}"
+LOGDIR="${LOGDIR:-$HOME/sts2-portrait/shots}"
 
 mkdir -p "$PREFIX"
 

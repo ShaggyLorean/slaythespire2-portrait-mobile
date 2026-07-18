@@ -2,7 +2,7 @@
 # Ortak yardımcılar. Diğer scriptler `source` eder.
 REPO="${REPO:-$HOME/sts2-portrait}"
 GAME="${GAME:-/home/whispersgone/Downloads/Slay-the-Spire-2-AnkerGames/Slay the Spire 2}"
-SCRATCH="${SCRATCH:-/tmp/claude-1000/-home-whispersgone/d17e17a8-955d-4d3d-a8a1-06a439a9f294/scratchpad}"
+SCRATCH="${SCRATCH:-$HOME/sts2-portrait/shots}"
 PREFIX="$HOME/sts2-portrait/proton-prefix"
 GLOG="$PREFIX/pfx/drive_c/users/steamuser/AppData/Roaming/SlayTheSpire2/logs/godot.log"
 export DOTNET_ROOT="$HOME/.dotnet"
@@ -20,17 +20,26 @@ sts2_install() {
 }
 
 sts2_kill() {
-  # Oyunu + crashpad'i öldür. Crashpad kalırsa sonraki açılış çökebilir → onu da öldür.
+  # Oyunu + proton wrapper + crashpad'i öldür. Çift-instance'ı önlemek için proton
+  # process GROUP'unu öldürüp HEM game HEM proton'un öldüğünü doğrula.
   # DİKKAT: 'wineserver -k' KULLANMA — tekrarlı çağrı prefix'i bozuyor (çökme cascade'i).
+  local pg
+  for pid in $(pgrep -f "GE-Proton11-1/proton run" 2>/dev/null); do
+    pg=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')
+    [ -n "$pg" ] && kill -9 -"$pg" 2>/dev/null
+  done
   pkill -9 -f "SlayTheSpire2.exe" 2>/dev/null || true
   pkill -9 -f "crashpad_handler.exe" 2>/dev/null || true
   pkill -9 -f "GE-Proton11-1/proton run" 2>/dev/null || true
-  pkill -9 -f "reaper.*SlayTheSpire2" 2>/dev/null || true
-  for i in $(seq 1 30); do
-    pgrep -f "SlayTheSpire2.exe --rendering" >/dev/null 2>&1 || break
+  # HEM game HEM proton gerçekten ölene kadar bekle (comm-tabanlı, self-match yok)
+  for i in $(seq 1 40); do
+    local g p
+    g=$(ps -eo comm 2>/dev/null | grep -c '^SlayTheSpire2')
+    p=$(ps -eo args 2>/dev/null | grep 'proton run' | grep -v grep | grep -c 'SlayThe')
+    [ "$g" = "0" ] && [ "$p" = "0" ] && break
     sleep 0.5
   done
-  sleep 2
+  sleep 1
 }
 
 # Modun yüklediği build mvid'ini logdan oku (freshness doğrulama)

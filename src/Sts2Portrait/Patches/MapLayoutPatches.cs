@@ -5,9 +5,10 @@ using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 namespace Sts2Portrait.Patches;
 
 /// <summary>
-/// Harita arka planı (mağara) dikeyde sadece üst ~%50'yi kaplıyor, altı kapkara.
-/// Haritanın EN ARKASINA, oyunun kendi mağara texture'ıyla (MapMid) tam-ekran, KAYMAYAN
-/// bir dolgu ekliyoruz → siyah kaybolur, sert sınır olmaz (aynı doku ailesi).
+/// Harita parşömen scroll'u yatay tasarlandığından dikey ekranda etrafı/altı kapkara kalıyor.
+/// Haritanın EN ARKASINA tam-ekran, KAYMAYAN, oyunun mağara temasına uygun bir DİKEY GRADYAN
+/// ekliyoruz → siyah kaybolur, yamalı görünmez, kasıtlı bir mağara zemini gibi durur.
+/// (Parşömen texture'ı MapMid'i kullanmak YANLIŞTI: o parşömen, mağara değil.)
 /// </summary>
 [HarmonyPatch(typeof(NMapScreen), "_Ready")]
 public static class MapBgFillPatch
@@ -16,62 +17,41 @@ public static class MapBgFillPatch
 
     public static void Postfix(NMapScreen __instance)
     {
-        TryFill(__instance, 0);
-    }
-
-    private static void TryFill(NMapScreen screen, int attempt)
-    {
-        screen.GetTree().CreateTimer(0.3).Timeout += () =>
+        var screen = __instance;
+        screen.GetTree().CreateTimer(0.2).Timeout += () =>
         {
             if (!GodotObject.IsInstanceValid(screen) || !screen.IsInsideTree()) return;
             if (!PortraitConfig.IsPortrait(PortraitConfig.CanvasSize)) return;
+            if (screen.GetNodeOrNull(FillName) is not null) return;
 
-            // Mağara texture'ı OnVisibilityChanged'de set edilir; yüklenene kadar ~10 kez dene.
-            var mapMid = screen.GetNodeOrNull<TextureRect>("TheMap/MapBg/MapMid");
-            var tex = mapMid?.Texture;
+            // Dikey mağara gradyanı: üstte hafif daha aydınlık, altta koyulaşan koyu yeşil-teal.
+            var grad = new Gradient();
+            grad.SetColor(0, new Color(0.06f, 0.10f, 0.11f));  // üst
+            grad.SetColor(1, new Color(0.02f, 0.045f, 0.05f)); // alt
+            grad.AddPoint(0.5f, new Color(0.04f, 0.07f, 0.075f)); // orta
 
-            var existing = screen.GetNodeOrNull<Control>(FillName);
-            if (existing is null)
+            var gtex = new GradientTexture2D
             {
-                var fill = new ColorRect
-                {
-                    Name = FillName,
-                    Color = new Color(0.035f, 0.086f, 0.129f), // koyu mağara-teal (yedek)
-                    AnchorRight = 1f, AnchorBottom = 1f,
-                    OffsetLeft = 0, OffsetTop = 0, OffsetRight = 0, OffsetBottom = 0,
-                    MouseFilter = Control.MouseFilterEnum.Ignore,
-                    ZIndex = -100,
-                };
-                screen.AddChild(fill);
-                screen.MoveChild(fill, 0);
-                existing = fill;
-            }
+                Gradient = grad,
+                Fill = GradientTexture2D.FillEnum.Linear,
+                FillFrom = new Vector2(0.5f, 0f),
+                FillTo = new Vector2(0.5f, 1f),
+                Width = 8, Height = 256,
+            };
 
-            // Texture geldiyse, ColorRect'in üstüne texture katmanı ekle (native mağara görünümü).
-            if (tex is not null && screen.GetNodeOrNull(FillName + "Tex") is null)
+            var fill = new TextureRect
             {
-                var texFill = new TextureRect
-                {
-                    Name = FillName + "Tex",
-                    Texture = tex,
-                    StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
-                    ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                    AnchorRight = 1f, AnchorBottom = 1f,
-                    OffsetLeft = 0, OffsetTop = 0, OffsetRight = 0, OffsetBottom = 0,
-                    MouseFilter = Control.MouseFilterEnum.Ignore,
-                    ZIndex = -99,
-                    Modulate = new Color(0.75f, 0.75f, 0.75f), // hafif karart (arkada dursun)
-                };
-                screen.AddChild(texFill);
-                screen.MoveChild(texFill, 1);
-                PortraitMod.Log("map bg fill: texture layer added");
-                return;
-            }
-
-            if (tex is null && attempt < 10)
-                TryFill(screen, attempt + 1); // texture'ı bekle
-            else if (tex is null)
-                PortraitMod.Log("map bg fill: texture never loaded, color only");
+                Name = FillName,
+                Texture = gtex,
+                StretchMode = TextureRect.StretchModeEnum.Scale,
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                AnchorRight = 1f, AnchorBottom = 1f,
+                OffsetLeft = 0, OffsetTop = 0, OffsetRight = 0, OffsetBottom = 0,
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+            };
+            screen.AddChild(fill);
+            screen.MoveChild(fill, 0); // en arkaya (TheMap ve legend önde kalır)
+            PortraitMod.Log("map bg fill: gradient added");
         };
     }
 }
