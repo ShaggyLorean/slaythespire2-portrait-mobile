@@ -19,3 +19,4 @@ GodotSharp.dll
 0Harmony.dll
 shots/
 scripts/local.env
+proton-prefix-*/
