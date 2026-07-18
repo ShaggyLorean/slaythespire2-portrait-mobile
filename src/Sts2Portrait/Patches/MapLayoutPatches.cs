@@ -15,6 +15,11 @@ public static class MapBgSeamFixPatch
         ApplyCovered(__instance);
     }
 
+    // How far the parchment is pulled up past the screen top. The sheet's torn top edge
+    // plus the dark void above it read as a broken strip under the HUD on phones, so the
+    // edge art is pushed off screen and the solid paper runs from the very top.
+    public static float TopOverscan = 260f;
+
     public static void ApplyCovered(NMapBg bg)
     {
         foreach (var name in Sections)
@@ -30,7 +35,12 @@ public static class MapBgSeamFixPatch
             mid.CustomMinimumSize = new Vector2(0, 2400f);
             mid.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
         }
-        PortraitMod.Log("map bg: KeepAspectCovered + MapMid uzatıldı");
+        if (!bg.HasMeta("sts2p_overscan"))
+        {
+            bg.SetMeta("sts2p_overscan", true);
+            bg.Position = new Vector2(bg.Position.X, bg.Position.Y - TopOverscan);
+        }
+        PortraitMod.Log("map bg: covered, extended, overscanned");
     }
 }
 
@@ -70,6 +80,48 @@ public static class MapBgFillPatch
             screen.MoveChild(fill, 0);
             PortraitMod.Log("map bg fill: colorrect added");
         };
+    }
+}
+
+// The node columns come out of the layout with uneven side margins on a narrow canvas
+// (the leftmost column nearly touches the edge). Measure the real spread and shift the
+// point and path layers so the whole graph sits centered.
+[HarmonyPatch(typeof(NMapScreen), "_Ready")]
+public static class MapCenterPatch
+{
+    public static void Postfix(NMapScreen __instance)
+    {
+        var screen = __instance;
+        foreach (var delay in new[] { 0.3, 1.0, 2.5 })
+        {
+            screen.GetTree().CreateTimer(delay).Timeout += () =>
+            {
+                if (!GodotObject.IsInstanceValid(screen) || !screen.IsInsideTree()) return;
+                var canvas = PortraitConfig.CanvasSize;
+                if (!PortraitConfig.IsPortrait(canvas)) return;
+                Center(screen, canvas.X);
+            };
+        }
+    }
+
+    private static void Center(Node screen, float width)
+    {
+        var points = ShopReflow.FindControl(screen, "Points");
+        var paths = ShopReflow.FindControl(screen, "Paths");
+        if (points is null) return;
+
+        float min = float.MaxValue, max = float.MinValue;
+        foreach (var child in points.GetChildren())
+        {
+            if (child is not Control c || c.Name.ToString().Contains("Vote")) continue;
+            min = Mathf.Min(min, c.Position.X);
+            max = Mathf.Max(max, c.Position.X + c.Size.X);
+        }
+        if (min > max) return;
+
+        float dx = (width - (max - min)) / 2f - min;
+        points.Position = new Vector2(dx, points.Position.Y);
+        if (paths is not null) paths.Position = new Vector2(dx, paths.Position.Y);
     }
 }
 

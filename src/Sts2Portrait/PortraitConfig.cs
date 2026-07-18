@@ -6,7 +6,7 @@ public static class PortraitConfig
 {
     public const int CanvasBaseWidth = 1080;
 
-    public static readonly Vector2I DevWindowSize = new(720, 1440);
+    public static readonly Vector2I DevWindowSize = new(655, 1440);   // phone-like 19.8:9
 
     // Dynamic canvas sizing. The content-scale canvas width sets how big every UI element
     // is on screen: the physical screen maps onto this many canvas units, so fewer units =
@@ -14,7 +14,7 @@ public static class PortraitConfig
     // phone gets the same relative UI size regardless of resolution). Below a floor the game
     // can't fill the screen, so it's clamped.
     public static float UiMagnify = 1.35f;     // UI is ~this much bigger than a 1:1 canvas
-    public static float MinCanvasWidth = 1056f;
+    public static float MinCanvasWidth = 1066f;   // matches the OnePlus 13 canvas so PC debug is 1:1
     public static float MaxCanvasWidth = 1280f;
 
     public static bool IsPortrait(Vector2 windowSize) => windowSize.Y > windowSize.X;

@@ -13,6 +13,31 @@ public static class CombatLayout
     public static float CtrlUpFrac = 0.072f;       // energy / end-turn strip, from bottom
     public static float EnergyXFrac = 0.084f;      // energy left inset
     public static float EndTurnRightFrac = 0.02f;  // end-turn right margin (button pinned to right edge)
+    public static float TargetDockYFrac = 0.72f;   // held targeted card docks here (near the finger)
+    public static float TargetDockScale = 0.62f;
+    public static float EnergyUpFrac = 0.145f;     // energy sits higher so it clears the draw pile
+    public static float AllyCenterXFrac = 0.545f;  // creature rows nudged inward so nothing hugs the edges
+    public static float EnemyCenterXFrac = 0.385f;
+}
+
+// When a targeted card is picked up, the game docks it at the bottom center of the
+// canvas. On a tall portrait canvas that is far below the hand, so on touch the card
+// looks like it teleports away from the finger and the aim arrow starts from the
+// bottom. Re-dock it just above the hand, close to where the finger already is.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Combat.NCardPlay), "CenterCard")]
+public static class TargetDockPatch
+{
+    public static void Postfix(object __instance)
+    {
+        var canvas = PortraitConfig.CanvasSize;
+        if (!PortraitConfig.IsPortrait(canvas)) return;
+        Tune.Reload();
+        var holder = Traverse.Create(__instance).Property("Holder").GetValue();
+        if (holder is null) return;
+        var t = Traverse.Create(holder);
+        t.Method("SetTargetPosition", new Vector2(canvas.X / 2f, canvas.Y * CombatLayout.TargetDockYFrac)).GetValue();
+        t.Method("SetTargetScale", Vector2.One * CombatLayout.TargetDockScale).GetValue();
+    }
 }
 
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Helpers.HandPosHelper), "GetPosition")]
@@ -85,20 +110,37 @@ public static class CombatControlsPatch
     public static void Postfix(object __instance)
     {
         var ui = (Node)__instance;
-        ui.GetTree().CreateTimer(0.05).Timeout += () =>
+        foreach (var delay in new[] { 0.05, 0.6, 1.6, 3.2 })
         {
-            if (!GodotObject.IsInstanceValid(ui) || !ui.IsInsideTree()) return;
-            var canvas = PortraitConfig.CanvasSize;
-            if (!PortraitConfig.IsPortrait(canvas)) return;
-            Tune.Reload();
-            var energy = Traverse.Create(__instance).Property("EnergyCounterContainer").GetValue<Control>();
-            if (energy is not null)
+            ui.GetTree().CreateTimer(delay).Timeout += () =>
             {
-                energy.AnchorLeft = energy.AnchorTop = energy.AnchorRight = energy.AnchorBottom = 0f;
-                energy.Position = new Vector2(canvas.X * CombatLayout.EnergyXFrac, canvas.Y * (1f - CombatLayout.CtrlUpFrac));
-                PortraitMod.Log($"energy -> {energy.Position}");
-            }
-        };
+                if (!GodotObject.IsInstanceValid(ui) || !ui.IsInsideTree()) return;
+                var canvas = PortraitConfig.CanvasSize;
+                if (!PortraitConfig.IsPortrait(canvas)) return;
+                Tune.Reload();
+                var energy = Traverse.Create(__instance).Property("EnergyCounterContainer").GetValue<Control>();
+                if (energy is not null)
+                {
+                    energy.AnchorLeft = energy.AnchorTop = energy.AnchorRight = energy.AnchorBottom = 0f;
+                    energy.Position = new Vector2(canvas.X * CombatLayout.EnergyXFrac, canvas.Y * (1f - CombatLayout.EnergyUpFrac));
+                }
+                NudgeCreatureRows(ui, canvas);
+            };
+        }
+    }
+
+    // The creature rows are centered for a wide screen, which pins the player's health
+    // bar to the left edge and the last enemy to the right edge on a narrow canvas.
+    // Pull both containers toward the middle.
+    private static void NudgeCreatureRows(Node ui, Vector2 canvas)
+    {
+        var scene = ui.GetTree().Root;
+        var ally = ShopReflow.FindControl(scene, "AllyContainer");
+        var enemy = ShopReflow.FindControl(scene, "EnemyContainer");
+        if (ally is not null)
+            ally.Position = new Vector2(canvas.X * CombatLayout.AllyCenterXFrac, ally.Position.Y);
+        if (enemy is not null)
+            enemy.Position = new Vector2(canvas.X * CombatLayout.EnemyCenterXFrac, enemy.Position.Y);
     }
 }
 
