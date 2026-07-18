@@ -8,10 +8,11 @@ public static class CombatLayout
     public static float BgScale = 1.7f;
     public static float HandScale = 0.82f;
     public static float FanXCompress = 0.72f;
-    public static float FanBottomFromCanvas = 400f;
-    public static float CtrlUpFromBottom = 180f;
-    public static float EnergyXFrac = 0.084f;
-    public static float EndTurnRightInset = 150f;
+    // Everything below is a FRACTION of the live canvas, so it adapts to any phone size.
+    public static float FanBottomFrac = 0.155f;   // hand fan origin, from bottom
+    public static float CtrlUpFrac = 0.072f;       // energy / end-turn strip, from bottom
+    public static float EnergyXFrac = 0.084f;      // energy left inset
+    public static float EndTurnRightFrac = 0.02f;  // end-turn right margin (button pinned to right edge)
 }
 
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Helpers.HandPosHelper), "GetPosition")]
@@ -67,10 +68,11 @@ public static class HandRaisePatch
             if (!GodotObject.IsInstanceValid(hand) || !hand.IsInsideTree()) return;
             var canvas = PortraitConfig.CanvasSize;
             if (!PortraitConfig.IsPortrait(canvas)) return;
+            Tune.Reload();
             var c = Traverse.Create(__instance).Property("CardHolderContainer").GetValue<Control>();
             if (c is null) return;
             c.Scale = Vector2.One * CombatLayout.HandScale;
-            float targetOriginY = canvas.Y - CombatLayout.FanBottomFromCanvas;
+            float targetOriginY = canvas.Y * (1f - CombatLayout.FanBottomFrac);
             c.Position = new Vector2(c.Position.X, targetOriginY);
             PortraitMod.Log($"hand scaled {CombatLayout.HandScale}, originY={targetOriginY}");
         };
@@ -88,11 +90,12 @@ public static class CombatControlsPatch
             if (!GodotObject.IsInstanceValid(ui) || !ui.IsInsideTree()) return;
             var canvas = PortraitConfig.CanvasSize;
             if (!PortraitConfig.IsPortrait(canvas)) return;
+            Tune.Reload();
             var energy = Traverse.Create(__instance).Property("EnergyCounterContainer").GetValue<Control>();
             if (energy is not null)
             {
                 energy.AnchorLeft = energy.AnchorTop = energy.AnchorRight = energy.AnchorBottom = 0f;
-                energy.Position = new Vector2(canvas.X * CombatLayout.EnergyXFrac, canvas.Y - CombatLayout.CtrlUpFromBottom);
+                energy.Position = new Vector2(canvas.X * CombatLayout.EnergyXFrac, canvas.Y * (1f - CombatLayout.CtrlUpFrac));
                 PortraitMod.Log($"energy -> {energy.Position}");
             }
         };
@@ -109,8 +112,11 @@ public static class EndTurnBottomPatch
         if (!PortraitConfig.IsPortrait(canvas)) return;
         btn.GetTree().CreateTimer(0.55).Timeout += () =>
         {
-            if (GodotObject.IsInstanceValid(btn) && btn.IsInsideTree())
-                btn.Position = new Vector2(canvas.X - CombatLayout.EndTurnRightInset, canvas.Y - CombatLayout.CtrlUpFromBottom);
+            if (!GodotObject.IsInstanceValid(btn) || !btn.IsInsideTree()) return;
+            Tune.Reload();
+            float w = btn.Size.X > 1 ? btn.Size.X : 240f;
+            float x = canvas.X - canvas.X * CombatLayout.EndTurnRightFrac - w;   // pin right edge inside canvas
+            btn.Position = new Vector2(x, canvas.Y * (1f - CombatLayout.CtrlUpFrac));
         };
     }
 }

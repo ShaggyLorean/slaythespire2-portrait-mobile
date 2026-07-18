@@ -27,6 +27,9 @@ public static class TopBarReflow
         if (!GodotObject.IsInstanceValid(bar)) return;
         if (!PortraitConfig.IsPortrait(PortraitConfig.CanvasSize)) return;
         float W = PortraitConfig.CanvasSize.X;
+        float safe = PortraitConfig.SafeTop();   // keep clear of notch / punch-hole camera
+        float row1 = TopBarLayout.Row1Y + safe;
+        float row2 = TopBarLayout.Row2Y + safe;
 
         var left = bar.GetNodeOrNull<Control>("LeftAlignedStuff");
         var right = bar.GetNodeOrNull<Control>("RightAlignedStuff");
@@ -39,7 +42,7 @@ public static class TopBarReflow
             left.PivotOffset = Vector2.Zero;
             left.AnchorLeft = left.AnchorTop = left.AnchorRight = left.AnchorBottom = 0f;
             left.Scale = new Vector2(fit, fit);
-            left.Position = new Vector2(TopBarLayout.MarginL, TopBarLayout.Row1Y);
+            left.Position = new Vector2(TopBarLayout.MarginL, row1);
         }
 
         if (right is not null)
@@ -49,7 +52,7 @@ public static class TopBarReflow
             right.PivotOffset = Vector2.Zero;
             right.AnchorLeft = right.AnchorTop = right.AnchorRight = right.AnchorBottom = 0f;
             right.Scale = new Vector2(rfit, rfit);
-            right.Position = new Vector2(W - TopBarLayout.MarginR - rw * rfit, TopBarLayout.Row2Y);
+            right.Position = new Vector2(W - TopBarLayout.MarginR - rw * rfit, row2);
         }
 
         var parent = bar.GetParent();
@@ -65,7 +68,7 @@ public static class TopBarReflow
             float fitR = Mathf.Min(1f, maxW / Mathf.Max(68f, contentW));
             relicInv.PivotOffset = Vector2.Zero;
             relicInv.Scale = new Vector2(fitR, fitR);
-            relicInv.Position = new Vector2(TopBarLayout.MarginL, TopBarLayout.RelicY);
+            relicInv.Position = new Vector2(TopBarLayout.MarginL, TopBarLayout.RelicY + safe);
         }
 
         FixWatermark(bar);

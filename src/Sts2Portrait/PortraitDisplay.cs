@@ -30,6 +30,7 @@ public static class PortraitDisplay
         if (window is null)
             return false;
 
+        Tune.Reload();          // lets UiMagnify be swept live from bridge/tune.cfg
         StatusStripHider.Start();
 
         if (!_orientationApplied && !OS.HasFeature("pc"))
@@ -62,8 +63,7 @@ public static class PortraitDisplay
             return false;
 
         float aspect = winSize.Y / winSize.X;
-        float scale = PortraitConfig.GetAdaptiveScale(winSize);
-        int baseWidth = (int)(PortraitConfig.CanvasBaseWidth / scale);
+        int baseWidth = PortraitConfig.CanvasWidthFor(winSize);
         var target = new Vector2I(baseWidth, (int)(baseWidth * aspect));
 
         if (window.ContentScaleSize == target
@@ -83,7 +83,7 @@ public static class PortraitDisplay
         if (target != _lastCanvas)
         {
             _lastCanvas = target;
-            PortraitMod.Log($"portrait canvas: window={winSize} scale={scale:F2} contentScaleSize={target}");
+            PortraitMod.Log($"portrait canvas: window={winSize} dpi={DisplayServer.ScreenGetDpi()} contentScaleSize={target}");
         }
         return true;
     }

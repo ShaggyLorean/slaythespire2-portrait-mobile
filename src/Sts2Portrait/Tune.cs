@@ -28,7 +28,9 @@ public static class Tune
                 var dot = key.IndexOf('.');
                 if (dot < 1) continue;
 
-                var field = Type.GetType("Sts2Portrait.Patches." + key[..dot])?.GetField(key[(dot + 1)..]);
+                var cls = key[..dot];
+                var field = (Type.GetType("Sts2Portrait.Patches." + cls)
+                             ?? Type.GetType("Sts2Portrait." + cls))?.GetField(key[(dot + 1)..]);
                 if (field is null) { PortraitMod.Log($"tune: bilinmeyen alan {key}"); continue; }
 
                 if (field.FieldType == typeof(float) &&
