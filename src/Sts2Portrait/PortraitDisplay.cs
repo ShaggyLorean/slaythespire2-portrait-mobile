@@ -17,11 +17,24 @@ public static class PortraitDisplay
         Engine.GetMainLoop() is SceneTree tree ? tree.Root : null;
 
     /// <summary>Dikey canvas ölçeğini uygula. Oyunun display ayarları çalıştıktan sonra çağrılır.</summary>
+    private static bool _orientationApplied;
+
     public static void ApplyPortrait()
     {
         var window = MainWindow;
         if (window is null)
             return;
+
+        // ANDROID: manifest-only orientation Godot'ta çalışmaz (oyun runtime'da project
+        // ayarından yönü landscape'e geri set eder). Mod'dan runtime çağrısı bunu ezer →
+        // tüm activity portrait'e döner. PC'de zararsız (masaüstü pencere yönü etkilenmez).
+        if (!_orientationApplied && !OS.HasFeature("pc"))
+        {
+            _orientationApplied = true;
+            try { DisplayServer.ScreenSetOrientation(DisplayServer.ScreenOrientation.Portrait); }
+            catch (System.Exception e) { PortraitMod.Log($"orientation set failed: {e.Message}"); }
+            PortraitMod.Log("android orientation -> Portrait");
+        }
 
         // PC geliştirme: fullscreen yatay pencereyi ilk seferde dikey pencereye çevir.
         if (!_devWindowApplied && OS.HasFeature("pc"))

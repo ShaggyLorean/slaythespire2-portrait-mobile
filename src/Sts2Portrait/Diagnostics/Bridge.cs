@@ -94,6 +94,8 @@ public static class Bridge
                 case "move": Move(F(p, 1), F(p, 2)); WriteDone(cmd, "ok"); break;
                 case "drag": Drag(F(p, 1), F(p, 2), F(p, 3), F(p, 4)); WriteDone(cmd, "ok"); break;
                 case "key": KeyPress(p[1]); WriteDone(cmd, "ok"); break;
+                case "tap": Tap(F(p, 1), F(p, 2)); WriteDone(cmd, "ok"); break;
+                case "tdrag": TouchDrag(F(p, 1), F(p, 2), F(p, 3), F(p, 4)); WriteDone(cmd, "ok"); break;
                 case "dev": DevCmd(cmd.Substring(3).Trim()); break;
                 default: WriteDone(cmd, "unknown"); break;
             }
