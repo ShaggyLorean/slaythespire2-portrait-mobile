@@ -20,3 +20,4 @@ GodotSharp.dll
 shots/
 scripts/local.env
 proton-prefix-*/
+tools/mobile-refs/*.dll

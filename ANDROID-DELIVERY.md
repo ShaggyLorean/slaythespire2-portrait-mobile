@@ -61,3 +61,20 @@ gerisinde (0.98-0.105 vs 0.108). Modumuz: (a) tam `sts2.dll`'e karşı sürüm-b
   tek yol — ki mevcut launcher'lar bunu zaten yapıyor; biz portrait modunu onların Mods klasörüne veriyoruz.
 - **"APK yapabilir miyiz?"** Evet — kullanıcının launcher APK'sini portrait manifest'e repack (script'le), ya da
   daha temizi: mod DLL'ini Mods klasörüne koy (repack gerektirmez, loader çalışıyorsa).
+
+## DOĞRULANMIŞ: OnePlus 13'te çalışan offline portrait (2026-07-18)
+Gerçek cihazda uçtan uca çalıştı — menü, karakter seçimi tam portrait, ekranı kaplıyor, siyah bant yok.
+- **Kurulum:** darthalex NoSteam launcher APK (v0.3.19) + kullanıcının kendi oyun dosyaları
+  (`SlayTheSpire2.pck` + `data_sts2_windows_x86_64`) `/storage/emulated/0/StS2LauncherMM/`'ye kopyalanır,
+  launcher "Install Local Files" ile `files/game/`'e açar.
+- **Kritik keşif:** Launcher'ın oyun mod-loader redirect'i yeni sürümlerde KIRIK (`"mods"` string'i
+  `ModManager.Initialize`'ın async state-machine'ine taşınmış; transpiler dış metni hedefliyor → dış mod
+  hiç yüklenmiyor). Çözüm: Mono.Cecil ile `STS2Mobile.ModEntry.Apply`'a `PortraitMod.Init()` çağrısı enjekte
+  et (launcher'ın kendi native-invoked entry'si) + DLL'imizi publish dizinine koy. `scripts/android-deploy.sh`.
+- **Content-scale savaşı:** `NGame.OnWindowChange` `AspectRatioSetting`'e göre `ContentScaleSize`'ı
+  (1680×1260 vb.) set ediyor; bizim portrait set'imiz `size_changed` tetikleyince geri alınıyordu.
+  Fix: `NGame.OnWindowChange` + `NGlobalUi.OnWindowChange` prefix-skip → kendi portrait canvas'ımız
+  (telefon aspect'inden dinamik, 1440×3168 → contentScaleSize 1173×2580) kazanır.
+- **Çakışan mobil-UI:** launcher'ın `UiScalePatches`'i devre dışı (bizim tam portrait UI'mız var).
+- **Kalan:** standalone "Slay the Spire 2" uygulaması (rebrand APK: isim/ikon/boot-to-game). Şu an
+  launcher üzerinden çalışıyor; paketleme fazı sıradaki.
