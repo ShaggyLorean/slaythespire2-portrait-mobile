@@ -21,3 +21,5 @@ shots/
 scripts/local.env
 proton-prefix-*/
 tools/mobile-refs/*.dll
+tools/bin/*.jar
+dist/
