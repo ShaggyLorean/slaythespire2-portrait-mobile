@@ -3,13 +3,6 @@ using HarmonyLib;
 
 namespace Sts2Portrait.Patches;
 
-/// <summary>
-/// Event (Unknown) odası: Title + EventDescription + OptionsContainer'ı taşıyan 800px'lik
-/// metin bloğu landscape'te sanatın SAĞINA (x≈526) konumlanıyor → portrait 1129 canvas'ta
-/// sağdan ~200px taşıyor (anlatım metni kırpık). Bloğun ortak parent'ını yatayda ortala.
-/// Event içeriği geç yüklendiğinden birkaç denemeyle uygulanır; her event türü için
-/// "Title" düğümünden parent bulunur (layout varyantlarından bağımsız).
-/// </summary>
 public static class EventLayout
 {
     public static float BlockWidth = 800f;
@@ -39,7 +32,7 @@ public static class EventTextCenterPatch
 
         float w = title.Size.X > 1 ? title.Size.X : EventLayout.BlockWidth;
         float targetX = (canvas.X - w) / 2f;
-        if (Mathf.Abs(parent.GlobalPosition.X - targetX) < 1f) return true; // zaten ortalı
+        if (Mathf.Abs(parent.GlobalPosition.X - targetX) < 1f) return true;
         parent.GlobalPosition = new Vector2(targetX, parent.GlobalPosition.Y);
         PortraitMod.Log($"event text block centered -> x={targetX:F0} (w={w:F0})");
         return true;

@@ -4,11 +4,6 @@ using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 
 namespace Sts2Portrait.Patches;
 
-/// <summary>
-/// Ana menü dikey yerleşimi. Oyunun kendi OnWindowChange/ScaleBgIfNarrow'ı bizim
-/// değişiklikleri sıfırladığından, hem _Ready'de hem de her pencere değişiminde
-/// yeniden uygularız (DisplayPatches'teki kalıp).
-/// </summary>
 public static class MenuLayout
 {
     private const float BgW = 2560f;
@@ -16,11 +11,10 @@ public static class MenuLayout
 
     public static void Apply(NMainMenu menu)
     {
-        Diagnostics.DevTools.Ensure(); // teşhis/köprü node'larını garanti et
+        Diagnostics.DevTools.Ensure();
         var canvas = PortraitConfig.CanvasSize;
         var center = canvas * 0.5f;
 
-        // --- Arka plan: cover + ortala ---
         var bgContainer = menu.GetNodeOrNull<Control>("MainMenuBg/BgContainer");
         float parentScale = 1f;
         if (bgContainer is not null)
@@ -32,21 +26,16 @@ public static class MenuLayout
             bgContainer.Position = center - new Vector2(BgW, BgH) * 0.5f;
         }
 
-        // --- Logo: FindChild ile bul, canvas üstüne ortala ---
         var logo = menu.FindChild("Logo", recursive: true, owned: false) as Node2D;
         if (logo is not null)
         {
-            // Spine logo origin'i sol-üstte; art origin'in sağ-altına uzanıyor.
-            // Bu yüzden origin'i sola/yukarı kaydırıp merkezliyoruz. Değerler deneysel.
             float logoGlobalScale = 0.42f;
             logo.Scale = Vector2.One * (logoGlobalScale / parentScale);
-            // Global görünür merkez ~ origin + (logoHalf). Deneyle: origin'i sola çek.
             logo.GlobalPosition = new Vector2(center.X - 470f, canvas.Y * 0.20f);
             logo.Visible = true;
             logo.Modulate = new Color(logo.Modulate.R, logo.Modulate.G, logo.Modulate.B, 1f);
         }
 
-        // --- Metin butonları: anchor sol-üst, yatay ortala ---
         var buttons = menu.GetNodeOrNull<Control>("MainMenuTextButtons");
         if (buttons is not null)
         {
@@ -58,7 +47,6 @@ public static class MenuLayout
         PortraitMod.Log($"menu layout: canvas={canvas} logo={(logo is null ? "?" : "ok")} bg={(bgContainer is null ? "?" : "ok")}");
     }
 
-    /// <summary>NMainMenuBg'den sahip NMainMenu'yü bul.</summary>
     public static NMainMenu? FindMenu(Node from)
     {
         for (Node? n = from; n is not null; n = n.GetParent())

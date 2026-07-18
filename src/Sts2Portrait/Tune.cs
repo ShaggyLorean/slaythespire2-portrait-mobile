@@ -3,12 +3,6 @@ using Godot;
 
 namespace Sts2Portrait;
 
-/// <summary>
-/// Canlı ayar: user://bridge/tune.cfg içindeki "Sınıf.Alan=değer" satırlarını
-/// (ör. "ShopLayout.CellH=530") Sts2Portrait.Patches altındaki statik layout
-/// alanlarına yansıtır. Dosya yoksa no-op — release'te dosya olmaz.
-/// Görsel iterasyonu rebuild'siz yapabilmek için.
-/// </summary>
 public static class Tune
 {
     private static DateTime _stamp;

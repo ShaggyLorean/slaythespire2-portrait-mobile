@@ -4,32 +4,18 @@ using HarmonyLib;
 
 namespace Sts2Portrait.Patches;
 
-/// <summary>
-/// Dükkan (merchant) dikey yerleşimi — panel TAM EKRAN.
-/// Yapı: NMerchantInventory > SlotsContainer [TextureRect 1747×978; kumaş dokusu] içinde
-/// NMerchantCard holder'ları (5+2), Relics(3), Potions(3), MerchantCardRemoval (servis).
-/// Landscape'te tek geniş yatay şerit → portrait'te taşıyordu. Paneli canvas'a kaplatıp
-/// öğeleri 3 sütunlu dikey grid'e (kartlar + servis) + alt banda (relic/potion) diziyoruz.
-///
-/// Önemli: NMerchantCard/NMerchantRemoval görselleri holder rect'inin değil ORİJİNİN
-/// etrafında çizilir (AncientTextBg -133,-22 gibi negatif ofsetli çocuklar) → hedefe
-/// GlobalPosition (origin) taşınır, rect merkezi değil.
-///
-/// Periyodik yeniden uygulanır: açılış tween'ini ezer, satın alma sonrası grid yeniden
-/// dizilir. Kapanışta (DoCloseAnimation) dokunulmaz ki panel kapatılabilsin.
-/// </summary>
 public static class ShopLayout
 {
     public static float PanelMarginX = 20f;
-    public static float PanelTop = 220f;      // top bar (2 satır) + filigran altı
-    public static float PanelBottom = 170f;   // alt kenar payı (geri oku panelin üzerine çizilir)
+    public static float PanelTop = 220f;
+    public static float PanelBottom = 170f;
     public static int   Cols = 3;
     public static float GridTop = 26f;
-    public static float CellH = 515f;         // kart 422 + fiyat etiketi
+    public static float CellH = 515f;
     public static float CardScale = 1.0f;
-    public static float BandH = 210f;         // alt bant: relic + potion
-    public static float TrinketScale = 1.0f;  // relic/potion ikon ölçeği (1.25 sığmıyor: 2*527>1040)
-    public static float RelicBandX = 215f;    // bant içi relic grubu origin x (geri okundan uzak)
+    public static float BandH = 210f;
+    public static float TrinketScale = 1.0f;
+    public static float RelicBandX = 215f;
     public static float PotionBandXFrac = 0.60f;
     public static float BandYOffset = -14f;
     public static float BgCoverScale = 1.75f;
@@ -50,8 +36,6 @@ public static class ShopReflow
         float panelW = canvas.X - 2 * ShopLayout.PanelMarginX;
         float panelH = canvas.Y - ShopLayout.PanelTop - ShopLayout.PanelBottom;
 
-        // Panel: tam ekran, sol-üst köşeden, ölçeksiz (açılış tween'i ne yaptıysa ezilir).
-        // ExpandMode=IgnoreSize ŞART: yoksa TextureRect.Size doku boyutuna (1747×978) clamp'lenir.
         if (slots is TextureRect tr)
         {
             tr.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
@@ -63,7 +47,6 @@ public static class ShopReflow
         slots.Position = new Vector2(ShopLayout.PanelMarginX, ShopLayout.PanelTop);
         slots.Size = new Vector2(panelW, panelH);
 
-        // Öğeleri TİP bazlı topla — container adlarından bağımsız; sayı değişse de çalışır.
         var cards = new List<Control>();
         CollectByType(slots, "NMerchantCard", cards);
         cards.RemoveAll(c => !c.Visible);
@@ -71,7 +54,6 @@ public static class ShopReflow
         var relics = FindControl(slots, "Relics");
         var potions = FindControl(slots, "Potions");
 
-        // Grid: kartlar + servis. Satır sayısı içeriğe göre; sığmazsa otomatik küçülür.
         bool hasRemoval = removal is { Visible: true };
         int items = cards.Count + (hasRemoval ? 1 : 0);
         int rows = Mathf.Max(1, (items + ShopLayout.Cols - 1) / ShopLayout.Cols);
@@ -86,8 +68,6 @@ public static class ShopReflow
         if (hasRemoval && removal is not null)
             PlaceOrigin(removal, origin + CellCenter(cards.Count, cellW, cellH), fit);
 
-        // Alt bant: relic'ler sol, potion'lar sağ. bandY = ikonların (122×scale) bant içinde
-        // dikey ortalanmış ÜST noktası (PlaceOrigin origin'e yerleştirir).
         float iconH = 122f * ShopLayout.TrinketScale;
         float bandY = panelH - ShopLayout.BandH + (ShopLayout.BandH - iconH) * 0.5f + ShopLayout.BandYOffset;
         if (relics is not null)
@@ -95,9 +75,6 @@ public static class ShopReflow
         if (potions is not null)
             PlaceOrigin(potions, origin + new Vector2(panelW * ShopLayout.PotionBandXFrac, bandY), ShopLayout.TrinketScale);
 
-        // Envanterin KENDİ kapat (geri) butonu portrait'te ekran dışında kalıyor (x=-220) →
-        // odanın geri okuyla aynı köşeye getir. Envanter açıkken z-sırayla üstte olduğundan
-        // tıklamayı bu alır → Close() çalışır; kapalıyken aynı yerde odanın oku durur.
         var back = FindControl(inv, "BackButton");
         if (back is not null)
             back.Position = new Vector2(-40f, canvas.Y - 354f);
@@ -112,8 +89,6 @@ public static class ShopReflow
         return new Vector2(c * cellW + cellW / 2f, ShopLayout.GridTop + r * cellH + cellH / 2f);
     }
 
-    // Kontrolün ORİJİNİNİ (görsel çapası) hedef global noktaya taşı — delta yöntemi:
-    // ara container ofsetleri ne olursa olsun yakınsar; periyodik tekrarında sabit kalır.
     private static void PlaceOrigin(Control n, Vector2 targetGlobal, float scale)
     {
         n.PivotOffset = Vector2.Zero;
@@ -153,15 +128,13 @@ public static class ShopReflow
     }
 }
 
-// Envanter açılınca periyodik reflow döngüsü başlat (instance başına bir kez).
-// Decompile: Open() → IsOpen=true + DoOpenAnimation (slots y→80 tween'i; reflow ezer).
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.Shops.NMerchantInventory), "Open")]
 public static class MerchantOpenReflowPatch
 {
     public static void Postfix(object __instance)
     {
         var inv = (Node)__instance;
-        if (inv.HasMeta("sts2p_shop_closed")) inv.RemoveMeta("sts2p_shop_closed"); // yeniden açıldı
+        if (inv.HasMeta("sts2p_shop_closed")) inv.RemoveMeta("sts2p_shop_closed");
         if (inv.HasMeta("sts2p_shop_loop")) return;
         inv.SetMeta("sts2p_shop_loop", true);
         Loop(inv);
@@ -169,20 +142,16 @@ public static class MerchantOpenReflowPatch
 
     private static void Loop(Node inv)
     {
-        if (!GodotObject.IsInstanceValid(inv)) return;  // free edildi → döngü biter
+        if (!GodotObject.IsInstanceValid(inv)) return;
         if (!inv.IsInsideTree())
         {
-            // Geçici olarak ağaçtan çıkarılmış olabilir; meta'yı temizle ki
-            // bir sonraki DoOpenAnimation döngüyü yeniden kurabilsin.
             if (inv.HasMeta("sts2p_shop_loop")) inv.RemoveMeta("sts2p_shop_loop");
             return;
         }
-        // Kapanış animasyonu oynarken/kapalıyken yazma — panel kapatılabilsin.
         bool closed = inv.HasMeta("sts2p_shop_closed") ||
                       (inv is CanvasItem ci && !ci.IsVisibleInTree());
         if (!closed)
         {
-            // Oyunun kendi durum bayrağı en güvenilir kaynak (decompile: public bool IsOpen).
             var isOpen = Traverse.Create(inv).Property("IsOpen");
             if (isOpen.PropertyExists()) closed = !isOpen.GetValue<bool>();
         }
@@ -195,15 +164,12 @@ public static class MerchantOpenReflowPatch
     }
 }
 
-// Kapanışta reflow'u durdur ki kapanış tween'i (slots y→-1000) ezilmesin.
-// Decompile: Close() private void — IsOpen=false + tween. IsOpen fallback'i de var.
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.Shops.NMerchantInventory), "Close")]
 public static class MerchantCloseReflowPatch
 {
     public static void Prefix(object __instance) => ((Node)__instance).SetMeta("sts2p_shop_closed", true);
 }
 
-// Çadır arka planı (BgContainer 2560×1200) portrait'te üst/alt letterbox bırakıyor → cover ölçek.
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom), "_Ready")]
 public static class MerchantBgCoverPatch
 {

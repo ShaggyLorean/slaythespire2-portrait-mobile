@@ -3,25 +3,17 @@ using HarmonyLib;
 
 namespace Sts2Portrait.Patches;
 
-/// <summary>
-/// Savaş ekranı dikey yerleşimi.
-/// - NCombatSceneContainer: bg dikeyde 0.9 ölçekle kalıyor (üstte siyah bant) → cover ölçek.
-/// - NPlayerHand: el kartları canvas dibinde kesiliyor → CardHolderContainer'ı yukarı al.
-/// </summary>
 public static class CombatLayout
 {
-    public static float BgScale = 1.7f;              // savaş arka planı dikeyi kaplasın (2765x1296 art)
-    // Kartlar: büyük ölçek (okunur) + x-sıkıştırma (fan yine sığar, daha çok üst üste biner).
-    public static float HandScale = 0.82f;           // kart BOYUTU (daha büyük)
-    public static float FanXCompress = 0.72f;        // fan x-yayılımı (dar) — GetPosition x çarpanı
-    public static float FanBottomFromCanvas = 400f;  // fan origin = CanvasSize.Y - bu (~1760)
-    public static float CtrlUpFromBottom = 180f;     // kontroller CanvasSize.Y - bu (~1980)
-    public static float EnergyXFrac = 0.084f;        // enerji sol kenar ~95px
-    public static float EndTurnRightInset = 150f;    // end-turn sağ kenardan içeri
+    public static float BgScale = 1.7f;
+    public static float HandScale = 0.82f;
+    public static float FanXCompress = 0.72f;
+    public static float FanBottomFromCanvas = 400f;
+    public static float CtrlUpFromBottom = 180f;
+    public static float EnergyXFrac = 0.084f;
+    public static float EndTurnRightInset = 150f;
 }
 
-// Kart fanının x-yayılımını portrait'te sıkıştır (kartlar büyük kalabilsin ama fan taşmasın).
-// HandPosHelper._cardPositionData paylaşımlı; TABLOYU DEĞİŞTİRMİYORUZ, sadece sonucu postfix'liyoruz.
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Helpers.HandPosHelper), "GetPosition")]
 public static class HandFanCompressPatch
 {
@@ -55,7 +47,6 @@ public static class CombatBgReadyPatch
 {
     public static void Postfix(object __instance)
     {
-        // _Ready'de _bgContainer henüz atanmış olmayabilir; kısa gecikmeyle uygula.
         var node = (Node)__instance;
         node.GetTree().CreateTimer(0.1).Timeout += () =>
         {
@@ -65,8 +56,6 @@ public static class CombatBgReadyPatch
     }
 }
 
-// El fanı: kör 170px kaldırma yerine, fanı KÜÇÜLT (0.70) → 10 karta kadar hep ekranda kalır,
-// ve origin'i MUTLAK bir Y'ye al. Fanın alt kenarı hand size'dan bağımsız sabitlenir.
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Combat.NPlayerHand), "_Ready")]
 public static class HandRaisePatch
 {
@@ -88,8 +77,6 @@ public static class HandRaisePatch
     }
 }
 
-// Kalıcı kontrolleri (enerji) fanın DAİMA altında kalan bir şeride taşı.
-// NCombatUi.Activate'ten SONRA çalışır (Regent'in (100,806) override'ından ve enerji AddChild'ından sonra).
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Combat.NCombatUi), "Activate")]
 public static class CombatControlsPatch
 {
@@ -112,7 +99,6 @@ public static class CombatControlsPatch
     }
 }
 
-// End-turn butonu her AnimIn'de ShowPos'a yeniden tween'lenir; tween SONRASI sağ-alt şeride sabitle.
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Combat.NEndTurnButton), "AnimIn")]
 public static class EndTurnBottomPatch
 {

@@ -5,19 +5,6 @@ using Godot;
 
 namespace Sts2Portrait.Diagnostics;
 
-/// <summary>
-/// Geliştirme köprüsü — TAMAMEN STATİK, SceneTree.ProcessFrame sinyaline bağlı.
-/// Mod DLL'inden gelen özel Node tiplerinin _Ready/_Process callback'leri Godot
-/// tarafından çağrılmadığından (dinamik assembly), node yerine sinyal kullanıyoruz.
-///
-/// Kanal: user://bridge/  (Linux: proton-prefix/.../SlayTheSpire2/bridge/)
-///   cmd  : dışarıdan yazılan komut (okununca silinir)
-///   done : son komut + sonuç
-///   *.png: viewport screenshot'ları
-///
-/// Komutlar: shot &lt;ad&gt; | dumproot | dumpscreen | click x y | move x y |
-///           drag x1 y1 x2 y2 | key &lt;Ad&gt;
-/// </summary>
 public static class Bridge
 {
     private static bool _started;
@@ -42,7 +29,6 @@ public static class Bridge
 
     private static void Tick()
     {
-        // ProcessFrame delta yok; sabit varsayım (~60fps) yeterli.
         _time += 0.016;
         for (int i = _pending.Count - 1; i >= 0; i--)
         {
@@ -107,7 +93,6 @@ public static class Bridge
 
     private static float F(string[] p, int i) => float.Parse(p[i], CultureInfo.InvariantCulture);
 
-    // Dev console komutunu doğrudan çalıştır (yazmaya gerek yok). Örn: "dev room boss", "dev win".
     private static void DevCmd(string command)
     {
         try
@@ -164,7 +149,6 @@ public static class Bridge
         _pending.Add((_time + 0.04 * 7, () => Press(b, false)));
     }
 
-    // --- GERÇEK touch event'leri (mouse değil) — mobil davranışı PC'de test etmek için ---
     private static void Tap(float x, float y)
     {
         var pos = new Vector2(x, y);
@@ -192,9 +176,6 @@ public static class Bridge
         _pending.Add((_time + 0.04 * 9, () => TouchPress(b, false)));
     }
 
-    // GERÇEK imleç sürüklemesi: oyunun drag akışı Viewport.GetMousePosition() POLL'ladığından
-    // (event pozisyonu değil), sentetik event yetmez — WarpMouse ile OS imlecini de taşı.
-    // Android'de touch DisplayServer imlecini zaten güncellediği için bu yol birebir temsilidir.
     private static void RealDrag(float x1, float y1, float x2, float y2)
     {
         var a = new Vector2(x1, y1);

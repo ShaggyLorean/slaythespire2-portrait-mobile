@@ -3,11 +3,6 @@ using Godot;
 
 namespace Sts2Portrait.Diagnostics;
 
-/// <summary>
-/// Çalışma zamanı node ağacı dökümcüsü — sadece STATİK yardımcı.
-/// (Mod DLL'inden gelen özel Node tiplerinin _Input/_Process callback'leri çağrılmadığından
-/// node tabanlı kullanım terk edildi; döküm Bridge komutlarından tetiklenir.)
-/// </summary>
 public static class NodeInspector
 {
     public static void DumpTree(Node root, string label, int maxDepth = 40)
