@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Ortak yardımcılar. Diğer scriptler `source` eder.
 REPO="${REPO:-$HOME/sts2-portrait}"
-GAME="${GAME:-/home/whispersgone/Downloads/Slay-the-Spire-2-AnkerGames/Slay the Spire 2}"
+_D="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"; [ -f "$_D/local.env" ] && . "$_D/local.env"
+GAME="${GAME:-}"; [ -n "$GAME" ] || echo "HATA: GAME tanımsız — scripts/local.env oluşturun (bkz. README)" >&2
 SCRATCH="${SCRATCH:-$HOME/sts2-portrait/shots}"
 PREFIX="$HOME/sts2-portrait/proton-prefix"
 GLOG="$PREFIX/pfx/drive_c/users/steamuser/AppData/Roaming/SlayTheSpire2/logs/godot.log"
@@ -9,7 +10,7 @@ export DOTNET_ROOT="$HOME/.dotnet"
 export PATH="$HOME/.dotnet:$HOME/.dotnet/tools:$PATH"
 
 sts2_build() {
-  dotnet build "$REPO/src/Sts2Portrait/Sts2Portrait.csproj" -c Release -v q 2>&1 | grep -iE "error|Build succ" | head
+  dotnet build "$REPO/src/Sts2Portrait/Sts2Portrait.csproj" -c Release -v q -p:GameDir="$GAME" 2>&1 | grep -iE "error|Build succ" | head
 }
 
 sts2_install() {

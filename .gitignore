@@ -18,3 +18,4 @@ sts2.dll
 GodotSharp.dll
 0Harmony.dll
 shots/
+scripts/local.env

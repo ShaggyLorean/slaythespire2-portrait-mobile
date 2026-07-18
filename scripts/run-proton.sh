@@ -3,7 +3,8 @@
 # Kullanım: run-proton.sh [--rendering-driver vulkan] [oyun argümanları...]
 set -uo pipefail
 
-GAME_DIR="${GAME_DIR:-/home/whispersgone/Downloads/Slay-the-Spire-2-AnkerGames/Slay the Spire 2}"
+_D="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"; [ -f "$_D/local.env" ] && . "$_D/local.env"
+GAME_DIR="${GAME_DIR:-}"; [ -n "$GAME_DIR" ] || { echo "HATA: GAME_DIR tanımsız — scripts/local.env oluşturun" >&2; exit 1; }
 EXE="$GAME_DIR/SlayTheSpire2.exe"
 PROTON="${PROTON:-$HOME/.steam/steam/compatibilitytools.d/GE-Proton11-1/proton}"
 PREFIX="${PREFIX:-$HOME/sts2-portrait/proton-prefix}"

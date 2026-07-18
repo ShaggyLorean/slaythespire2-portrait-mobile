@@ -96,6 +96,8 @@ public static class Bridge
                 case "key": KeyPress(p[1]); WriteDone(cmd, "ok"); break;
                 case "tap": Tap(F(p, 1), F(p, 2)); WriteDone(cmd, "ok"); break;
                 case "tdrag": TouchDrag(F(p, 1), F(p, 2), F(p, 3), F(p, 4)); WriteDone(cmd, "ok"); break;
+                case "warp": Input.WarpMouse(new Vector2(F(p, 1), F(p, 2))); WriteDone(cmd, "ok"); break;
+                case "rdrag": RealDrag(F(p, 1), F(p, 2), F(p, 3), F(p, 4)); WriteDone(cmd, "ok"); break;
                 case "dev": DevCmd(cmd.Substring(3).Trim()); break;
                 default: WriteDone(cmd, "unknown"); break;
             }
@@ -188,6 +190,28 @@ public static class Bridge
             prev = mid;
         }
         _pending.Add((_time + 0.04 * 9, () => TouchPress(b, false)));
+    }
+
+    // GERÇEK imleç sürüklemesi: oyunun drag akışı Viewport.GetMousePosition() POLL'ladığından
+    // (event pozisyonu değil), sentetik event yetmez — WarpMouse ile OS imlecini de taşı.
+    // Android'de touch DisplayServer imlecini zaten güncellediği için bu yol birebir temsilidir.
+    private static void RealDrag(float x1, float y1, float x2, float y2)
+    {
+        var a = new Vector2(x1, y1);
+        var b = new Vector2(x2, y2);
+        Input.WarpMouse(a);
+        Move(x1, y1);
+        Press(a, true);
+        for (int i = 1; i <= 10; i++)
+        {
+            var mid = a.Lerp(b, i / 10f);
+            _pending.Add((_time + 0.05 * i, () =>
+            {
+                Input.WarpMouse(mid);
+                Input.ParseInputEvent(new InputEventMouseMotion { Position = mid, GlobalPosition = mid, ButtonMask = MouseButtonMask.Left });
+            }));
+        }
+        _pending.Add((_time + 0.05 * 12, () => Press(b, false)));
     }
 
     private static void KeyPress(string keyName)

@@ -4,7 +4,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-GAME="${GAME:-/home/whispersgone/Downloads/Slay-the-Spire-2-AnkerGames/Slay the Spire 2}"
+_D="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"; [ -f "$_D/local.env" ] && . "$_D/local.env"
+GAME="${GAME:-}"; [ -n "$GAME" ] || echo "HATA: GAME tanımsız — scripts/local.env oluşturun (bkz. README)" >&2
 SCRATCH="${SCRATCH:-/tmp/claude-1000/-home-whispersgone/d17e17a8-955d-4d3d-a8a1-06a439a9f294/scratchpad}"
 PREFIX="$HOME/sts2-portrait/proton-prefix"
 GLOG="$PREFIX/pfx/drive_c/users/steamuser/AppData/Roaming/SlayTheSpire2/logs/godot.log"

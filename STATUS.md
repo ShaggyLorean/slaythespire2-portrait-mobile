@@ -63,3 +63,17 @@ bshot <ad>             # oyun-içi screenshot → scratchpad/<ad>-s.png
 ```
 Mod patch'leri: `src/Sts2Portrait/Patches/` (Display, Menu, Combat, Map, Diagnostics).
 Merkezi ayarlar: `PortraitConfig.cs` + her patch sınıfının başındaki sabitler (deneyle ayarlı).
+
+## Gece vardiyası 2 (2026-07-18) — doğrulama sonuçları
+- **Dükkan TAM EKRAN** yeniden tasarımı: 3 sütun grid + relic/potion bandı; satın almada canlı re-grid;
+  aç/kapa/yeniden-aç döngüsü çalışıyor (envanterin kendi BackButton'ı portrait'te ekran dışındaydı → taşındı).
+  Act 2 dükkanında da doğrulandı.
+- **Top bar**: 2 satır dinamik; 11 relic + 6 potion stres testi geçti; sürüm filigranı ikon altına küçültüldü.
+- **Input/touch**: Oyunun pointer modeli zaten dokunma-şekilli: kartı sürükle-oynat (saldırı→düşman üstüne bırak,
+  skill→yukarı bırak), End Turn UZUN BASIŞ onaylı (NEndTurnLongPressBar). Android'de Godot touch→mouse emülasyonu
+  bu akışı birebir üretir. PC'de sentetik jestlerle uçtan uca doğrulandı (rdrag=WarpMouse+event köprü komutu —
+  oyun sürüklemede Viewport.GetMousePosition() POLL'lar, salt event enjeksiyonu yetmez; gerçek cihazda sorun değil).
+- **Boss + Act 2**: Act 1 boss portrait ✓; act geçişi ✓; Act 2 harita/savaş/dükkan ✓ (harita patch'i act-bağımsız).
+- **Teslimat**: README.md (yasal duruş + iki Android yolu + sürüm uyarısı), scripts/android-repack.sh
+  (apktool -s, realpath guard, hiçbir şey indirmez/rehost etmez). Kişisel oyun yolu repo'dan temizlendi
+  (scripts/local.env git-ignored; csproj GameDir zorunlu, net hata mesajı).

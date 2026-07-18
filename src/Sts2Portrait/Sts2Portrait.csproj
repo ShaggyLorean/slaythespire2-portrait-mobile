@@ -9,7 +9,7 @@
     <AssemblyName>Sts2Portrait</AssemblyName>
     <RootNamespace>Sts2Portrait</RootNamespace>
     <!-- Oyun dizini: dotnet build -p:GameDir="..." ile geçersiz kılınabilir -->
-    <GameDir Condition="'$(GameDir)' == ''">/home/whispersgone/Downloads/Slay-the-Spire-2-AnkerGames/Slay the Spire 2</GameDir>
+    <GameDir Condition="'$(GameDir)' == ''">$(STS2_GAME_DIR)</GameDir>
     <GameData>$(GameDir)/data_sts2_windows_x86_64</GameData>
   </PropertyGroup>
 
@@ -29,4 +29,8 @@
     </Reference>
   </ItemGroup>
 
+  <Target Name="GameDirCheck" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(GameDir)' == ''"
+           Text="GameDir bos. Kendi oyun kurulumunuzu verin: dotnet build -p:GameDir=&quot;/path/to/Slay the Spire 2&quot; (veya STS2_GAME_DIR ortam degiskeni)." />
+  </Target>
 </Project>
