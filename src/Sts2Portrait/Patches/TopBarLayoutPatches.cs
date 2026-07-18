@@ -1,4 +1,3 @@
-using System.Collections;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
@@ -7,29 +6,21 @@ using MegaCrit.Sts2.Core.Nodes.Potions;
 namespace Sts2Portrait.Patches;
 
 /// <summary>
-/// Üst HUD bar landscape tasarımlı (1680-2580 geniş); portrait 1080'de öğeler çakışıyor
-/// (süre Map/Deck üstüne biniyor) ve potion satırı slot arttıkça taşıyor.
-/// Kendi 2-satırlı reflow'umuzu dayatıyoruz; potion sayısı değiştikçe yeniden paketliyoruz.
+/// Üst HUD bar landscape tasarımlı. Yapı: TopBar > LeftAlignedStuff [HBox, ~1280 geniş:
+/// Portrait+HP+Gold+Potion+RoomIcons+Modifiers] ve RightAlignedStuff [HBox, sağa-yaslı:
+/// Timer+Map+Deck+Pause]. Portrait 1080'de LeftAlignedStuff taşıp RightAlignedStuff'la çakışıyor.
+///
+/// HBox'lar çocuklarını AUTO-LAYOUT yaptığından tek tek eleman konumlamak işe yaramaz.
+/// Bunun yerine CONTAINER'ları konumluyoruz:
+///  - LeftAlignedStuff'ı satır 1'e, genişliğe SIĞACAK şekilde ölçekle (potion/modifier arttıkça
+///    genişler → ölçek dinamik küçülür ama HER ZAMAN sığar, çakışmaz — max durumu bile görünür).
+///  - RightAlignedStuff'ı satır 2'ye, sağa-yaslı taşı.
 /// </summary>
 public static class TopBarLayout
 {
-    public static float MarginL = 24f, MarginR = 24f;
-    public static float Row1Y = 8f, Row2Y = 78f;
-    public static float SlotW = 60f, SlotGap = 12f;
-    public static float IconW = 62f, IconGap = 8f;
-    public static float BtnW = 80f, BtnGap = 8f;
-    public static float LeftGap = 14f;
-
-    // Boyut henüz atanmamışsa (deferred anında) yedek genişlikler.
-    public static float WidthOr(Control c, float fallback) => c.Size.X > 1 ? c.Size.X : fallback;
-
-    public static void Flatten(Control c)
-    {
-        if (c is null) return;
-        c.AnchorLeft = c.AnchorTop = c.AnchorRight = c.AnchorBottom = 0f;
-        c.GrowHorizontal = Control.GrowDirection.End;
-        c.GrowVertical = Control.GrowDirection.End;
-    }
+    public static float MarginL = 12f, MarginR = 12f;
+    public static float Row1Y = 6f;
+    public static float Row2Y = 96f;
 }
 
 public static class TopBarReflow
@@ -40,93 +31,33 @@ public static class TopBarReflow
         if (!PortraitConfig.IsPortrait(PortraitConfig.CanvasSize)) return;
         float W = PortraitConfig.CanvasSize.X;
 
-        // --- Satır 1 sol: Portrait, Hp, Gold ---
-        float x = TopBarLayout.MarginL;
-        PlaceRow1(bar.Portrait, ref x, 72f);
-        PlaceRow1(bar.Hp, ref x, 179f);
-        PlaceRow1(bar.Gold, ref x, 138f);
-        float leftEnd = x;
+        var left = bar.GetNodeOrNull<Control>("LeftAlignedStuff");
+        var right = bar.GetNodeOrNull<Control>("RightAlignedStuff");
 
-        // --- Satır 1 sağ: Map, Deck, Pause (sağdan içe) ---
-        float rx = W - TopBarLayout.MarginR;
-        PlaceRow1Right(bar.Map, ref rx);
-        PlaceRow1Right(bar.Deck, ref rx);
-        PlaceRow1Right(bar.Pause, ref rx);
-        float rightStart = rx;
-
-        // --- Süre: satır 1 ortasındaki boşluğa (çakışmaz) ---
-        var timer = bar.Timer;
-        if (timer is not null)
+        // --- Satır 1: LeftAlignedStuff, genişliğe sığacak şekilde ölçekle ---
+        if (left is not null)
         {
-            TopBarLayout.Flatten(timer);
-            float tw = TopBarLayout.WidthOr(timer, 164f);
-            timer.GlobalPosition = new Vector2((leftEnd + rightStart) * 0.5f - tw * 0.5f, TopBarLayout.Row1Y);
+            float avail = W - TopBarLayout.MarginL - TopBarLayout.MarginR;
+            float contentW = left.Size.X > 1 ? left.Size.X : 1280f;
+            float fit = Mathf.Min(1f, avail / contentW);
+            left.PivotOffset = Vector2.Zero;              // sol-üstten ölçekle
+            left.AnchorLeft = left.AnchorTop = left.AnchorRight = left.AnchorBottom = 0f;
+            left.Scale = new Vector2(fit, fit);
+            left.Position = new Vector2(TopBarLayout.MarginL, TopBarLayout.Row1Y);
         }
 
-        // --- Satır 2 sağ: Boss/Floor/Room ikonları (sağdan içe) ---
-        float irx = W - TopBarLayout.MarginR;
-        PlaceIconRight(bar.BossIcon, ref irx);
-        PlaceIconRight(bar.FloorIcon, ref irx);
-        PlaceIconRight(bar.RoomIcon, ref irx);
-
-        // --- Satır 2 sol: potion satırı, kalan alanı doldurur ---
-        PackPotions(bar.PotionContainer, TopBarLayout.MarginL, irx - TopBarLayout.IconGap);
-
-        PortraitMod.Log($"topbar reflow: W={W} leftEnd={leftEnd:F0} rightStart={rightStart:F0}");
-    }
-
-    // NOT: GlobalPosition kullanıyoruz — bazı öğelerin (ör. PotionContainer'ın PotionMarginifier'ı)
-    // ara parent'ı var; Position parent-relative olduğundan kayıyor. GlobalPosition mutlaktır.
-    private static void PlaceRow1(Control c, ref float x, float fallbackW)
-    {
-        if (c is null) return;
-        TopBarLayout.Flatten(c);
-        c.GlobalPosition = new Vector2(x, TopBarLayout.Row1Y);
-        x += TopBarLayout.WidthOr(c, fallbackW) + TopBarLayout.LeftGap;
-    }
-
-    private static void PlaceRow1Right(Control c, ref float rx)
-    {
-        if (c is null) return;
-        TopBarLayout.Flatten(c);
-        rx -= TopBarLayout.BtnW;
-        c.GlobalPosition = new Vector2(rx, TopBarLayout.Row1Y);
-        rx -= TopBarLayout.BtnGap;
-    }
-
-    private static void PlaceIconRight(Control c, ref float rx)
-    {
-        if (c is null || !c.Visible) return;
-        TopBarLayout.Flatten(c);
-        rx -= TopBarLayout.IconW;
-        c.GlobalPosition = new Vector2(rx, TopBarLayout.Row2Y);
-        rx -= TopBarLayout.IconGap;
-    }
-
-    // Potion satırını canlı slot sayısına göre paketle → her zaman sığar, sadece aralık daralır.
-    public static void PackPotions(NPotionContainer pc, float startX, float endX)
-    {
-        if (pc is null) return;
-        TopBarLayout.Flatten(pc);
-        pc.GlobalPosition = new Vector2(startX, TopBarLayout.Row2Y);
-
-        var holders = Traverse.Create(pc).Field("_holders").GetValue<IList>();
-        int n = holders?.Count ?? 0;
-        if (n == 0) return;
-
-        float avail = endX - startX;
-        float step = Mathf.Min(TopBarLayout.SlotW + TopBarLayout.SlotGap, avail / n);
-        step = Mathf.Max(step, TopBarLayout.SlotW * 0.85f);
-
-        // Her holder'ı MUTLAK global konuma yerleştir (parent margin'lerinden bağımsız).
-        for (int i = 0; i < n; i++)
+        // --- Satır 2: RightAlignedStuff (Map/Deck/Pause), sağa-yaslı ---
+        if (right is not null)
         {
-            if (holders[i] is Control h)
-            {
-                TopBarLayout.Flatten(h);
-                h.GlobalPosition = new Vector2(startX + i * step, TopBarLayout.Row2Y + 4f);
-            }
+            float rw = right.Size.X > 1 ? right.Size.X : 476f;
+            float rfit = Mathf.Min(1f, (W - TopBarLayout.MarginL - TopBarLayout.MarginR) / rw);
+            right.PivotOffset = Vector2.Zero;
+            right.AnchorLeft = right.AnchorTop = right.AnchorRight = right.AnchorBottom = 0f;
+            right.Scale = new Vector2(rfit, rfit);
+            right.Position = new Vector2(W - TopBarLayout.MarginR - rw * rfit, TopBarLayout.Row2Y);
         }
+
+        PortraitMod.Log($"topbar reflow: W={W} leftW={(left?.Size.X ?? 0):F0} rightW={(right?.Size.X ?? 0):F0}");
     }
 
     /// <summary>Herhangi bir node'dan yukarı yürüyerek NTopBar ata bul.</summary>
@@ -138,30 +69,32 @@ public static class TopBarReflow
     }
 }
 
-// (1) İlk tam reflow — refs + başlangıç potion'ları oluştuktan sonra.
+// (1) İlk reflow — refs + başlangıç içerik oluştuktan sonra.
 [HarmonyPatch(typeof(NTopBar), "Initialize")]
 public static class TopBarInitReflowPatch
 {
-    public static void Postfix(NTopBar __instance) => Defer(__instance);
+    public static void Postfix(NTopBar __instance) => Defer(__instance, 0);
 
-    public static void Defer(NTopBar bar)
+    // İçerik boyutu ilk karede 0 olabilir → birkaç kez dene ki gerçek genişliğe göre ölçeklensin.
+    public static void Defer(NTopBar bar, int attempt)
     {
-        bar.GetTree().CreateTimer(0.06).Timeout += () =>
+        bar.GetTree().CreateTimer(0.08).Timeout += () =>
         {
-            if (GodotObject.IsInstanceValid(bar) && bar.IsInsideTree())
-                TopBarReflow.Apply(bar);
+            if (!GodotObject.IsInstanceValid(bar) || !bar.IsInsideTree()) return;
+            TopBarReflow.Apply(bar);
+            if (attempt < 4) Defer(bar, attempt + 1);
         };
     }
 }
 
-// (2) Belt boyutu değişince tüm bar yeniden paketlensin.
+// (2) Belt boyutu değişince yeniden ölçekle.
 [HarmonyPatch(typeof(NTopBar), "MaxPotionsChanged")]
 public static class TopBarMaxPotionsReflowPatch
 {
-    public static void Postfix(NTopBar __instance) => TopBarInitReflowPatch.Defer(__instance);
+    public static void Postfix(NTopBar __instance) => TopBarInitReflowPatch.Defer(__instance, 3);
 }
 
-// (3) Yeni potion holder eklenince potion satırını yeniden paketle.
+// (3) Yeni potion holder eklenince yeniden ölçekle (LeftAlignedStuff genişledi).
 [HarmonyPatch(typeof(NPotionContainer), "GrowPotionHolders")]
 public static class PotionGrowReflowPatch
 {
@@ -169,10 +102,6 @@ public static class PotionGrowReflowPatch
     {
         if (!PortraitConfig.IsPortrait(PortraitConfig.CanvasSize)) return;
         var bar = TopBarReflow.FindTopBar(__instance);
-        if (bar is not null)
-            bar.GetTree().CreateTimer(0.02).Timeout += () =>
-            {
-                if (GodotObject.IsInstanceValid(bar)) TopBarReflow.Apply(bar);
-            };
+        if (bar is not null) TopBarInitReflowPatch.Defer(bar, 3);
     }
 }

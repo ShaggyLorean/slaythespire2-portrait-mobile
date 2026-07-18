@@ -11,11 +11,25 @@ namespace Sts2Portrait.Patches;
 public static class CombatLayout
 {
     public static float BgScale = 1.7f;              // savaş arka planı dikeyi kaplasın (2765x1296 art)
-    public static float HandScale = 0.70f;           // fanı küçült → 10 kart 1080 genişliğe sığar
+    // Kartlar: büyük ölçek (okunur) + x-sıkıştırma (fan yine sığar, daha çok üst üste biner).
+    public static float HandScale = 0.82f;           // kart BOYUTU (daha büyük)
+    public static float FanXCompress = 0.72f;        // fan x-yayılımı (dar) — GetPosition x çarpanı
     public static float FanBottomFromCanvas = 400f;  // fan origin = CanvasSize.Y - bu (~1760)
     public static float CtrlUpFromBottom = 180f;     // kontroller CanvasSize.Y - bu (~1980)
     public static float EnergyXFrac = 0.084f;        // enerji sol kenar ~95px
     public static float EndTurnRightInset = 150f;    // end-turn sağ kenardan içeri
+}
+
+// Kart fanının x-yayılımını portrait'te sıkıştır (kartlar büyük kalabilsin ama fan taşmasın).
+// HandPosHelper._cardPositionData paylaşımlı; TABLOYU DEĞİŞTİRMİYORUZ, sadece sonucu postfix'liyoruz.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Helpers.HandPosHelper), "GetPosition")]
+public static class HandFanCompressPatch
+{
+    public static void Postfix(ref Vector2 __result)
+    {
+        if (!PortraitConfig.IsPortrait(PortraitConfig.CanvasSize)) return;
+        __result.X *= CombatLayout.FanXCompress;
+    }
 }
 
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Combat.NCombatSceneContainer), "OnWindowChange")]
