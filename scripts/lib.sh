@@ -20,15 +20,17 @@ sts2_install() {
 }
 
 sts2_kill() {
+  # Oyunu + crashpad'i öldür. Crashpad kalırsa sonraki açılış çökebilir → onu da öldür.
+  # DİKKAT: 'wineserver -k' KULLANMA — tekrarlı çağrı prefix'i bozuyor (çökme cascade'i).
   pkill -9 -f "SlayTheSpire2.exe" 2>/dev/null || true
+  pkill -9 -f "crashpad_handler.exe" 2>/dev/null || true
   pkill -9 -f "GE-Proton11-1/proton run" 2>/dev/null || true
   pkill -9 -f "reaper.*SlayTheSpire2" 2>/dev/null || true
-  # gerçekten ölene kadar bekle (kendi grep'ini hariç tut: --rendering-driver ile eşleştir)
   for i in $(seq 1 30); do
     pgrep -f "SlayTheSpire2.exe --rendering" >/dev/null 2>&1 || break
     sleep 0.5
   done
-  sleep 1
+  sleep 2
 }
 
 # Modun yüklediği build mvid'ini logdan oku (freshness doğrulama)
