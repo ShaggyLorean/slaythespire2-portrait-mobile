@@ -20,10 +20,12 @@ public static class CombatLayout
     public static float EnemyCenterXFrac = 0.385f;
 }
 
-// When a targeted card is picked up, the game docks it at the bottom center of the
-// canvas. On a tall portrait canvas that is far below the hand, so on touch the card
-// looks like it teleports away from the finger and the aim arrow starts from the
-// bottom. Re-dock it just above the hand, close to where the finger already is.
+// A targeted card (attack, single-target skill) is dragged up out of the hand, and the
+// moment it enters the play zone the game snaps it to the bottom-center of the screen. On a
+// tall portrait canvas that is a big jump downward away from the finger, and the aim arrow
+// then starts from way down there. Instead dock the card where the finger already is when
+// targeting begins, so there is no jump and the arrow starts under the thumb. Clamped so the
+// card never sits over the hand or off the top.
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Combat.NCardPlay), "CenterCard")]
 public static class TargetDockPatch
 {
@@ -32,10 +34,14 @@ public static class TargetDockPatch
         var canvas = PortraitConfig.CanvasSize;
         if (!PortraitConfig.IsPortrait(canvas)) return;
         Tune.Reload();
+        var node = __instance as Node;
         var holder = Traverse.Create(__instance).Property("Holder").GetValue();
-        if (holder is null) return;
+        if (node is null || holder is null) return;
+
+        float pointerY = node.GetViewport().GetMousePosition().Y;
+        float y = Mathf.Clamp(pointerY, canvas.Y * 0.42f, canvas.Y * CombatLayout.TargetDockYFrac);
         var t = Traverse.Create(holder);
-        t.Method("SetTargetPosition", new Vector2(canvas.X / 2f, canvas.Y * CombatLayout.TargetDockYFrac)).GetValue();
+        t.Method("SetTargetPosition", new Vector2(canvas.X / 2f, y)).GetValue();
         t.Method("SetTargetScale", Vector2.One * CombatLayout.TargetDockScale).GetValue();
     }
 }
