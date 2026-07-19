@@ -30,16 +30,18 @@ expect rough edges and report what you hit.
 
 <table align="center">
 <tr>
-  <td><img src="docs/launcher.png" width="280"/></td>
-  <td><img src="docs/menu.png" width="280"/></td>
-  <td><img src="docs/map.png" width="280"/></td>
+  <td><img src="docs/launcher.png" width="260"/></td>
+  <td><img src="docs/menu.png" width="260"/></td>
+  <td><img src="docs/map.png" width="260"/></td>
 </tr>
 <tr>
-  <td><img src="docs/combat.png" width="280"/></td>
-  <td><img src="docs/cards.png" width="280"/></td>
-  <td><img src="docs/shaders.png" width="280"/></td>
+  <td><img src="docs/combat.png" width="260"/></td>
+  <td><img src="docs/boss.png" width="260"/></td>
+  <td><img src="docs/shop.png" width="260"/></td>
 </tr>
 </table>
+
+All captures are from a OnePlus 13.
 
 ## What you need
 
