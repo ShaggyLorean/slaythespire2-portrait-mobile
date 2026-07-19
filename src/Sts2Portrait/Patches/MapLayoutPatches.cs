@@ -18,7 +18,8 @@ public static class MapBgSeamFixPatch
     // How far the parchment is pulled up past the screen top. The sheet's torn top edge
     // plus the dark void above it read as a broken strip under the HUD on phones, so the
     // edge art is pushed off screen and the solid paper runs from the very top.
-    public static float TopOverscan = 260f;
+    public static float TopOverscan = 120f;
+    public static float MidHeight = 3600f;
 
     public static void ApplyCovered(NMapBg bg)
     {
@@ -32,7 +33,7 @@ public static class MapBgSeamFixPatch
         var mid = bg.GetNodeOrNull<TextureRect>("MapMid");
         if (mid is not null)
         {
-            mid.CustomMinimumSize = new Vector2(0, 2400f);
+            mid.CustomMinimumSize = new Vector2(0, MidHeight);
             mid.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
         }
         if (!bg.HasMeta("sts2p_overscan"))
@@ -71,7 +72,7 @@ public static class MapBgFillPatch
             var fill = new ColorRect
             {
                 Name = FillName,
-                Color = new Color(0.11f, 0.13f, 0.10f),
+                Color = new Color("b79766"),   // parchment tan, so any uncovered edge blends in
                 AnchorRight = 1f, AnchorBottom = 1f,
                 OffsetLeft = 0, OffsetTop = 0, OffsetRight = 0, OffsetBottom = 0,
                 MouseFilter = Control.MouseFilterEnum.Ignore,
