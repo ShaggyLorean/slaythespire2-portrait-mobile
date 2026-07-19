@@ -82,6 +82,9 @@ public static class Bridge
                 case "key": KeyPress(p[1]); WriteDone(cmd, "ok"); break;
                 case "tap": Tap(F(p, 1), F(p, 2)); WriteDone(cmd, "ok"); break;
                 case "tdrag": TouchDrag(F(p, 1), F(p, 2), F(p, 3), F(p, 4)); WriteDone(cmd, "ok"); break;
+                case "tpress": TouchPress(new Vector2(F(p, 1), F(p, 2)), true); _tlast = new Vector2(F(p, 1), F(p, 2)); WriteDone(cmd, "ok"); break;
+                case "tmove": TouchMoveTo(F(p, 1), F(p, 2)); WriteDone(cmd, "ok"); break;
+                case "trel": TouchPress(new Vector2(F(p, 1), F(p, 2)), false); WriteDone(cmd, "ok"); break;
                 case "warp": Input.WarpMouse(new Vector2(F(p, 1), F(p, 2))); WriteDone(cmd, "ok"); break;
                 case "rdrag": RealDrag(F(p, 1), F(p, 2), F(p, 3), F(p, 4)); WriteDone(cmd, "ok"); break;
                 case "dev": DevCmd(cmd.Substring(3).Trim()); break;
@@ -158,6 +161,22 @@ public static class Bridge
 
     private static void TouchPress(Vector2 pos, bool pressed) =>
         Input.ParseInputEvent(new InputEventScreenTouch { Index = 0, Pressed = pressed, Position = pos });
+
+    private static Vector2 _tlast;
+
+    private static void TouchMoveTo(float x, float y)
+    {
+        var target = new Vector2(x, y);
+        var from = _tlast;
+        for (int i = 1; i <= 6; i++)
+        {
+            var mid = from.Lerp(target, i / 6f);
+            var prev = from.Lerp(target, (i - 1) / 6f);
+            _pending.Add((_time + 0.03 * i, () =>
+                Input.ParseInputEvent(new InputEventScreenDrag { Index = 0, Position = mid, Relative = mid - prev })));
+        }
+        _tlast = target;
+    }
 
     private static void TouchDrag(float x1, float y1, float x2, float y2)
     {

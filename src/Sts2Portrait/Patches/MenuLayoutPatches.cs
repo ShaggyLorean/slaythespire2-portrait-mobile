@@ -8,9 +8,13 @@ public static class MenuLayout
 {
     private const float BgW = 2560f;
     private const float BgH = 1200f;
+    public static float BgOvershoot = 1.06f;   // overfill so neither edge leaves a black strip
+    public static float LogoYFrac = 0.20f;
+    public static float ButtonsYFrac = 0.55f;
 
     public static void Apply(NMainMenu menu)
     {
+        Tune.Reload();
         Diagnostics.DevTools.Ensure();
         var canvas = PortraitConfig.CanvasSize;
         var center = canvas * 0.5f;
@@ -19,7 +23,7 @@ public static class MenuLayout
         float parentScale = 1f;
         if (bgContainer is not null)
         {
-            float cover = Mathf.Max(canvas.X / BgW, canvas.Y / BgH);
+            float cover = Mathf.Max(canvas.X / BgW, canvas.Y / BgH) * BgOvershoot;
             parentScale = cover;
             bgContainer.PivotOffset = new Vector2(BgW, BgH) * 0.5f;
             bgContainer.Scale = Vector2.One * cover;
@@ -31,7 +35,7 @@ public static class MenuLayout
         {
             float logoGlobalScale = 0.42f;
             logo.Scale = Vector2.One * (logoGlobalScale / parentScale);
-            logo.GlobalPosition = new Vector2(center.X - 470f, canvas.Y * 0.20f);
+            logo.GlobalPosition = new Vector2(center.X - 470f, canvas.Y * LogoYFrac);
             logo.Visible = true;
             logo.Modulate = new Color(logo.Modulate.R, logo.Modulate.G, logo.Modulate.B, 1f);
         }
@@ -41,7 +45,7 @@ public static class MenuLayout
         {
             buttons.AnchorLeft = buttons.AnchorTop = buttons.AnchorRight = buttons.AnchorBottom = 0f;
             float groupW = buttons.Size.X > 0 ? buttons.Size.X : 269f;
-            buttons.Position = new Vector2(center.X - groupW * 0.5f, canvas.Y * 0.55f);
+            buttons.Position = new Vector2(center.X - groupW * 0.5f, canvas.Y * ButtonsYFrac);
         }
 
         PortraitMod.Log($"menu layout: canvas={canvas} logo={(logo is null ? "?" : "ok")} bg={(bgContainer is null ? "?" : "ok")}");
