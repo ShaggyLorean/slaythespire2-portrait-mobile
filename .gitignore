@@ -1,26 +1,58 @@
-notes/
-# Decompile çıktıları ve oyun verisi — ASLA commit edilmez
-notes/sts2-src/
-notes/pck-project/
-vendor/
-tools/
-proton-prefix/
+# Windows
+*.bat
 
-# Build çıktıları
-**/bin/
-**/obj/
+# Build outputs
+android/build/
+android/.gradle/
+android/.cxx/
+android/assets/dotnet_bcl/
+android/local.properties
+android/res/values-*/godot_project_name_string.xml
+android/res/values/godot_project_name_string.xml
+src/patcher/bin/
+src/patcher/obj/
+src/STS2Mobile/bin/
+src/STS2Mobile/obj/
+tools/**/bin/
+tools/**/obj/
+tmp/
+tmp-*/
 
-# Oyun assembly'leri / paketleri / APK'lar (kullanıcı sağlar)
-*.pck
+# Large binary files
+*.tar.gz
 *.apk
-# Not: manifest/Sts2Portrait.json commit EDİLİR; oyun DLL'leri edilmez
-data_sts2_windows_x86_64/
-sts2.dll
-GodotSharp.dll
-0Harmony.dll
-shots/
-scripts/local.env
-proton-prefix-*/
-tools/mobile-refs/*.dll
-tools/bin/*.jar
-dist/
+*.so
+*.pck
+*.aar
+*.aar.bak*
+*.jar
+*.keystore
+
+# Third-party sources & SDKs
+vendor/
+
+# FMOD logos (proprietary)
+android/assets/FMOD_LOGOS/
+
+# Upstream game files
+upstream/
+
+# Python venv
+venv/
+
+# Logs
+logs.txt
+
+# Hidden directories
+.*
+!.gitignore
+!.github/
+!.github/**
+
+# IDE
+*.user
+*.suo
+
+# .NET
+*.nupkg
+patchnotes.md

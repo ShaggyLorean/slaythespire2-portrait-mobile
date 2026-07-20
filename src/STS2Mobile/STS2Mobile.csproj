@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <AssemblyName>STS2Mobile</AssemblyName>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    <Nullable>annotations</Nullable>
+    <GameReferenceDir Condition="'$(GameReferenceDir)' == ''">../../upstream/godot-export/.godot/mono/publish/arm64</GameReferenceDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameReferenceDir)/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GodotSharp">
+      <HintPath>$(GameReferenceDir)/GodotSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="sts2">
+      <HintPath>$(GameReferenceDir)/sts2.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="SteamKit2" Version="3.4.0" />
+  </ItemGroup>
+</Project>
