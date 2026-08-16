@@ -38,7 +38,7 @@ window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/handheld/orientation=4
+window/handheld/orientation=5
 
 [dotnet]
 
@@ -69,7 +69,10 @@ PROJECT_SETTINGS = [
     ("display/window/size/viewport_height", ("int", 1080)),
     ("display/window/stretch/mode", ("string", "canvas_items")),
     ("display/window/stretch/aspect", ("string", "expand")),
-    ("display/window/handheld/orientation", ("int", 4)),
+    # DisplayServer.ScreenOrientation: 5 == SCREEN_SENSOR_PORTRAIT. The engine
+    # applies this before any managed patch runs, so it must already be portrait
+    # here; 4 (SCREEN_SENSOR_LANDSCAPE) caused the landscape flash on cold start.
+    ("display/window/handheld/orientation", ("int", 5)),
     ("dotnet/project/assembly_name", ("string", "sts2")),
     ("rendering/renderer/rendering_method", ("string", "gl_compatibility")),
     ("rendering/renderer/rendering_method.mobile", ("string", "gl_compatibility")),

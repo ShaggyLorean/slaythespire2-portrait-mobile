@@ -39,6 +39,7 @@ upstream/
 
 # Python venv
 venv/
+__pycache__/
 
 # Logs
 logs.txt
