@@ -1,28 +1,26 @@
 # Changelog
 
-All notable changes for the overhauled repository are recorded here.
+Notable changes to the portrait project. Bug ids refer to [docs/BUGS.md](docs/BUGS.md).
 
-## [Unreleased]
-
-### Added
-- Added an overhaul migration check-list + roadmap to formalize the independent rewrite scope.
-- Added repository labels for severity/priority/category tracking:
-  - severity: critical/high/medium/low
-  - priority: p0/p1/p2/p3
-  - category: reliability/overhaul
-- Added project governance artifacts:
-  - `OVERHAUL_STATUS.md`
-  - `docs/device-log-checklist.md`
-
-### Changed
-- Improved launcher timeout control for manual cloud sync operations to avoid UI hangs.
-- Added per-path and per-operation timeouts for cloud sync coordinator reads/writes.
-- Hardened lifecycle cloud flush paths to avoid unbounded waits.
-- Hardened dependency reflection in `ModLoaderPatches` to avoid startup breakage when mod metadata shape changes.
+## [Unreleased] - 0.4.0 / 0.5.0 line
 
 ### Fixed
-- Fixed `Task.WhenAny`-based dead-ends for cloud sync operations that could block launcher interaction.
-- Added time-bound guardrails around cache read/write/update operations in cloud sync paths.
+- BUG-001: bootstrap PCK now requests sensor portrait (`orientation=5`; 4 was sensor landscape in the Godot 4 enum), and `GodotApp` coerces every activity orientation request to the portrait family, removing the landscape flash on launcher cold start and on the Start game handoff. A regression verifier (`scripts/verify-bootstrap-pck.py`) re-parses the generated PCK.
+- BUG-002: launcher confirmation dialogs render on a dedicated CanvasLayer above all content; the section-column ZIndex override that drew buttons over dialog text is gone, and buttons under an open dialog no longer receive input.
+- BUG-005: the Repair game files confirmation states the real per-mode behavior (Steam: delete download then re-download; Offline: remove import for a clean reimport) instead of upstream's stale "Redownload game files?" copy.
+- BUG-003 (event slice): event text starts below the run HUD band. `PortraitHudMetrics` is the single source for HUD-occupied space; the event block keeps its authored Y only when it clears the HUD.
+- BUG-004 (geometry): the combat top band and the native top cover take the real display-cutout inset as a lower bound instead of being purely fixed-size; cover sizing is logged for the gutter investigation.
 
-## [Initial Overhaul Baseline]
-- Forked repository and established independent project documentation and workflow for a sustained rewrite.
+### Removed
+- BUG-006/BUG-010: five unregistered patch files (EventLayout, Merchant, MobileLayout, UiScale, CombatBackground), the never-called PortraitTopVignette, and a dead LauncherActivity helper (1,000+ lines of misleading dead code).
+
+### Added
+- Project docs: bug inventory ([docs/BUGS.md](docs/BUGS.md)), test log ([docs/TESTS.md](docs/TESTS.md)), upstream boundary and sync policy ([docs/UPSTREAM.md](docs/UPSTREAM.md)), roadmap ([docs/ROADMAP.md](docs/ROADMAP.md)).
+- `tools/pctest/`: PC harness that compiles the game-independent layer against official GodotSharp/SteamKit2 packages and unit-checks the HUD metrics math, for machines without game files.
+
+### Removed (docs)
+- Inherited upstream governance files (`MIGRATION_CHECKLIST.md`, `OVERHAUL_ROADMAP.md`, `OVERHAUL_STATUS.md`, `docs/current-android-status.md`) that described the upstream project, not this one.
+
+## [0.3.0-portrait-preview] - 2026-07-20
+
+First save point for the portrait-first Android build. See [docs/release-notes/v0.3.0-portrait-preview.md](docs/release-notes/v0.3.0-portrait-preview.md).

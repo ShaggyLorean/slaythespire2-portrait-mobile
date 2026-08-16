@@ -17,6 +17,8 @@ This project uses [StS2 Launcher Overhaul](https://github.com/SocialHummingbird/
 
 The design audit and the mapping from the supplied before/after references live in [docs/portrait-design-audit.md](docs/portrait-design-audit.md).
 
+Project tracking: [docs/BUGS.md](docs/BUGS.md) (bug inventory), [docs/TESTS.md](docs/TESTS.md) (test log and device scenarios), [docs/ROADMAP.md](docs/ROADMAP.md) (0.3.0 to 1.0), [docs/UPSTREAM.md](docs/UPSTREAM.md) (upstream boundary and sync policy).
+
 ## Launcher modes
 
 ### Offline
