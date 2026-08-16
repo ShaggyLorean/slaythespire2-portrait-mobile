@@ -230,8 +230,13 @@ internal sealed class LauncherController
 
     private void RedownloadPressed()
     {
+        // The button says "Repair game files"; the dialog must say exactly what
+        // that repair does in the active mode, because the action is a delete.
+        var message = _model.Mode == LauncherMode.Offline
+            ? "Repair game files?\nThis removes the imported game files so you can import a fresh copy. Your saves are kept."
+            : "Repair game files?\nThis deletes the downloaded game files and you download a fresh copy from Steam. Your Steam login and saves are kept.";
         _view.ShowConfirmation(
-            "Redownload game files?\nThis keeps your Steam login but deletes downloaded game files.",
+            message,
             () =>
             {
                 _model.ResetGameFilesForRedownload();
