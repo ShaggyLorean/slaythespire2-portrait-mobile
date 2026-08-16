@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    PC pre-screening harness (see docs/TESTS.md).
+
+    Compiles the game-independent layer (launcher MVC, components, Steam
+    client, portrait display and HUD metrics) against the official GodotSharp
+    and SteamKit2 packages, without needing the game's sts2.dll. This catches
+    syntax/type errors in launcher work on a machine that has no game files,
+    and runs the pure-math unit checks in Program.cs.
+
+    It cannot compile the Harmony patch layer (that requires sts2.dll via
+    GameReferenceDir) and it is not a substitute for on-device validation.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>LauncherPcHarness</AssemblyName>
+    <RootNamespace>STS2Mobile.PcTest</RootNamespace>
+    <Nullable>annotations</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="GodotSharp" Version="4.5.1" />
+    <PackageReference Include="SteamKit2" Version="3.4.0" />
+    <PackageReference Include="Lib.Harmony" Version="2.3.6" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="GameStubs.cs" />
+    <Compile Include="../../src/STS2Mobile/Launcher/**/*.cs" />
+    <Compile Include="../../src/STS2Mobile/Steam/**/*.cs" />
+    <Compile Include="../../src/STS2Mobile/Portrait/PortraitDisplay.cs" />
+    <Compile Include="../../src/STS2Mobile/Portrait/PortraitHudMetrics.cs" />
+    <Compile Include="../../src/STS2Mobile/PatchHelper.cs" />
+    <Compile Include="../../src/STS2Mobile/AndroidGodotAppBridge.cs" />
+    <Compile Include="../../src/STS2Mobile/AppPaths.cs" />
+    <Compile Include="../../src/STS2Mobile/BootstrapTrace.cs" />
+    <!-- Game-typed files: need sts2.dll, excluded from the harness. -->
+    <Compile Remove="../../src/STS2Mobile/Launcher/LauncherStartupFlow.cs" />
+    <Compile Remove="../../src/STS2Mobile/Launcher/LauncherGameStartupRecovery.cs" />
+  </ItemGroup>
+</Project>

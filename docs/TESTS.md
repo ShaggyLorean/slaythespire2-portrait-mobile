@@ -31,9 +31,9 @@ Per the plan, PC checks must use real device metrics, not arbitrary window sizes
 | Check | Tier | Result | Notes |
 | --- | --- | --- | --- |
 | Bootstrap PCK orientation = SENSOR_PORTRAIT (5) in project.binary and project.godot | T1 | PASS | `python scripts/verify-bootstrap-pck.py`: `OK ... (3 entries)` |
-| Game-independent layer compiles after dialog/ZIndex/copy changes | T2 | see round notes | recorded after each harness run |
-| PortraitHudMetrics math (band geometry, monotonicity, reference-canvas headroom) | T2 | see round notes | `LauncherPcHarness` exit code |
-| Java changes (orientation coercion, cover sizing) | - | REVIEW ONLY | no Android SDK on this PC; compiles at the next APK build |
+| Game-independent layer compiles after dialog/ZIndex/copy changes | T2 | PASS | `dotnet build tools/pctest -c Release`: 0 errors against GodotSharp 4.5.1 + SteamKit2 3.4.0 |
+| PortraitHudMetrics math (band geometry, monotonicity, reference-canvas headroom) | T2 | PASS | `dotnet run` in tools/pctest: `OK: PortraitHudMetrics checks passed`, exit 0 |
+| Java changes (orientation coercion, cover sizing) | - | REVIEW ONLY | no Android SDK on this PC; compiles at the next APK build. Engine-side call path verified against Godot 4.5 source: `GodotIO.setScreenOrientation` calls `activity.setRequestedOrientation`, which our override intercepts |
 
 ### Device round for 0.4.0 + 0.5.0 (pending)
 
