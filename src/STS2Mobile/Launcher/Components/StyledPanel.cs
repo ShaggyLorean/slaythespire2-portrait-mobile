@@ -32,8 +32,12 @@ internal sealed class StyledPanel : CenterContainer
         );
         AddChild(panelContainer);
 
+        // Tree order already draws Content above the backdrop that
+        // UpdateSizeFromViewport inserts at index 0. Do not give Content a
+        // ZIndex boost here: canvas items with a higher Z draw over any plain
+        // overlay a later caller adds at Z 0, which put section buttons on top
+        // of confirmation dialogs.
         Content = new VBoxContainer();
-        Content.ZIndex = 10;
         Content.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
         Content.AddThemeConstantOverride("separation", (int)(10 * scale));
         panelContainer.AddChild(Content);

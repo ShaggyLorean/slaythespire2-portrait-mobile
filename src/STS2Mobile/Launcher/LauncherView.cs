@@ -294,15 +294,28 @@ internal sealed class LauncherView
         }
     }
 
-    private sealed class StyledDialog : ColorRect
+    // The launcher content is a plain layer-0 Control tree; the startup
+    // recovery panel owns CanvasLayer 128. Confirmations get their own
+    // CanvasLayer between the two so they always draw and receive input above
+    // every section control, regardless of any ZIndex used inside the content.
+    private sealed class StyledDialog : CanvasLayer
     {
+        private const int DialogCanvasLayer = 64;
+
         internal event Action Confirmed;
         private event Action Cancelled;
 
         internal StyledDialog(string message, float scale)
         {
-            SetAnchorsPreset(Control.LayoutPreset.FullRect);
-            Color = LauncherComponentTheme.DialogOverlay;
+            Layer = DialogCanvasLayer;
+
+            var backdrop = new ColorRect
+            {
+                Color = LauncherComponentTheme.DialogOverlay,
+                MouseFilter = Control.MouseFilterEnum.Stop,
+            };
+            backdrop.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            AddChild(backdrop);
 
             var center = BuildCenter();
             var dialogBox = BuildDialogBox(scale);
