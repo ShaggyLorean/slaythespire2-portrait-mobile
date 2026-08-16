@@ -34,6 +34,8 @@ Per the plan, PC checks must use real device metrics, not arbitrary window sizes
 | Game-independent layer compiles after dialog/ZIndex/copy changes | T2 | PASS | `dotnet build tools/pctest -c Release`: 0 errors against GodotSharp 4.5.1 + SteamKit2 3.4.0 |
 | PortraitHudMetrics math (band geometry, monotonicity, reference-canvas headroom) | T2 | PASS | `dotnet run` in tools/pctest: `OK: PortraitHudMetrics checks passed`, exit 0 |
 | Java changes (orientation coercion, cover sizing) | - | REVIEW ONLY | no Android SDK on this PC; compiles at the next APK build. Engine-side call path verified against Godot 4.5 source: `GodotIO.setScreenOrientation` calls `activity.setRequestedOrientation`, which our override intercepts |
+| Full managed build including the Harmony patch layer | T3 | PASS | `dotnet build src/STS2Mobile -c Release -p:GameReferenceDir="D:\SteamLibrary\steamapps\common\Slay the Spire 2\data_sts2_windows_x86_64"`: Build succeeded, 0 errors |
+| BUG-001 game-leg root cause evidence | T1 | PASS | Retail `SlayTheSpire2.pck` parsed: `display/window/handheld/orientation` absent from `project.binary` (151 settings), engine default `SCREEN_LANDSCAPE` (0) applies; confirms the activity-boundary fix choice |
 
 ### Device round for 0.4.0 + 0.5.0 (pending)
 
