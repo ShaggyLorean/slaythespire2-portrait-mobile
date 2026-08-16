@@ -36,6 +36,9 @@ Per the plan, PC checks must use real device metrics, not arbitrary window sizes
 | Java changes (orientation coercion, cover sizing) | - | REVIEW ONLY | no Android SDK on this PC; compiles at the next APK build. Engine-side call path verified against Godot 4.5 source: `GodotIO.setScreenOrientation` calls `activity.setRequestedOrientation`, which our override intercepts |
 | Full managed build including the Harmony patch layer | T3 | PASS | `dotnet build src/STS2Mobile -c Release -p:GameReferenceDir="D:\SteamLibrary\steamapps\common\Slay the Spire 2\data_sts2_windows_x86_64"`: Build succeeded, 0 errors |
 | BUG-001 game-leg root cause evidence | T1 | PASS | Retail `SlayTheSpire2.pck` parsed: `display/window/handheld/orientation` absent from `project.binary` (151 settings), engine default `SCREEN_LANDSCAPE` (0) applies; confirms the activity-boundary fix choice |
+| Engine + APK chain rebuild | build | PASS | Custom Godot 4.5.1 arm64 (mono + sts2 patch) built from source and injected into the AAR; `build-android-local.ps1` produced and structurally verified the APK |
+
+**Device-round APK:** `StS2Portrait-v0.4.0-dev1-arm64-v8a.apk`, versionCode `40010`, package `com.sts2portrait.mobile.local` (installs alongside the release/dev app), local test keystore, sha256 `31c73198f632443a37e6bc62541a3d351050f9b509b4a34d514478f4e9b23a55`. Fresh package = no downloaded game inside; use Steam Online download or Offline import on device before the game-side steps.
 
 ### Device round for 0.4.0 + 0.5.0 (pending)
 
@@ -58,10 +61,14 @@ Record results as: step, PASS/FAIL, device, APK version, and for failures a scre
 
 From step 7's log line: if `cutoutInset` >= the fallback on the reference device and no gutter is visible above the band, the `width / 12` floor can likely be dropped next release; if a gutter is visible on any cutout-less device, we finally have its true size. Paste the numbers here either way.
 
-## Handoff: restoring T3 + APK builds on this PC
+## Build environment on this PC (restored 2026-08-16)
 
-Blocked on game files only. Once Slay the Spire 2 is installed (or its files restored) on the PC:
+The full chain was reconstructed post-format and is working:
 
-1. Copy or reference `data_sts2_windows_x86_64` and run:
-   `dotnet build src/STS2Mobile/STS2Mobile.csproj -c Release -p:GameReferenceDir="<path>/data_sts2_windows_x86_64"`
-2. The APK additionally needs the toolchain from README (custom Godot 4.5.1 runtime via `scripts/setup-godot-source.ps1` + `scripts/build-godot.ps1`, Android SDK/NDK, JDK, gradle), then `scripts/build-android-local.ps1`.
+- Game reference: `D:\SteamLibrary\steamapps\common\Slay the Spire 2\data_sts2_windows_x86_64` (also seeded into `upstream/godot-export/.godot/mono/publish/arm64` for the build script's dependency fallback: sts2, 0Harmony, GodotSharp, Steamworks.NET, Sentry).
+- .NET SDK 9.0.317; JDK 17 at `C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot`; Android SDK at `%LOCALAPPDATA%\Android\Sdk` (platform-tools, android-35, build-tools 35.0.0, NDK 28.1.13356709); Gradle 8.11.1 at `tmp\toolchain\gradle-8.11.1` (repo has no gradlew.bat).
+- Godot 4.5.1-stable source at `vendor/godot` with `patches/godot/sts2-android-runtime.patch` applied; `scripts/build-godot.ps1 -Arches arm64` rebuilds `libgodot_android.so` and injects it into `android/libs/release/godot-lib.template_release.aar` (base AAR fetched from Maven `org.godotengine:godot:4.5.1.stable`; the engine patch touches C++ only, so the stock Java side is correct).
+- `android/assets/dotnet_bcl` seeded with the .NET 9.0.7 mono-android BCL (169 assemblies + `System.Private.CoreLib.dll` from the runtime pack's `native/` dir), matching the game's 9.0.7 runtime exactly; the mono runtime pack is also cached at `tmp\nuget-runtime` for the native `.so` staging step.
+- Signing: `tmp\localtest.keystore` (localtest defaults from the build script).
+
+Full APK recipe: `dotnet publish` happens inside `scripts\build-android-local.ps1 -VersionName <v> -VersionCode <c> -AndroidHome "%LOCALAPPDATA%\Android\Sdk" -JavaHome "C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot" -GradlePath "tmp\toolchain\gradle-8.11.1\bin\gradle.bat" -Abi arm64-v8a`.
