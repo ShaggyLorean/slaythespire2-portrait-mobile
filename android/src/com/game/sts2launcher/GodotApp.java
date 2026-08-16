@@ -1150,8 +1150,16 @@ public class GodotApp extends GodotActivity {
 				// The exposed renderer gutter is 90px on a 1440px-wide device, with
 				// another ~20px of its blue-grey torn edge below it. Width / 12 keeps
 				// the complete gutter covered across portrait resolutions without
-				// reaching the combat HUD.
-				int height = Math.max(1, Math.round(width / 12.0f));
+				// reaching the combat HUD. A display cutout deeper than that ratio
+				// must extend the cover so the camera area never sits on raw gutter.
+				// Never shrink below the ratio: the gutter's root cause is still
+				// unconfirmed, so the historical floor stays until device evidence
+				// says the cutout inset alone is enough (BUG-004 investigation).
+				int widthFallback = Math.max(1, Math.round(width / 12.0f));
+				int cutoutInset = getDisplayCutoutTopInsetPixels();
+				int height = Math.max(cutoutInset, widthFallback);
+				Log.i(TAG, "Combat top cover sizing: cutoutInset=" + cutoutInset
+					+ "px widthFallback=" + widthFallback + "px chosen=" + height + "px");
 
 				if (combatTopCover == null) {
 					combatTopCover = new View(this);
