@@ -6,11 +6,8 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Log;
 
-import java.io.File;
-
 public class LauncherActivity extends Activity {
 	private static final String TAG = "STS2Mobile";
-	private static final String PCK_FILE = "SlayTheSpire2.pck";
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -51,10 +48,5 @@ public class LauncherActivity extends Activity {
 			}
 		}
 		return false;
-	}
-
-	private boolean hasDownloadedGamePck() {
-		File pck = new File(new File(getFilesDir(), "game"), PCK_FILE);
-		return pck.exists() && pck.isFile() && pck.length() > 0;
 	}
 }

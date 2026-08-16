@@ -84,31 +84,6 @@ internal static class PortraitNodes
     }
 }
 
-internal sealed class PortraitTopVignette : Control
-{
-    public override void _Draw()
-    {
-        var width = Math.Max(1f, Size.X);
-        var height = Math.Max(1f, Size.Y);
-        DrawPolygon(
-            new[]
-            {
-                Vector2.Zero,
-                new Vector2(width, 0f),
-                new Vector2(width, height),
-                new Vector2(0f, height),
-            },
-            new[]
-            {
-                new Color(0.018f, 0.038f, 0.030f, 0.98f),
-                new Color(0.018f, 0.038f, 0.030f, 0.98f),
-                new Color(0.018f, 0.038f, 0.030f, 0f),
-                new Color(0.018f, 0.038f, 0.030f, 0f),
-            }
-        );
-    }
-}
-
 internal sealed class PortraitCombatFrame : Control
 {
     private Vector2 _configuredSize;
@@ -634,7 +609,6 @@ internal static class EndTurnPatch
 internal static class PortraitTopBar
 {
     private static string _lastSignature = "";
-    private const string VignetteName = "Sts2PortraitTopVignette";
 
     private static void Place(Control control, Vector2 globalPosition, float scale)
     {
@@ -654,26 +628,6 @@ internal static class PortraitTopBar
         right -= width * scale;
         Place(control, new Vector2(right, top), scale);
         return right - 12f;
-    }
-
-    private static void EnsureVignette(NTopBar bar, Vector2 canvas)
-    {
-        var vignette = bar.GetNodeOrNull<PortraitTopVignette>(VignetteName);
-        if (vignette is null)
-        {
-            vignette = new PortraitTopVignette
-            {
-                Name = VignetteName,
-                MouseFilter = Control.MouseFilterEnum.Ignore,
-            };
-            bar.AddChild(vignette);
-            bar.MoveChild(vignette, 0);
-        }
-
-        PortraitNodes.ClearAnchors(vignette);
-        vignette.Position = Vector2.Zero;
-        vignette.Size = new Vector2(canvas.X, 520f);
-        vignette.QueueRedraw();
     }
 
     private static bool IsUpperRightBuildText(Control control, string text, Vector2 canvas)
