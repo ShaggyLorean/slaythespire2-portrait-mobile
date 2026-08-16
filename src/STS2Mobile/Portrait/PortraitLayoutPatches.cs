@@ -87,20 +87,27 @@ internal static class PortraitNodes
 internal sealed class PortraitCombatFrame : Control
 {
     private Vector2 _configuredSize;
+    private float _configuredTopSolid;
 
     internal void Configure(Vector2 canvas)
     {
-        if (_configuredSize == canvas && GetChildCount() > 0)
+        // The top band covers the authored sky strip (fixed art height) and
+        // must also back the display cutout, whose inset can be reported late
+        // or change between devices, so it is part of the rebuild signature.
+        var topSolid = PortraitHudMetrics.CombatTopBandHeight(PortraitDisplay.SafeTop());
+        if (_configuredSize == canvas
+            && Math.Abs(_configuredTopSolid - topSolid) < 0.5f
+            && GetChildCount() > 0)
             return;
 
         _configuredSize = canvas;
+        _configuredTopSolid = topSolid;
         foreach (var child in GetChildren())
             child.QueueFree();
 
         var width = Math.Max(1f, canvas.X);
         var height = Math.Max(1f, canvas.Y);
-        const float topSolid = 118f;
-        const float topFade = 430f;
+        var topFade = Math.Max(430f, topSolid + 120f);
         const float bottomFade = 610f;
         const float bottomSolid = 235f;
         var topInk = new Color(0.027f, 0.145f, 0.094f, 1f);
@@ -705,7 +712,7 @@ internal static class PortraitTopBar
             right.Position = Vector2.Zero;
         }
 
-        var top = safeTop + 24f;
+        var top = PortraitHudMetrics.HudTop(safeTop);
         var hp = PortraitNodes.FindControl(bar, "TopBarHp");
         var gold = PortraitNodes.FindControl(bar, "TopBarGold");
         var portrait = PortraitNodes.FindControl(bar, "TopBarPortrait");
@@ -725,11 +732,11 @@ internal static class PortraitTopBar
             portraitTip.Visible = false;
 
         Place(hp, new Vector2(38f, top), 1.28f);
-        Place(gold, new Vector2(38f, top + 92f), 1.28f);
-        Place(potions, new Vector2(38f, top + 184f), 1.25f);
-        Place(room, new Vector2(38f, top + 286f), 1.32f);
-        Place(floor, new Vector2(168f, top + 286f), 1.32f);
-        Place(boss, new Vector2(322f, top + 286f), 1.32f);
+        Place(gold, new Vector2(38f, top + PortraitHudMetrics.GoldRowOffset), 1.28f);
+        Place(potions, new Vector2(38f, top + PortraitHudMetrics.PotionRowOffset), 1.25f);
+        Place(room, new Vector2(38f, top + PortraitHudMetrics.RoomRowOffset), 1.32f);
+        Place(floor, new Vector2(168f, top + PortraitHudMetrics.RoomRowOffset), 1.32f);
+        Place(boss, new Vector2(322f, top + PortraitHudMetrics.RoomRowOffset), 1.32f);
 
         var rightEdge = canvas.X - 38f;
         rightEdge = PlaceFromRight(pause, rightEdge, top, 1.50f);
@@ -756,7 +763,7 @@ internal static class PortraitTopBar
             var scale = Mathf.Min(1.48f, maxWidth / contentWidth);
             relics.PivotOffset = Vector2.Zero;
             relics.Scale = Vector2.One * scale;
-            relics.Position += new Vector2(38f, top + 394f) - relics.GlobalPosition;
+            relics.Position += new Vector2(38f, top + PortraitHudMetrics.RelicRowOffset) - relics.GlobalPosition;
         }
 
         HideBuildWatermark(bar.GetTree().Root, canvas);
@@ -1116,7 +1123,13 @@ internal static class EventRoomPatch
             if (title?.GetParent() is not Control block)
                 return;
             var width = title.Size.X > 1f ? title.Size.X : Math.Min(800f, canvas.X - 80f);
-            block.GlobalPosition = new Vector2((canvas.X - width) * 0.5f, block.GlobalPosition.Y);
+
+            // The authored event layout is top-anchored for a landscape canvas,
+            // which lands the first text lines inside the run HUD band. Keep
+            // the authored Y when it already clears the HUD, push down when not.
+            var contentTop = PortraitHudMetrics.ContentTop(PortraitDisplay.SafeTop());
+            var y = Math.Max(block.GlobalPosition.Y, contentTop);
+            block.GlobalPosition = new Vector2((canvas.X - width) * 0.5f, y);
         });
     }
 }
