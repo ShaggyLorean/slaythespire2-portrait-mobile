@@ -3,6 +3,7 @@ package com.game.sts2launcher;
 import org.godotengine.godot.GodotActivity;
 
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -153,6 +154,33 @@ public class GodotApp extends GodotActivity {
 		super.onWindowFocusChanged(hasFocus);
 		if (hasFocus) {
 			configureEdgeToEdgeWindow();
+		}
+	}
+
+	// The engine applies the mounted PCK's display/window/handheld/orientation
+	// during setup, before any managed patch can run. The bootstrap PCK is
+	// portrait now, but the downloaded game ships the desktop project settings,
+	// so the engine's first request would still flip the window to landscape
+	// for a few visible frames until PortraitDisplay re-asserts portrait.
+	// Coerce every non-portrait request at the OS boundary instead of racing it.
+	@Override
+	public void setRequestedOrientation(int requestedOrientation) {
+		int coerced = coercePortraitOrientation(requestedOrientation);
+		if (coerced != requestedOrientation) {
+			Log.i(TAG, "Coerced requested orientation " + requestedOrientation + " to sensor portrait");
+		}
+		super.setRequestedOrientation(coerced);
+	}
+
+	private static int coercePortraitOrientation(int requestedOrientation) {
+		switch (requestedOrientation) {
+			case ActivityInfo.SCREEN_ORIENTATION_PORTRAIT:
+			case ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT:
+			case ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT:
+			case ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT:
+				return requestedOrientation;
+			default:
+				return ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT;
 		}
 	}
 
