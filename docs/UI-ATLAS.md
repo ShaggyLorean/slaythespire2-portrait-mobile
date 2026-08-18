@@ -27,6 +27,7 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | death (Devastation) | dogrulandi: Continue TouchScale ile alt bantta buyutuldu |
 | compendium (ana menu) | dogrulandi: margin kutusu canvas genislikte, Character Stats iceride; watermark ana menude de gizli; card library 2 sutunla temiz |
 | relic collection / potion lab | dogrulandi: 10 sutun kategori gridleri patchsiz temiz |
+| modding ekrani | liste paneli calisiyor (rig modu listede); SAG detay paneli canvas disina tasar, compendium-tipi pas gerekli (tur 17) |
 | timeline (intro) | dogrulandi: kilitli-profil tanitim metni ortalanmis temiz; icerik unlock gerektirir |
 | hover tooltip (potion/relic) | dogrulandi: HUD yiginina girecek tip bandin altina, popup seridinin sagina iner (kullanici raporuydu) |
 | cok-relic bar (16 relic stresi) | dogrulandi: kelepce + 2. satira sarma calisiyor, map/event/combat kompozisyonlari dayanikli; polish notu: 14+ relicte ikonlar kuculuyor (dusuk oncelik) |

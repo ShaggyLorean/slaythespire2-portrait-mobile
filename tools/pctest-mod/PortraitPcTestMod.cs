@@ -345,6 +345,7 @@ public static class PortraitPcTestMod
             "potions" => PotionsProbeScenario,
             "relics" => RelicsProbeScenario,
             "extras" => ExtrasProbeScenario,
+            "modding" => ModdingProbeScenario,
             _ => Scenario,
         };
 
@@ -379,7 +380,18 @@ public static class PortraitPcTestMod
             8.0
         ),
         Shot("x1-timeline"),
-        Click("Close", 1.5, 5.0, "BackButton"),
+    };
+
+    // Modding screen lives inside settings; separate walk because the
+    // timeline has no Close control to return from.
+    private static readonly Step[] ModdingProbeScenario =
+    {
+        new(
+            "wait main menu",
+            () => FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true },
+            0.4,
+            25.0
+        ),
         Click("SettingsButton", 2.0),
         Click("ModdingButton", 2.0, 6.0),
         Shot("x2-modding"),
