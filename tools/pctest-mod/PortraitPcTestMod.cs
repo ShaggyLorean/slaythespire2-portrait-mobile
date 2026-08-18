@@ -16,7 +16,7 @@ namespace Sts2PortraitPcTest;
 [ModInitializer(nameof(Initialize))]
 public static class PortraitPcTestMod
 {
-    private const double QuitAtSeconds = 60.0;
+    private const double QuitAtSeconds = 80.0;
 
     private static SceneTree _tree;
     private static Assembly _sts2Mobile;
@@ -161,7 +161,7 @@ public static class PortraitPcTestMod
     private static double StepTimeout(int step) => step switch
     {
         0 => 25.0,
-        1 or 3 => 6.0,
+        1 or 3 or 20 => 6.0,
         5 => 4.0,
         _ => 3.0,
     };
@@ -174,7 +174,7 @@ public static class PortraitPcTestMod
             _stepStartedAt = elapsed;
 
         var timedOut = elapsed - _stepStartedAt > StepTimeout(_step);
-        if (timedOut && _step is 0 or 1 or 3 or 5 or 8)
+        if (timedOut && _step is 0 or 1 or 3 or 5 or 8 or 20)
         {
             PcTestLog.Write($"step {_step} timed out, skipping");
             Advance(elapsed, 0.1);
@@ -271,6 +271,22 @@ public static class PortraitPcTestMod
                 if (HideMapScreenOverlay())
                     break;
                 Capture("10-combat");
+                Advance(elapsed, 0.3);
+                break;
+            case 18:
+                Console("win");
+                Advance(elapsed, 6.0);
+                break;
+            case 19:
+                Capture("11-rewards");
+                Advance(elapsed, 0.3);
+                break;
+            case 20:
+                if (ClickControlByName("Deck"))
+                    Advance(elapsed, 2.5);
+                break;
+            case 21:
+                Capture("12-deck-view");
                 Advance(elapsed, 0.1);
                 break;
             default:

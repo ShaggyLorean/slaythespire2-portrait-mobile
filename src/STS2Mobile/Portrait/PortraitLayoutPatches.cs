@@ -307,6 +307,38 @@ internal static class PortraitCombat
     private const float HandBottomClearance = 240f;
 
     private const string HandGuardMeta = "sts2_portrait_hand_guard";
+    private const string HandHiddenMeta = "sts2_portrait_hand_hidden_for_capstone";
+
+    // Fullscreen capstone screens (deck view, in-run settings) sit at plain
+    // tree z, and the fan's absolute ZIndex would draw the cards over them.
+    // Hide the holder while such a screen is open; restore only what we hid.
+    private static void ApplyCapstoneHandVisibility(Node hand, Control holder)
+    {
+        var capstone = PortraitNodes.FindByType(hand.GetTree().Root, "NCapstoneContainer");
+        var open = false;
+        if (capstone is not null)
+        {
+            foreach (var child in capstone.GetChildren())
+            {
+                if (child is Control { Visible: true })
+                {
+                    open = true;
+                    break;
+                }
+            }
+        }
+
+        if (open && holder.Visible)
+        {
+            holder.Visible = false;
+            holder.SetMeta(HandHiddenMeta, true);
+        }
+        else if (!open && holder.HasMeta(HandHiddenMeta))
+        {
+            holder.RemoveMeta(HandHiddenMeta);
+            holder.Visible = true;
+        }
+    }
 
     private static float HandBaselineY(Vector2 canvas)
         => Math.Min(
@@ -323,7 +355,10 @@ internal static class PortraitCombat
         // local Position put the fan mid-screen there.
         holder.Position += new Vector2(0f, HandBaselineY(canvas) - holder.GlobalPosition.Y);
         holder.ZAsRelative = false;
-        holder.ZIndex = 320;
+        // Above the combat frame's bands (100) but below every game screen and
+        // overlay: forcing the old 320 here drew the fan over the in-combat
+        // deck view.
+        holder.ZIndex = 110;
     }
 
     // The card holder can be created AFTER every burst retry has passed
@@ -353,14 +388,17 @@ internal static class PortraitCombat
             if (PortraitDisplay.IsPortrait(canvas))
             {
                 var holder = PortraitNodes.FindControl(hand, "CardHolderContainer");
-                if (holder is not null
-                    && Math.Abs(holder.GlobalPosition.Y - HandBaselineY(canvas)) > 4f)
+                if (holder is not null)
                 {
-                    var before = holder.GlobalPosition.Y;
-                    PlaceHand(holder, canvas);
-                    PatchHelper.Log(
-                        $"[Portrait] Hand guard corrected holder Y {before:F0} -> {holder.GlobalPosition.Y:F0}"
-                    );
+                    ApplyCapstoneHandVisibility(hand, holder);
+                    if (Math.Abs(holder.GlobalPosition.Y - HandBaselineY(canvas)) > 4f)
+                    {
+                        var before = holder.GlobalPosition.Y;
+                        PlaceHand(holder, canvas);
+                        PatchHelper.Log(
+                            $"[Portrait] Hand guard corrected holder Y {before:F0} -> {holder.GlobalPosition.Y:F0}"
+                        );
+                    }
                 }
             }
             ScheduleHandGuard(hand);
@@ -708,39 +746,27 @@ internal static class PortraitTopBar
         return right - 12f;
     }
 
-    private static bool IsUpperRightBuildText(Control control, string text, Vector2 canvas)
-        => !string.IsNullOrWhiteSpace(text)
-            && control.GlobalPosition.X > canvas.X * 0.62f
-            && control.GlobalPosition.Y < PortraitDisplay.SafeTop() + 4f;
+    // Identity rules only: name or literal placeholder text. The old
+    // position-based rule ("any label in the upper right") permanently hid
+    // whatever legitimate control happened to pass through that region.
+    private static bool IsBuildWatermarkText(Node node, string text)
+        => node.Name.ToString().Contains("Build", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("NONE", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("???", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("CI", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("[NONE]", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("(???)", StringComparison.OrdinalIgnoreCase);
 
     private static void HideBuildWatermark(Node root, Vector2 canvas)
     {
         if (root is Label label)
         {
-            var text = label.Text ?? "";
-            if (
-                root.Name.ToString().Contains("Build", StringComparison.OrdinalIgnoreCase)
-                || text.Equals("NONE", StringComparison.OrdinalIgnoreCase)
-                || text.Equals("???", StringComparison.OrdinalIgnoreCase)
-                || text.StartsWith("CI", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("[NONE]", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("(???)", StringComparison.OrdinalIgnoreCase)
-                || IsUpperRightBuildText(label, text, canvas)
-            )
+            if (IsBuildWatermarkText(root, label.Text ?? ""))
                 label.Visible = false;
         }
         else if (root is RichTextLabel richText)
         {
-            var text = richText.Text ?? "";
-            if (
-                root.Name.ToString().Contains("Build", StringComparison.OrdinalIgnoreCase)
-                || text.Equals("NONE", StringComparison.OrdinalIgnoreCase)
-                || text.Equals("???", StringComparison.OrdinalIgnoreCase)
-                || text.StartsWith("CI", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("[NONE]", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("(???)", StringComparison.OrdinalIgnoreCase)
-                || IsUpperRightBuildText(richText, text, canvas)
-            )
+            if (IsBuildWatermarkText(root, richText.Text ?? ""))
                 richText.Visible = false;
         }
         else if (root is CanvasItem canvasItem && root.GetType().Name == "NDebugInfoLabelManager")
@@ -761,7 +787,10 @@ internal static class PortraitTopBar
         bar.ZAsRelative = false;
         bar.ZIndex = 400;
         var safeTop = PortraitDisplay.SafeTop();
-        var combat = PortraitCombat.CombatHudActive;
+        // Fullscreen capstone screens (deck view, in-run settings) open over
+        // combat too; the expanded stack would poke into their content, so
+        // they always get the slim bar.
+        var combat = PortraitCombat.CombatHudActive && !IsCapstoneScreenOpen(bar);
         var left = bar.GetNodeOrNull<Control>("LeftAlignedStuff");
         var right = bar.GetNodeOrNull<Control>("RightAlignedStuff");
 
@@ -817,6 +846,9 @@ internal static class PortraitTopBar
             // Combat: the expanded stack tuned in v0.3.0; the combat frame's
             // ink band owns the top of the screen, no shared backdrop.
             SetBackdropVisible(bar, canvas, safeTop, visible: false);
+            SetVisible(room, true);
+            SetVisible(floor, true);
+            SetVisible(boss, true);
             var top = PortraitHudMetrics.CombatHudTop(safeTop);
             Place(hp, new Vector2(38f, top), 1.28f);
             Place(gold, new Vector2(38f, top + PortraitHudMetrics.GoldRowOffset), 1.28f);
@@ -836,15 +868,14 @@ internal static class PortraitTopBar
         {
             // Outside combat: a slim two-row bar over one shared backdrop band,
             // so screen content starts high and every screen wears the same top.
+            // Row 1 keeps vitals and the right-side screen buttons; row 2 packs
+            // the run trinkets so the left cluster never fights the buttons.
             SetBackdropVisible(bar, canvas, safeTop, visible: true);
             var top = PortraitHudMetrics.HudTop(safeTop);
             var row2 = top + PortraitHudMetrics.CompactRowPitch;
 
             Place(hp, new Vector2(38f, top), 1.02f);
             Place(gold, new Vector2(330f, top), 1.02f);
-            Place(room, new Vector2(600f, top + 6f), 0.95f);
-            Place(floor, new Vector2(694f, top + 6f), 0.95f);
-            Place(boss, new Vector2(788f, top + 8f), 0.88f);
 
             var rightEdge = canvas.X - 30f;
             rightEdge = PlaceFromRight(pause, rightEdge, top, 1.12f);
@@ -852,17 +883,55 @@ internal static class PortraitTopBar
             PlaceFromRight(map, rightEdge, top, 1.12f);
 
             Place(potions, new Vector2(38f, row2), 0.92f);
+            // The game continuously tweens the room/floor/boss cluster for its
+            // own top-bar anim states; pinning loses that fight and they land
+            // over screen content. The slim bar drops them (combat's expanded
+            // stack still shows all three, and the map screen itself carries
+            // the progress information).
+            SetVisible(room, false);
+            SetVisible(floor, false);
+            SetVisible(boss, false);
             PlaceRelics(relics, canvas, new Vector2(330f, row2 + 4f), 1.12f, canvas.X - 330f - 30f);
         }
-
-        HideBuildWatermark(bar.GetTree().Root, canvas);
 
         var signature = $"portrait-zones-6:{canvas.X:F0}:{(combat ? "combat" : "compact")}:{relics?.GetChildCount() ?? 0}";
         if (_lastSignature != signature)
         {
             _lastSignature = signature;
+            // Sweep only on transitions: a full-tree walk is too expensive for
+            // the perpetual reflow tick, and watermark labels only (re)appear
+            // alongside scene or mode changes.
+            HideBuildWatermark(bar.GetTree().Root, canvas);
             PatchHelper.Log($"[Portrait] Top bar reflow {signature}");
         }
+    }
+
+    // Visible=false loses against the game's own top-bar show tweens; a
+    // per-node modulate alpha survives them (the tweens animate position and
+    // the bar-level modulate, not each icon's own).
+    private static bool IsCapstoneScreenOpen(Node anchor)
+    {
+        var capstone = PortraitNodes.FindByType(anchor.GetTree().Root, "NCapstoneContainer");
+        if (capstone is null)
+            return false;
+        foreach (var child in capstone.GetChildren())
+        {
+            if (child is Control { Visible: true })
+                return true;
+        }
+        return false;
+    }
+
+    private static void SetVisible(Control control, bool visible)
+    {
+        if (control is null)
+            return;
+        var alpha = visible ? 1f : 0f;
+        if (Math.Abs(control.Modulate.A - alpha) > 0.01f)
+            control.Modulate = new Color(1f, 1f, 1f, alpha);
+        control.MouseFilter = visible
+            ? Control.MouseFilterEnum.Stop
+            : Control.MouseFilterEnum.Ignore;
     }
 
     private static void PlaceRelics(
@@ -892,24 +961,43 @@ internal static class PortraitTopBar
 
     private const string BackdropName = "Sts2PortraitHudBackdrop";
 
-    // One ink band behind the compact bar, shared by every non-combat screen:
+    // One scrim behind the compact bar, shared by every non-combat screen:
     // scrolling content passes under it and stays legible, and the punch-hole
-    // area is backed by the same band on every screen (combat has its own).
+    // area is backed the same way everywhere (combat has its own band). A
+    // solid rectangle read as a black slab against the painted art, so this
+    // is a deep-teal gradient, near-opaque behind the rows and fading out
+    // below them.
     private static void SetBackdropVisible(NTopBar bar, Vector2 canvas, float safeTop, bool visible)
     {
         var host = bar.GetParent();
         if (host is null)
             return;
 
-        var backdrop = host.GetNodeOrNull<ColorRect>(BackdropName);
+        var backdrop = host.GetNodeOrNull<TextureRect>(BackdropName);
         if (backdrop is null)
         {
             if (!visible)
                 return;
-            backdrop = new ColorRect
+
+            var gradient = new Gradient();
+            gradient.SetColor(0, new Color(0.031f, 0.075f, 0.089f, 0.96f));
+            gradient.SetColor(1, new Color(0.031f, 0.075f, 0.089f, 0f));
+            gradient.AddPoint(0.62f, new Color(0.031f, 0.075f, 0.089f, 0.82f));
+            var texture = new GradientTexture2D
+            {
+                Gradient = gradient,
+                Width = 16,
+                Height = 256,
+                FillFrom = new Vector2(0f, 0f),
+                FillTo = new Vector2(0f, 1f),
+            };
+
+            backdrop = new TextureRect
             {
                 Name = BackdropName,
-                Color = new Color(0.024f, 0.043f, 0.062f, 0.93f),
+                Texture = texture,
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.Scale,
                 MouseFilter = Control.MouseFilterEnum.Ignore,
                 ZAsRelative = false,
                 ZIndex = 390,
@@ -923,7 +1011,8 @@ internal static class PortraitTopBar
 
         PortraitNodes.ClearAnchors(backdrop);
         backdrop.Position = Vector2.Zero;
-        backdrop.Size = new Vector2(canvas.X, PortraitHudMetrics.HudBottom(safeTop) + 6f);
+        // The fade tail extends past the rows so the hard edge disappears.
+        backdrop.Size = new Vector2(canvas.X, PortraitHudMetrics.HudBottom(safeTop) + 96f);
     }
 }
 
@@ -1123,7 +1212,11 @@ internal static class TopBarInitializePatch
             return;
 
         PortraitTopBar.Apply(bar);
-        var delay = pass < 8 ? 0.35 : 1.2;
+        // The game's own top-bar layout re-runs on screen changes, so a slow
+        // steady tick leaves visible drift for up to a full period. The tick
+        // is cheap now (the tree sweep only runs on signature transitions),
+        // so keep the steady cadence tight.
+        var delay = pass < 8 ? 0.35 : 0.5;
         bar.GetTree().CreateTimer(delay).Timeout += () => Reflow(bar, pass + 1);
     }
 }
@@ -1372,8 +1465,14 @@ internal static class MerchantOpenPatch
     {
         if (!GodotObject.IsInstanceValid(inventory) || !inventory.IsInsideTree())
             return;
-        if (!inventory.HasMeta("sts2_portrait_shop_closed"))
-            PortraitShop.Apply(inventory);
+        if (inventory.HasMeta("sts2_portrait_shop_closed"))
+        {
+            // Stop the chain when the shop closes; Open restarts it on the
+            // next visit instead of letting the timer idle for the whole run.
+            inventory.RemoveMeta("sts2_portrait_shop_loop");
+            return;
+        }
+        PortraitShop.Apply(inventory);
         inventory.GetTree().CreateTimer(0.5).Timeout += () => Reflow(inventory);
     }
 }
