@@ -1553,6 +1553,32 @@ internal static class MapScreenReadyPatch
             }
             PortraitMap.CenterGraph(__instance);
         });
+        // Touch rule: the drawing tools ship at 60x60, under the touch
+        // minimum, and spawn after _Ready; lift them on the assert loop and
+        // keep the row anchored above the gesture strip.
+        PortraitNodes.AssertLoop(__instance, () =>
+        {
+            var canvas = PortraitDisplay.CanvasSize;
+            if (!PortraitDisplay.IsPortrait(canvas))
+                return;
+            var safeBottom = PortraitDisplay.SafeBottom();
+            var toolX = PortraitHudMetrics.EdgeMargin;
+            foreach (var name in new[] { "DrawButton", "EraseButton", "ClearButton" })
+            {
+                if (PortraitNodes.FindControl(__instance, name) is not { } tool)
+                    continue;
+                var baseW = tool.Size.X > 1f ? tool.Size.X : 60f;
+                var baseH = tool.Size.Y > 1f ? tool.Size.Y : 60f;
+                var scale = PortraitHudMetrics.TouchScale(baseW, baseH, 1.8f);
+                tool.PivotOffset = Vector2.Zero;
+                tool.Scale = Vector2.One * scale;
+                tool.GlobalPosition = new Vector2(
+                    toolX,
+                    PortraitHudMetrics.BottomAnchoredY(canvas.Y, safeBottom, baseH * scale)
+                );
+                toolX += baseW * scale + 18f;
+            }
+        });
         PortraitNodes.After(__instance, 0.8, () => PortraitMap.CenterGraph(__instance));
     }
 }
