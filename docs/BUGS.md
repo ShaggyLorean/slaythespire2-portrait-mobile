@@ -45,7 +45,7 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Actual**: HUD (`ZIndex 400`) draws over event text; other non-combat screens have per-screen, inconsistent protection (shop computes its own top offset, rest site has none).
 - **Root cause**: the portrait HUD is the game's own `NTopBar` re-anchored with no screen gating (`PortraitTopBar.Apply`, `src/STS2Mobile/Portrait/PortraitLayoutPatches.cs`), and the live event patch (`EventRoomPatch`) recenters the text block on X only; the authored landscape Y lands inside the HUD band. No shared "HUD occupies this much vertical space" source existed.
 - **Fix (0.5.0, first slice)**: `PortraitHudMetrics` is now the single source for the HUD-occupied band; `EventRoomPatch` pushes the event block below `HudBottom()` when the authored Y would collide. Remaining screens (rest options, rewards, pause, run end) are tracked as BUG-011 and the 0.6.0 milestone.
-- **Status**: fixed-pending-device (event screens); remaining screens open under BUG-011
+- **Status**: fixed-pending-device (event screens); PC-visual PASS on the originally reported event (`BYRDONIS_NEST`, see TESTS.md); remaining screens open under BUG-011/BUG-013
 - **Fixed in**: 0.5.0 (event slice)
 
 ## BUG-004: Top strip reserved for the punch-hole is fixed-size and combat-only

@@ -16,7 +16,7 @@ namespace Sts2PortraitPcTest;
 [ModInitializer(nameof(Initialize))]
 public static class PortraitPcTestMod
 {
-    private const double QuitAtSeconds = 40.0;
+    private const double QuitAtSeconds = 60.0;
 
     private static SceneTree _tree;
     private static Assembly _sts2Mobile;
@@ -192,15 +192,45 @@ public static class PortraitPcTestMod
                 Advance(elapsed, 0.3);
                 break;
             case 8:
-                if (ClickBottomMapPoint())
-                    Advance(elapsed, 6.0);
+                // Console teleports unlock every screen without playing the
+                // run; BYRDONIS_NEST reproduces the reported event overlap.
+                Console("event BYRDONIS_NEST");
+                Advance(elapsed, 3.5);
                 break;
             case 9:
-                Capture("06-first-room");
-                Advance(elapsed, 5.0);
+                if (HideMapScreenOverlay())
+                    break; // takes render effect next frame; capture then
+                Capture("06-event-byrdonis");
+                Advance(elapsed, 0.3);
                 break;
             case 10:
-                Capture("07-first-room-settled");
+                Console("room restsite");
+                Advance(elapsed, 3.5);
+                break;
+            case 11:
+                if (HideMapScreenOverlay())
+                    break;
+                Capture("07-rest-site");
+                Advance(elapsed, 0.3);
+                break;
+            case 12:
+                Console("room shop");
+                Advance(elapsed, 3.5);
+                break;
+            case 13:
+                if (HideMapScreenOverlay())
+                    break;
+                Capture("08-shop");
+                Advance(elapsed, 0.3);
+                break;
+            case 14:
+                Console("room treasure");
+                Advance(elapsed, 3.5);
+                break;
+            case 15:
+                if (HideMapScreenOverlay())
+                    break;
+                Capture("09-treasure");
                 Advance(elapsed, 0.1);
                 break;
             default:
@@ -249,6 +279,40 @@ public static class PortraitPcTestMod
         }
 
         return false;
+    }
+
+    private static MegaCrit.Sts2.Core.DevConsole.DevConsole _console;
+
+    // Clicking a map point closes the map screen; console teleports bypass
+    // that, leaving the map drawn over the entered room. Rig-only cleanup so
+    // captures show the room the way normal navigation would. Returns true
+    // when it hid something this frame: the viewport texture only reflects it
+    // on the NEXT rendered frame, so the caller must capture one tick later.
+    private static bool HideMapScreenOverlay()
+    {
+        if (FindNodeByName(_tree.Root, "MapScreen") is Control { Visible: true } map)
+        {
+            map.Visible = false;
+            PcTestLog.Write("map screen overlay hidden for capture");
+            return true;
+        }
+        return false;
+    }
+
+    // The game's own dev-console commands (event/room/fight/...) are plain
+    // classes; driving them directly needs no console UI and no keybind.
+    private static void Console(string command)
+    {
+        try
+        {
+            _console ??= new MegaCrit.Sts2.Core.DevConsole.DevConsole(shouldAllowDebugCommands: true);
+            var result = _console.ProcessCommand(command);
+            PcTestLog.Write($"console '{command}' -> success={result.success} msg={result.msg}");
+        }
+        catch (Exception ex)
+        {
+            PcTestLog.Write($"console '{command}' FAILED: {ex.Message}");
+        }
     }
 
     // The entry map node is the bottom-most reachable point; its position is
