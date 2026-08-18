@@ -44,9 +44,9 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Expected**: content on every screen starts below the space the HUD occupies.
 - **Actual**: HUD (`ZIndex 400`) draws over event text; other non-combat screens have per-screen, inconsistent protection (shop computes its own top offset, rest site has none).
 - **Root cause**: the portrait HUD is the game's own `NTopBar` re-anchored with no screen gating (`PortraitTopBar.Apply`, `src/STS2Mobile/Portrait/PortraitLayoutPatches.cs`), and the live event patch (`EventRoomPatch`) recenters the text block on X only; the authored landscape Y lands inside the HUD band. No shared "HUD occupies this much vertical space" source existed.
-- **Fix (0.5.0, first slice)**: `PortraitHudMetrics` is now the single source for the HUD-occupied band; `EventRoomPatch` pushes the event block below `HudBottom()` when the authored Y would collide. Remaining screens (rest options, rewards, pause, run end) are tracked as BUG-011 and the 0.6.0 milestone.
-- **Status**: fixed-pending-device (event screens); PC-visual PASS on the originally reported event (`BYRDONIS_NEST`, see TESTS.md); remaining screens open under BUG-011/BUG-013
-- **Fixed in**: 0.5.0 (event slice)
+- **Fix (0.5.0, revised)**: first attempt reserved space under the full stacked HUD, which fixed the overlap but produced dead bands and inconsistent compositions (rejected on review). The shipped design keeps the expanded HUD for combat only; outside combat the HUD is a slim two-row bar over one shared ink backdrop band, `ContentTop` derives from that bar, and `EventRoomPatch` keeps the authored Y whenever it already clears the bar. Every non-combat screen now wears the same top.
+- **Status**: fixed-pending-device (event screens); PC-visual PASS on the originally reported event (`BYRDONIS_NEST`, `shots-20260818-144548/06-event-byrdonis.png`); remaining unpatched screens tracked under BUG-011
+- **Fixed in**: 0.5.0 (event slice, compact-bar design)
 
 ## BUG-004: Top strip reserved for the punch-hole is fixed-size and combat-only
 
@@ -122,20 +122,22 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Where**: in-game combat, PC rig round `tmp/pctest/shots-20260818-133912/06-first-room.png` (1180x2596 canvas, 4-card hand).
 - **Repro**: enter turn-1 combat; the card fan's lower quarter renders past the canvas bottom.
 - **Expected**: full cards visible above the bottom edge (plus gesture inset on device).
-- **Actual**: card bottoms cut off; `HandBaseline = canvas.Y * 0.925` plus current card scale exceeds the canvas, and the baseline ignores `SafeBottom()`.
-- **Root cause**: candidate: fixed baseline ratio + card scale tuned on a different state; needs device cross-check before the fix lands (v0.3.0 device round validated the hand, so PC evidence must be compared against a device screenshot first).
-- **Status**: open (0.6.0; verify on device, then derive the baseline from SafeBottom and hand height)
-- **Fixed in**: -
+- **Actual**: card bottoms cut off.
+- **Root cause**: three stacked problems. `PlaceHand` set a raw local Position (only correct when the holder's parent sits at the canvas origin; teleport-entered combats put the fan mid-screen), the holder can be created after every placement retry has passed (no enforcement), and the baseline ignored `SafeBottom()`. A fourth, rig-side: the desktop safe area reported a ~1300-unit phantom bottom inset against the oversized phone window, which poisoned the first version of this fix.
+- **Fix**: global-space anchoring + a lifetime hand guard (SceneTreeTimer chain) + `min(0.925 * canvas, canvas - SafeBottom - clearance)` baseline; non-Android ignores the desktop safe area entirely and uses only the simulated insets.
+- **Status**: fixed-pending-device; PC-visual PASS (`shots-20260818-144548/10-combat.png`, five-card fan fully visible)
+- **Fixed in**: 0.5.0
 
 ## BUG-013: Map nodes render under the HUD stack
 
 - **Where**: in-game map screen, PC rig round `tmp/pctest/shots-20260818-133123/05-run-settled.png`.
 - **Repro**: open the act map; upper-left map points sit behind the HP/gold text (HUD ZIndex 400 draws over them).
-- **Expected**: map content clears the HUD band like events do after the 0.5.0 fix, or the map scroll area starts below `PortraitHudMetrics.ContentTop`.
-- **Actual**: top map rows overlap the HUD column.
-- **Root cause**: map patches center and fill the map but do not reserve the HUD band (BUG-003 family, map slice).
-- **Status**: open (0.6.0)
-- **Fixed in**: -
+- **Expected**: map content clears the HUD, or passes under it legibly.
+- **Actual**: top map rows overlapped the tall HUD column.
+- **Root cause**: BUG-003 family; the stacked non-combat HUD occupied ~520 canvas px with no shared band.
+- **Fix**: solved by the compact-bar redesign: outside combat the HUD is a slim two-row bar over one ink backdrop band, map points start below the band and scroll under it legibly.
+- **Status**: fixed-pending-device; PC-visual PASS (`shots-20260818-144548/05-run-settled.png`)
+- **Fixed in**: 0.5.0
 
 ## BUG-011: Non-combat screens without portrait handling
 
