@@ -1163,7 +1163,14 @@ internal static class PortraitTopBar
         PortraitNodes.ClearAnchors(backdrop);
         backdrop.Position = Vector2.Zero;
         // The fade tail extends past the rows so the hard edge disappears.
-        backdrop.Size = new Vector2(canvas.X, PortraitHudMetrics.HudBottom(safeTop) + 96f);
+        // Deep enough to hold the event text block on the narrow canvas
+        // bucket too: on 984-wide canvases the scaled prose ran past the old
+        // fixed depth and its last line sat on bare art. The fade tail keeps
+        // map points readable underneath as before, just deeper.
+        backdrop.Size = new Vector2(
+            canvas.X,
+            PortraitHudMetrics.ContentTop(safeTop) + 470f
+        );
     }
 }
 
@@ -1637,6 +1644,11 @@ internal static class EventRoomPatch
             block.Scale = Vector2.One * textScale;
             var blockWidth = (block.Size.X > 1f ? block.Size.X : 800f) * textScale;
             block.GlobalPosition = new Vector2((canvas.X - blockWidth) * 0.5f, contentTop);
+            // The shared scrim draws at Z 390 over room content (so map
+            // points scroll under it); event prose must read ON the scrim,
+            // not under its dark end.
+            block.ZAsRelative = false;
+            block.ZIndex = 395;
 
             var optionsTop = canvas.Y;
             if (options is not null)
