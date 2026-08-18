@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    PC visual-test mod (docs/TESTS.md, PC pre-screening).
+
+    Loaded by the game's own mod loader (user://mods) on the desktop build.
+    Applies the portrait patch group inside the running Windows game and
+    drives screenshot capture from within the process, so layout fixes can be
+    verified at the phone canvas size with no OS-level input and no window
+    focus requirements.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <!-- Matches the manifest id in case the loader resolves the DLL by id. -->
+    <AssemblyName>sts2-portrait-pctest</AssemblyName>
+    <Nullable>annotations</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GameReferenceDir Condition="'$(GameReferenceDir)' == ''">../../upstream/godot-export/.godot/mono/publish/arm64</GameReferenceDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="PortraitPcTestMod.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameReferenceDir)/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GodotSharp">
+      <HintPath>$(GameReferenceDir)/GodotSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="sts2">
+      <HintPath>$(GameReferenceDir)/sts2.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="STS2Mobile">
+      <HintPath>../../src/STS2Mobile/bin/Release/net9.0/STS2Mobile.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

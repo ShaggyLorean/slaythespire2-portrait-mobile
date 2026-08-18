@@ -1,0 +1,10 @@
+{
+  "id": "sts2-portrait-pctest",
+  "name": "STS2 Portrait PC Test",
+  "author": "portrait-mobile",
+  "description": "Applies the portrait patch group on the desktop build and captures screenshots for PC pre-screening. Never ship this to a device.",
+  "version": "0.1.0",
+  "has_pck": false,
+  "has_dll": true,
+  "affects_gameplay": false
+}
