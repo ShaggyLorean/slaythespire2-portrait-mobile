@@ -203,6 +203,8 @@ internal sealed class LauncherView
         ribbonStyle.ContentMarginTop = LauncherComponentTheme.ScaleInt(scale, 10);
         ribbonStyle.ContentMarginBottom = LauncherComponentTheme.ScaleInt(scale, 10);
         ribbon.AddThemeStyleboxOverride(LauncherComponentTheme.Panel, ribbonStyle);
+        // Containers zero child rotation on every sort; the tilt lives on
+        // the ribbon inside a plain Control wrapper the vbox manages.
         ribbon.RotationDegrees = -1.2f;
         var title = new StyledLabel("SLAY THE SPIRE 2", scale, fontSize: 30);
         title.AddThemeFontOverride("font", LauncherComponentTheme.DisplayFont);
@@ -212,7 +214,12 @@ internal sealed class LauncherView
         );
         title.HorizontalAlignment = HorizontalAlignment.Center;
         ribbon.AddChild(title);
-        left.AddChild(ribbon);
+        var ribbonSlot = new Control();
+        ribbonSlot.CustomMinimumSize = new Vector2(0, LauncherComponentTheme.ScaleInt(scale, 64));
+        ribbonSlot.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        ribbon.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        ribbonSlot.AddChild(ribbon);
+        left.AddChild(ribbonSlot);
 
         var statusLabel = new StyledLabel("Initializing...", scale);
         statusLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
