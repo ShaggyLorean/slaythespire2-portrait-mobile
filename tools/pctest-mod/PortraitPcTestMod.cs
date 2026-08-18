@@ -16,7 +16,7 @@ namespace Sts2PortraitPcTest;
 [ModInitializer(nameof(Initialize))]
 public static class PortraitPcTestMod
 {
-    private const double QuitAtSeconds = 220.0;
+    private const double QuitAtSeconds = 240.0;
 
     private static SceneTree _tree;
     private static Assembly _sts2Mobile;
