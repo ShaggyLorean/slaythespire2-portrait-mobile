@@ -1425,13 +1425,15 @@ internal static class PortraitShop
         if (hasRemoval)
             Place(removal, origin + CellCenter(cards.Count, cellWidth, cellHeight), scale);
 
+        // The utility band holds two shelves side by side; at 0.95 scale the
+        // right shelf's last potion ran off the canvas and the rows touched.
         var relics = PortraitNodes.FindControl(slots, "Relics");
         var potions = PortraitNodes.FindControl(slots, "Potions");
-        var bandY = panelHeight - utilityBand + 35f;
+        var bandY = panelHeight - utilityBand + 42f;
         if (relics is not null)
-            Place(relics, origin + new Vector2(panelWidth * 0.28f, bandY), 0.95f);
+            Place(relics, origin + new Vector2(panelWidth * 0.22f, bandY), 0.8f);
         if (potions is not null)
-            Place(potions, origin + new Vector2(panelWidth * 0.70f, bandY), 0.95f);
+            Place(potions, origin + new Vector2(panelWidth * 0.64f, bandY), 0.8f);
     }
 
     private static Vector2 CellCenter(int index, float width, float height)

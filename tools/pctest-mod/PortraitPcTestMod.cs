@@ -16,7 +16,7 @@ namespace Sts2PortraitPcTest;
 [ModInitializer(nameof(Initialize))]
 public static class PortraitPcTestMod
 {
-    private const double QuitAtSeconds = 80.0;
+    private const double QuitAtSeconds = 115.0;
 
     private static SceneTree _tree;
     private static Assembly _sts2Mobile;
@@ -174,7 +174,7 @@ public static class PortraitPcTestMod
             _stepStartedAt = elapsed;
 
         var timedOut = elapsed - _stepStartedAt > StepTimeout(_step);
-        if (timedOut && _step is 0 or 1 or 3 or 5 or 8 or 20)
+        if (timedOut && _step is 0 or 1 or 3 or 5 or 8 or 20 or 22 or 23 or 25 or 27)
         {
             PcTestLog.Write($"step {_step} timed out, skipping");
             Advance(elapsed, 0.1);
@@ -287,6 +287,44 @@ public static class PortraitPcTestMod
                 break;
             case 21:
                 Capture("12-deck-view");
+                Advance(elapsed, 0.3);
+                break;
+            case 22:
+                if (ClickControlByName("BackButton"))
+                    Advance(elapsed, 2.0);
+                break;
+            case 23:
+                if (ClickControlByName("PauseButton") || ClickControlByName("Pause"))
+                    Advance(elapsed, 2.5);
+                break;
+            case 24:
+                Capture("13-settings");
+                Advance(elapsed, 0.3);
+                break;
+            case 25:
+                if (ClickControlByName("BackButton") || ClickControlByName("ResumeButton"))
+                    Advance(elapsed, 2.0);
+                break;
+            case 26:
+                Console("room shop");
+                Advance(elapsed, 3.5);
+                break;
+            case 27:
+                if (HideMapScreenOverlay())
+                    break;
+                if (ClickControlByName("MerchantButton"))
+                    Advance(elapsed, 3.0);
+                break;
+            case 28:
+                Capture("14-shop-inventory");
+                Advance(elapsed, 0.3);
+                break;
+            case 29:
+                Console("die");
+                Advance(elapsed, 6.0);
+                break;
+            case 30:
+                Capture("15-death");
                 Advance(elapsed, 0.1);
                 break;
             default:
