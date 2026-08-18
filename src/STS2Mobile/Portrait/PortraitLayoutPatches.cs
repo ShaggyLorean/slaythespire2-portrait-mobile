@@ -2175,13 +2175,13 @@ internal static class PortraitRewards
             var scale = PortraitHudMetrics.FillScale(baseW, baseH, canvas.X * 0.38f, 190f, 1.7f);
             proceed.PivotOffset = Vector2.Zero;
             proceed.Scale = Vector2.One * scale;
-            // Hangs off the panel's lower right, above the leftover hand
-            // fan the combat room keeps drawing in front of everything.
+            // Sits inside the panel's lower-right corner: below the panel it
+            // collided with the leftover hand fan on narrow buckets.
             proceed.ZAsRelative = false;
             proceed.ZIndex = 460;
             proceed.GlobalPosition = new Vector2(
-                canvas.X - PortraitHudMetrics.EdgeMargin - baseW * scale,
-                Math.Min(panelBottom + 36f, bandBottom - baseH * scale)
+                canvas.X - PortraitHudMetrics.EdgeMargin - baseW * scale - 24f,
+                Math.Min(panelBottom - baseH * scale - 24f, bandBottom - baseH * scale)
             );
         }
     }
