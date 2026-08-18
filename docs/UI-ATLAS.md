@@ -27,6 +27,8 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | death (Devastation) | dogrulandi: Continue TouchScale ile alt bantta buyutuldu |
 | compendium (ana menu) | dogrulandi: margin kutusu canvas genislikte, Character Stats iceride; watermark ana menude de gizli; card library 2 sutunla temiz |
 | relic collection / potion lab | dogrulandi: 10 sutun kategori gridleri patchsiz temiz |
+| timeline (intro) | dogrulandi: kilitli-profil tanitim metni ortalanmis temiz; icerik unlock gerektirir |
+| hover tooltip (potion/relic) | dogrulandi: HUD yiginina girecek tip bandin altina, popup seridinin sagina iner (kullanici raporuydu) |
 | cok-relic bar (16 relic stresi) | dogrulandi: kelepce + 2. satira sarma calisiyor, map/event/combat kompozisyonlari dayanikli; polish notu: 14+ relicte ikonlar kuculuyor (dusuk oncelik) |
 | potion Drink/Discard popup | dogrulandi: aktif barin altina kenar payiyla acilir, 1.2x; kat/boss satiri cakismasi bitti |
 | boss odasi + boss rewards | dogrulandi: normal loot akisiyla ayni (buyuk panel); boss relic secimi ayri mekanik (Neow reliciyle) |
