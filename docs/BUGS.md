@@ -87,8 +87,9 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Expected**: watermark hiding targets the watermark; reflow work is event-driven or cheap.
 - **Actual**: overbroad text matching plus a perpetual full-tree walk (battery/thermal cost, and a correctness hazard for legitimate UI).
 - **Root cause**: `PortraitLayoutPatches.HideBuildWatermark` heuristic + self-rescheduling reflow timer.
-- **Status**: open (0.7.0)
-- **Fixed in**: -
+- **Fix**: identity-only watermark rules (position rule removed), and the tree sweep now runs only on reflow signature transitions instead of every tick; the steady reflow itself stays but does bounded per-node work.
+- **Status**: fixed-pending-device
+- **Fixed in**: 0.5.0
 
 ## BUG-008: Merchant reflow timer keeps running after the shop closes
 
@@ -97,8 +98,9 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Expected**: timers stop when their screen closes.
 - **Actual**: idle timer churn for the rest of the run.
 - **Root cause**: `MerchantOpenPatch.Reflow` re-schedules unconditionally; `Close` only sets a flag.
-- **Status**: open (0.7.0)
-- **Fixed in**: -
+- **Fix**: the chain now stops on the closed flag and clears its start marker so the next Open restarts it.
+- **Status**: fixed-pending-device
+- **Fixed in**: 0.5.0
 
 ## BUG-009: In-game UI Scale setting has no effect in portrait
 
