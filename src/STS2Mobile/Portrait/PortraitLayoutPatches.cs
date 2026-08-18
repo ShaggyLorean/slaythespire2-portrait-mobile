@@ -1353,6 +1353,46 @@ internal static class TopBarInitializePatch
     }
 }
 
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.HoverTips.NHoverTipSet), "SetAlignment")]
+internal static class HoverTipAlignmentPatch
+{
+    // Hover tips align beside their owner, which for top-bar owners (the
+    // potion capsule, relics) lands the text plate inside the pinned HUD
+    // rows: the floor and boss icons printed straight over the tip title.
+    // Portrait rule: a tip that would start inside the HUD stack drops to
+    // just below it, clamped to the side margins.
+    private static void Postfix(object __instance)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        var text = Traverse
+            .Create(__instance)
+            .Field("_textHoverTipContainer")
+            .GetValue<Control>();
+        if (text is null || !GodotObject.IsInstanceValid(text))
+            return;
+        var safeTop = PortraitDisplay.SafeTop();
+        var hudBottom = PortraitCombat.CombatHudActive
+            ? PortraitHudMetrics.CombatHudBottom(safeTop)
+            : PortraitHudMetrics.HudBottom(safeTop) + PortraitHudMetrics.RelicRowHeight + 26f;
+        if (text.GlobalPosition.Y < hudBottom + 8f)
+        {
+            // The potion popup parks at the left edge of this same strip;
+            // dropped tips start to its right so the two never stack.
+            const float popupLane = 380f;
+            text.GlobalPosition = new Vector2(
+                Mathf.Clamp(
+                    text.GlobalPosition.X,
+                    popupLane,
+                    canvas.X - text.Size.X - PortraitHudMetrics.EdgeMargin
+                ),
+                hudBottom + 8f
+            );
+        }
+    }
+}
+
 [HarmonyPatch(typeof(NPotionPopup), "_Ready")]
 internal static class PotionPopupPatch
 {

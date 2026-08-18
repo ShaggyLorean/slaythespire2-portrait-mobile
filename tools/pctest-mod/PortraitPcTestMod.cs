@@ -344,8 +344,46 @@ public static class PortraitPcTestMod
             "compendium" => CompendiumProbeScenario,
             "potions" => PotionsProbeScenario,
             "relics" => RelicsProbeScenario,
+            "extras" => ExtrasProbeScenario,
             _ => Scenario,
         };
+
+    // Last unexplored menu screens: the timeline (handler-invoked like the
+    // compendium) and the modding screen inside settings.
+    private static readonly Step[] ExtrasProbeScenario =
+    {
+        new(
+            "wait main menu",
+            () => FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true },
+            0.4,
+            25.0
+        ),
+        new(
+            "open timeline screen",
+            () =>
+            {
+                var menu = FindNodeByName(_tree.Root, "MainMenu");
+                var open = menu?.GetType().GetMethod(
+                    "OpenTimelineScreen",
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public,
+                    binder: null,
+                    types: new[] { typeof(MegaCrit.Sts2.Core.Nodes.GodotExtensions.NButton) },
+                    modifiers: null
+                );
+                if (open is null)
+                    return false;
+                open.Invoke(menu, new object[] { null });
+                return true;
+            },
+            3.0,
+            8.0
+        ),
+        Shot("x1-timeline"),
+        Click("Close", 1.5, 5.0, "BackButton"),
+        Click("SettingsButton", 2.0),
+        Click("ModdingButton", 2.0, 6.0),
+        Shot("x2-modding"),
+    };
 
     // Many-relic bar stress: unknown ids fail loudly in the log and are
     // simply skipped, so the belt ends up with however many stick.
