@@ -28,6 +28,8 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | compendium (ana menu) | dogrulandi: margin kutusu canvas genislikte, Character Stats iceride; watermark ana menude de gizli; card library 2 sutunla temiz |
 | relic collection / potion lab | dogrulandi: 10 sutun kategori gridleri patchsiz temiz |
 | modding ekrani | dogrulandi: liste ustte, detay paneli altinda dikey istif; her sey canvas icinde |
+| draw/discard pile ekranlari | dogrulandi: 3 sutun kart grid patchsiz temiz |
+| boss loot (Lava Rock cift relic) | dogrulandi: relicler loot paneline buyuk satirlar olarak girer, secim ekrani yok |
 | timeline (intro) | dogrulandi: kilitli-profil tanitim metni ortalanmis temiz; icerik unlock gerektirir |
 | hover tooltip (potion/relic) | dogrulandi: HUD yiginina girecek tip bandin altina, popup seridinin sagina iner (kullanici raporuydu) |
 | cok-relic bar (16 relic stresi) | dogrulandi: kelepce + 2. satira sarma calisiyor, map/event/combat kompozisyonlari dayanikli; polish notu: 14+ relicte ikonlar kuculuyor (dusuk oncelik) |
