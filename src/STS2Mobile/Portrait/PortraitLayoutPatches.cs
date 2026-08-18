@@ -577,6 +577,8 @@ internal static class PortraitSettingsOverlay
         if (!PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
             return;
 
+        OffsetContentBelowSafeTop(screen, settingsAreOpen);
+
         var topBar = PortraitNodes.FindByType(screen.GetTree().Root, "NTopBar");
         if (topBar is null)
             return;
@@ -593,6 +595,43 @@ internal static class PortraitSettingsOverlay
         {
             topBar.Visible = (bool)topBar.GetMeta(PreviousTopBarVisibilityMeta);
             topBar.RemoveMeta(PreviousTopBarVisibilityMeta);
+        }
+    }
+
+    private const string ContentOffsetMeta = "sts2_portrait_settings_offset";
+
+    // The settings tab row is authored at y=102, inside the cutout zone on
+    // devices with a deep inset. Shift the tab manager and the scroll body
+    // down below the safe top while the screen is open.
+    private static void OffsetContentBelowSafeTop(NSettingsScreen screen, bool open)
+    {
+        var tabs = PortraitNodes.FindControl(screen, "SettingsTabManager");
+        var scroll = PortraitNodes.FindControl(screen, "ScrollContainer");
+        if (tabs is null)
+            return;
+
+        if (open)
+        {
+            if (screen.HasMeta(ContentOffsetMeta))
+                return;
+            var wanted = PortraitDisplay.SafeTop() + 8f;
+            var delta = wanted - tabs.Position.Y;
+            if (delta <= 0f)
+                return;
+            screen.SetMeta(ContentOffsetMeta, delta);
+            tabs.Position += new Vector2(0f, delta);
+            if (scroll is not null)
+                scroll.Position += new Vector2(0f, delta);
+            return;
+        }
+
+        if (screen.HasMeta(ContentOffsetMeta))
+        {
+            var delta = (float)screen.GetMeta(ContentOffsetMeta);
+            screen.RemoveMeta(ContentOffsetMeta);
+            tabs.Position -= new Vector2(0f, delta);
+            if (scroll is not null)
+                scroll.Position -= new Vector2(0f, delta);
         }
     }
 }
@@ -839,6 +878,27 @@ internal static class PortraitTopBar
         {
             relics.ZAsRelative = false;
             relics.ZIndex = 410;
+        }
+
+        // Fullscreen capstone screens (deck view, settings) bring their own
+        // chrome; the whole HUD cluster steps aside instead of bleeding
+        // through their headers.
+        var capstoneOpen = IsCapstoneScreenOpen(bar);
+        SetVisible(hp, !capstoneOpen);
+        SetVisible(gold, !capstoneOpen);
+        SetVisible(potions, !capstoneOpen);
+        SetVisible(map, !capstoneOpen);
+        SetVisible(deck, !capstoneOpen);
+        SetVisible(pause, !capstoneOpen);
+        if (relics is not null)
+            SetVisible(relics, !capstoneOpen);
+        if (capstoneOpen)
+        {
+            SetVisible(room, false);
+            SetVisible(floor, false);
+            SetVisible(boss, false);
+            SetBackdropVisible(bar, canvas, safeTop, visible: false);
+            return;
         }
 
         if (combat)

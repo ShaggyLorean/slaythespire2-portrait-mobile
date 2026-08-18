@@ -16,7 +16,7 @@ namespace Sts2PortraitPcTest;
 [ModInitializer(nameof(Initialize))]
 public static class PortraitPcTestMod
 {
-    private const double QuitAtSeconds = 115.0;
+    private const double QuitAtSeconds = 140.0;
 
     private static SceneTree _tree;
     private static Assembly _sts2Mobile;
@@ -155,187 +155,144 @@ public static class PortraitPcTestMod
     // user's OS mouse is never touched.
     private static double _stepStartedAt = -1;
 
-    // Conditional steps must never wedge the walk, but each has a different
-    // patience: the first menu wait spans the whole boot, required clicks get
-    // a few retries, one-time popups are skipped quickly when absent.
-    private static double StepTimeout(int step) => step switch
+    // A step returns true when it did its work; the walk then settles for
+    // Settle seconds. Steps that can legitimately not apply (one-time popups,
+    // state-dependent buttons) time out after Timeout seconds and are skipped,
+    // so the walk never wedges.
+    private sealed record Step(string Name, Func<bool> Run, double Settle, double Timeout = 3.0);
+
+    private static Step Click(string name, double settle, double timeout = 6.0, params string[] fallbackNames)
+        => new(
+            $"click {name}",
+            () =>
+            {
+                if (ClickControlByName(name))
+                    return true;
+                foreach (var alt in fallbackNames)
+                {
+                    if (ClickControlByName(alt))
+                        return true;
+                }
+                return false;
+            },
+            settle,
+            timeout
+        );
+
+    private static Step Shot(string label, double settle = 0.3)
+        => new(
+            $"capture {label}",
+            () =>
+            {
+                if (HideMapScreenOverlay())
+                    return false; // capture next frame, after the hide renders
+                Capture(label);
+                return true;
+            },
+            settle,
+            5.0
+        );
+
+    private static Step Cmd(string command, double settle)
+        => new($"console {command}", () => { Console(command); return true; }, settle);
+
+    private static readonly Step[] Scenario =
     {
-        0 => 25.0,
-        1 or 3 or 20 => 6.0,
-        5 => 4.0,
-        _ => 3.0,
+        new(
+            "wait main menu",
+            () =>
+            {
+                if (FindNodeByName(_tree.Root, "MainMenu") is not Control { Visible: true })
+                    return false;
+                Capture("01-main-menu");
+                return true;
+            },
+            0.4,
+            25.0
+        ),
+        Click("SingleplayerButton", 2.0),
+        Shot("02-character-select"),
+        Click("ConfirmButton", 2.5),
+        Shot("03-after-confirm"),
+        // One-time tutorial popup; absent on profiles that already answered.
+        Click("NoButton", 7.0, 4.0),
+        Shot("04-run-start", 5.0),
+        Shot("05-map"),
+        new(
+            "relics + reported event",
+            () =>
+            {
+                Console("relic add AKABEKO");
+                Console("relic add ANCHOR");
+                Console("relic add ASTROLABE");
+                Console("relic add BAG_OF_MARBLES");
+                Console("event BYRDONIS_NEST");
+                return true;
+            },
+            3.5
+        ),
+        Shot("06-event-byrdonis"),
+        Cmd("room restsite", 3.5),
+        Shot("07-rest-site"),
+        Cmd("room shop", 3.5),
+        Shot("08-shop"),
+        Cmd("room treasure", 3.5),
+        Shot("09-treasure"),
+        Cmd("room monster", 6.0),
+        Shot("10-combat"),
+        Cmd("win", 6.0),
+        Shot("11-rewards"),
+        Click("Deck", 2.5),
+        Shot("12-deck-view"),
+        Click("BackButton", 2.0),
+        Click("PauseButton", 2.5, 6.0, "Pause"),
+        Shot("13-pause"),
+        Click("SettingsButton", 2.5, 6.0, "Settings"),
+        Shot("14-settings-body"),
+        Click("BackButton", 1.5),
+        Click("ResumeButton", 1.5, 3.0, "Resume", "BackButton"),
+        Cmd("room shop", 3.5),
+        new(
+            "open merchant inventory",
+            () => !HideMapScreenOverlay() && ClickControlByName("MerchantButton"),
+            3.0
+        ),
+        Shot("15-shop-inventory"),
+        Cmd("event NEOW", 3.5),
+        Shot("16-neow"),
+        Cmd("die", 6.0),
+        Shot("17-death", 0.1),
     };
 
     private static void RunScenario(double elapsed)
     {
         if (elapsed < _stepReadyAt)
             return;
+
+        if (_step >= Scenario.Length)
+        {
+            if (!_quitRequested)
+            {
+                _quitRequested = true;
+                PcTestLog.Write("scenario complete, quitting game");
+                _tree.Quit();
+            }
+            return;
+        }
+
         if (_stepStartedAt < 0)
             _stepStartedAt = elapsed;
 
-        var timedOut = elapsed - _stepStartedAt > StepTimeout(_step);
-        if (timedOut && _step is 0 or 1 or 3 or 5 or 8 or 20 or 22 or 23 or 25 or 27)
+        var step = Scenario[_step];
+        if (elapsed - _stepStartedAt > step.Timeout)
         {
-            PcTestLog.Write($"step {_step} timed out, skipping");
+            PcTestLog.Write($"step {_step} ({step.Name}) timed out, skipping");
             Advance(elapsed, 0.1);
             return;
         }
 
-        switch (_step)
-        {
-            case 0:
-                if (FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true })
-                {
-                    Capture("01-main-menu");
-                    Advance(elapsed, 0.4);
-                }
-                break;
-            case 1:
-                if (ClickControlByName("SingleplayerButton"))
-                    Advance(elapsed, 2.0);
-                break;
-            case 2:
-                Capture("02-character-select");
-                Advance(elapsed, 0.3);
-                break;
-            case 3:
-                if (ClickControlByName("ConfirmButton"))
-                    Advance(elapsed, 2.5);
-                break;
-            case 4:
-                Capture("03-after-confirm");
-                Advance(elapsed, 0.3);
-                break;
-            case 5:
-                // First-run tutorial popup: decline so screen sweeps stay
-                // deterministic and free of FTUE overlays. Optional: skips on
-                // timeout when the profile already answered it.
-                if (ClickControlByName("NoButton"))
-                    Advance(elapsed, 7.0);
-                break;
-            case 6:
-                Capture("04-run-start");
-                Advance(elapsed, 5.0);
-                break;
-            case 7:
-                Capture("05-run-settled");
-                Advance(elapsed, 0.3);
-                break;
-            case 8:
-                // Console teleports unlock every screen without playing the
-                // run; BYRDONIS_NEST reproduces the reported event overlap.
-                Console("event BYRDONIS_NEST");
-                Advance(elapsed, 3.5);
-                break;
-            case 9:
-                if (HideMapScreenOverlay())
-                    break; // takes render effect next frame; capture then
-                Capture("06-event-byrdonis");
-                Advance(elapsed, 0.3);
-                break;
-            case 10:
-                Console("room restsite");
-                Advance(elapsed, 3.5);
-                break;
-            case 11:
-                if (HideMapScreenOverlay())
-                    break;
-                Capture("07-rest-site");
-                Advance(elapsed, 0.3);
-                break;
-            case 12:
-                Console("room shop");
-                Advance(elapsed, 3.5);
-                break;
-            case 13:
-                if (HideMapScreenOverlay())
-                    break;
-                Capture("08-shop");
-                Advance(elapsed, 0.3);
-                break;
-            case 14:
-                Console("room treasure");
-                Advance(elapsed, 3.5);
-                break;
-            case 15:
-                if (HideMapScreenOverlay())
-                    break;
-                Capture("09-treasure");
-                Advance(elapsed, 0.3);
-                break;
-            case 16:
-                Console("room monster");
-                Advance(elapsed, 6.0);
-                break;
-            case 17:
-                if (HideMapScreenOverlay())
-                    break;
-                Capture("10-combat");
-                Advance(elapsed, 0.3);
-                break;
-            case 18:
-                Console("win");
-                Advance(elapsed, 6.0);
-                break;
-            case 19:
-                Capture("11-rewards");
-                Advance(elapsed, 0.3);
-                break;
-            case 20:
-                if (ClickControlByName("Deck"))
-                    Advance(elapsed, 2.5);
-                break;
-            case 21:
-                Capture("12-deck-view");
-                Advance(elapsed, 0.3);
-                break;
-            case 22:
-                if (ClickControlByName("BackButton"))
-                    Advance(elapsed, 2.0);
-                break;
-            case 23:
-                if (ClickControlByName("PauseButton") || ClickControlByName("Pause"))
-                    Advance(elapsed, 2.5);
-                break;
-            case 24:
-                Capture("13-settings");
-                Advance(elapsed, 0.3);
-                break;
-            case 25:
-                if (ClickControlByName("BackButton") || ClickControlByName("ResumeButton"))
-                    Advance(elapsed, 2.0);
-                break;
-            case 26:
-                Console("room shop");
-                Advance(elapsed, 3.5);
-                break;
-            case 27:
-                if (HideMapScreenOverlay())
-                    break;
-                if (ClickControlByName("MerchantButton"))
-                    Advance(elapsed, 3.0);
-                break;
-            case 28:
-                Capture("14-shop-inventory");
-                Advance(elapsed, 0.3);
-                break;
-            case 29:
-                Console("die");
-                Advance(elapsed, 6.0);
-                break;
-            case 30:
-                Capture("15-death");
-                Advance(elapsed, 0.1);
-                break;
-            default:
-                if (!_quitRequested)
-                {
-                    _quitRequested = true;
-                    PcTestLog.Write("scenario complete, quitting game");
-                    _tree.Quit();
-                }
-                break;
-        }
+        if (step.Run())
+            Advance(elapsed, step.Settle);
     }
 
     private static void Advance(double elapsed, double settleSeconds)

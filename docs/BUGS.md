@@ -141,6 +141,17 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Status**: fixed-pending-device; PC-visual PASS (`shots-20260818-144548/05-run-settled.png`)
 - **Fixed in**: 0.5.0
 
+## BUG-014: Top-bar icons fight the game's own layout writers
+
+- **Where**: slim bar, top-right map/deck/pause icons and the room/floor/boss cluster.
+- **Repro**: on some frames the icons render at the game's landscape-strip positions (y around 40 canvas) or fly toward the origin when a capstone screen opens, instead of holding the slim-bar row; rig clicks occasionally land on the drifted positions.
+- **Expected**: icons hold the positions the portrait layout assigns.
+- **Actual**: a tug of war between our 0.5s reflow and the game's writers.
+- **Root cause (diagnosed so far)**: two writers. `LeftAlignedStuff`/`RightAlignedStuff` are containers whose sort pass re-lays children every frame, and the buttons' own anim-state machinery (`NTopBar.ToggleAnimState` fires on capstone child enter/exit; `NTopBarDeckButton`/`NTopBarPauseButton`) repositions them on screen-open transitions. Reparenting the controls out of the containers made it worse (buttons then landed at the origin) and was reverted.
+- **Fix direction**: Harmony-prefix the game-side writers (the container sort cannot be patched, so the per-button anim/update methods and whatever lays the strip must be identified from the decompiled source) or adopt the game's own positions per state instead of fighting them. Needs a dedicated pass.
+- **Status**: open (0.6.0)
+- **Fixed in**: -
+
 ## BUG-011: Non-combat screens without portrait handling
 
 - **Where**: in-game. Card reward layout, deck/master-deck viewer, pause menu body, relic/keyword tooltips, run end / victory / death / score, boss relic select, potion use/discard prompts, card/grid/hand select overlays, campfire action menu, merchant purchase confirm, compendium/stats/unlocks/credits, mod menu, LAN screens, settings body.
