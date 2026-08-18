@@ -1406,7 +1406,7 @@ internal static class HoverTipAlignmentPatch
         {
             // The potion popup parks at the left edge of this same strip;
             // dropped tips start to its right so the two never stack.
-            const float popupLane = 380f;
+            const float popupLane = 396f;
             text.GlobalPosition = new Vector2(
                 Mathf.Clamp(
                     text.GlobalPosition.X,
@@ -1989,24 +1989,62 @@ internal static class PortraitCompendium
         var safeBottom = PortraitDisplay.SafeBottom();
         var bandTop = PortraitHudMetrics.ContentTop(safeTop);
         var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, safeBottom);
-        var contentHeight = content.Size.Y > 1f ? content.Size.Y : 714f;
 
-        // The vbox ships a 1520-wide custom minimum, which balloons the
-        // margin box back to its landscape footprint one layout pass after
-        // any resize; drop the minimums so the canvas width can hold.
-        content.CustomMinimumSize = Vector2.Zero;
-        margin.CustomMinimumSize = Vector2.Zero;
-        // The scene ships 200-unit side margins tuned for 1920.
-        margin.AddThemeConstantOverride("margin_left", 26);
-        margin.AddThemeConstantOverride("margin_right", 26);
-        margin.AddThemeConstantOverride("margin_top", 20);
-        margin.AddThemeConstantOverride("margin_bottom", 20);
-        PortraitNodes.ClearAnchors(margin);
-        margin.Position = new Vector2(
-            0f,
-            bandTop + (bandBottom - bandTop - contentHeight) * 0.5f - 20f
+        // Containers reset child scale on every sort, so no scale survives
+        // inside the margin/vbox chain. The shelf cards move OUT to the
+        // submenu root (a plain Control) once and get laid out by hand:
+        // three cards in a row scaled to the canvas, the stats chip
+        // centered under them. The emptied stock furniture hides.
+        margin.Visible = false;
+
+        var shelf = new[]
+        {
+            PortraitNodes.FindControl(submenu, "CardLibraryButton"),
+            PortraitNodes.FindControl(submenu, "RelicCollectionButton"),
+            PortraitNodes.FindControl(submenu, "PotionLabButton"),
+        };
+        var stats = PortraitNodes.FindControl(submenu, "StatisticsButton");
+        const float cardW = 368f;
+        const float cardH = 490f;
+        const float gap = 24f;
+        var scale = Math.Min(
+            1f,
+            (canvas.X - 2f * PortraitHudMetrics.EdgeMargin - 2f * gap) / (3f * cardW)
         );
-        margin.Size = new Vector2(canvas.X, contentHeight + 40f);
+        var rowWidth = 3f * cardW * scale + 2f * gap;
+        var rowX = PortraitHudMetrics.CenterX(canvas.X, rowWidth);
+        var statsH = 200f * scale;
+        var totalH = cardH * scale + 36f + statsH;
+        var rowY = bandTop + (bandBottom - bandTop - totalH) * 0.5f;
+
+        for (var i = 0; i < shelf.Length; i++)
+        {
+            var card = shelf[i];
+            if (card is null)
+                continue;
+            if (card.GetParent() != submenu)
+            {
+                card.GetParent().RemoveChild(card);
+                submenu.AddChild(card);
+            }
+            card.PivotOffset = Vector2.Zero;
+            card.Scale = Vector2.One * scale;
+            card.GlobalPosition = new Vector2(rowX + i * (cardW * scale + gap), rowY);
+        }
+        if (stats is not null)
+        {
+            if (stats.GetParent() != submenu)
+            {
+                stats.GetParent().RemoveChild(stats);
+                submenu.AddChild(stats);
+            }
+            stats.PivotOffset = Vector2.Zero;
+            stats.Scale = Vector2.One * scale;
+            stats.GlobalPosition = new Vector2(
+                PortraitHudMetrics.CenterX(canvas.X, 280f * scale),
+                rowY + cardH * scale + 36f
+            );
+        }
     }
 }
 
