@@ -25,6 +25,8 @@ internal sealed class LauncherView
     private readonly float _panelBaseY;
     private readonly float _scale;
     private readonly StyledLabel _statusLabel;
+    private static PanelContainer _authNotice;
+    private static StyledLabel _authNoticeLabel;
 
     internal LauncherView(Control parent, float scale)
     {
@@ -43,6 +45,21 @@ internal sealed class LauncherView
     }
 
     internal void SetStatus(string text) => _statusLabel.Text = text;
+
+    // Any Steam Guard / verification prompt surfaces here, on the face of
+    // the screen; null hides the callout again.
+    internal void ShowAuthNotice(string text)
+    {
+        if (_authNotice is null)
+            return;
+        if (string.IsNullOrEmpty(text))
+        {
+            _authNotice.Visible = false;
+            return;
+        }
+        _authNoticeLabel.Text = text;
+        _authNotice.Visible = true;
+    }
 
     internal void AppendLog(string msg) => Log.AppendLog(msg);
 
@@ -173,22 +190,58 @@ internal sealed class LauncherView
         // The standalone launcher is visible before the downloaded game PCK is
         // mounted, so game textures are not loadable here. Keep the title native
         // and avoid noisy resource-loader errors during every cold start.
-        var title = new StyledLabel("Slay the Spire 2", scale, fontSize: 31);
+        // Parchment ribbon title: full-width flat band with an ink title,
+        // hung at a slight hand-placed tilt. The one loud thing besides the
+        // primary action.
+        var ribbon = new PanelContainer();
+        var ribbonStyle = new StyleBoxFlat { BgColor = LauncherComponentTheme.Parchment };
+        ribbonStyle.BorderColor = LauncherComponentTheme.ParchmentShade;
+        ribbonStyle.BorderWidthBottom = 4;
+        ribbonStyle.SetCornerRadiusAll(0);
+        ribbonStyle.ContentMarginLeft = LauncherComponentTheme.ScaleInt(scale, 20);
+        ribbonStyle.ContentMarginRight = LauncherComponentTheme.ScaleInt(scale, 20);
+        ribbonStyle.ContentMarginTop = LauncherComponentTheme.ScaleInt(scale, 10);
+        ribbonStyle.ContentMarginBottom = LauncherComponentTheme.ScaleInt(scale, 10);
+        ribbon.AddThemeStyleboxOverride(LauncherComponentTheme.Panel, ribbonStyle);
+        ribbon.RotationDegrees = -1.2f;
+        var title = new StyledLabel("SLAY THE SPIRE 2", scale, fontSize: 30);
         title.AddThemeFontOverride("font", LauncherComponentTheme.DisplayFont);
         title.AddThemeColorOverride(
             LauncherViewLayoutMetrics.ThemeFontColor,
-            LauncherComponentTheme.Gold
+            LauncherComponentTheme.ParchmentInk
         );
-        left.AddChild(title);
-        left.AddChild(new HSeparator());
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+        ribbon.AddChild(title);
+        left.AddChild(ribbon);
 
         var statusLabel = new StyledLabel("Initializing...", scale);
         statusLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         statusLabel.AddThemeColorOverride(
             LauncherViewLayoutMetrics.ThemeFontColor,
-            LauncherComponentTheme.Ivory
+            LauncherComponentTheme.MutedIvory
         );
         left.AddChild(statusLabel);
+
+        // Verification callout: any Steam Guard or confirmation prompt lands
+        // here, on the face of the screen, never only inside the details log.
+        _authNotice = new PanelContainer { Visible = false };
+        var noticeStyle = new StyleBoxFlat { BgColor = LauncherComponentTheme.Parchment };
+        noticeStyle.BorderColor = LauncherComponentTheme.SpireCrimson;
+        noticeStyle.SetBorderWidthAll(3);
+        noticeStyle.SetCornerRadiusAll(0);
+        noticeStyle.ContentMarginLeft = LauncherComponentTheme.ScaleInt(scale, 16);
+        noticeStyle.ContentMarginRight = LauncherComponentTheme.ScaleInt(scale, 16);
+        noticeStyle.ContentMarginTop = LauncherComponentTheme.ScaleInt(scale, 10);
+        noticeStyle.ContentMarginBottom = LauncherComponentTheme.ScaleInt(scale, 10);
+        _authNotice.AddThemeStyleboxOverride(LauncherComponentTheme.Panel, noticeStyle);
+        _authNoticeLabel = new StyledLabel("", scale, fontSize: 16);
+        _authNoticeLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _authNoticeLabel.AddThemeColorOverride(
+            LauncherViewLayoutMetrics.ThemeFontColor,
+            LauncherComponentTheme.ParchmentInk
+        );
+        _authNotice.AddChild(_authNoticeLabel);
+        left.AddChild(_authNotice);
 
         var modeSelection = new ModeSelectionSection(scale);
         left.AddChild(modeSelection);

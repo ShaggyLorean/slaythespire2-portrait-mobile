@@ -53,7 +53,20 @@ internal sealed class LauncherController
         _model.SessionStateChanged += state =>
             _runOnMainThread(() => UpdateUI(state));
         _model.LogReceived += message =>
-            _runOnMainThread(() => _view.AppendLog(message));
+            _runOnMainThread(() =>
+            {
+                _view.AppendLog(message);
+                // Verification prompts must never live only inside the
+                // details log (user missed a Steam Guard confirmation that
+                // way): surface them on the face of the screen.
+                var lowered = message.ToLowerInvariant();
+                if (lowered.Contains("confirmation") || lowered.Contains("guard")
+                    || lowered.Contains("approve") || lowered.Contains("verify your"))
+                    _view.ShowAuthNotice(message);
+                else if (lowered.Contains("authentication successful")
+                    || lowered.Contains("login failed"))
+                    _view.ShowAuthNotice(null);
+            });
         PatchHelper.LogEmitted += message =>
         {
             if (message.StartsWith("[Cloud]"))

@@ -133,15 +133,8 @@ internal sealed class ScreenBackground : Control
             mist, 2f
         );
 
-        var inset = Math.Max(8f, width * 0.018f);
-        var gold = new Color(LauncherComponentTheme.Gold, 0.32f);
-        var cyan = new Color(LauncherComponentTheme.SpireCyan, 0.16f);
-        AddLine(new[] { new Vector2(inset, 0f), new Vector2(inset, height) }, gold, 2f);
-        AddLine(
-            new[] { new Vector2(width - inset, 0f), new Vector2(width - inset, height) },
-            cyan,
-            2f
-        );
+        // No edge rails: the frame lines read as a broken column and fight
+        // the full-bleed composition (user-reported eyesore).
         GD.Print($"[LauncherBackdrop] built at {width:F0}x{height:F0}");
     }
 

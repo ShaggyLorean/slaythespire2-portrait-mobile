@@ -67,16 +67,22 @@ internal sealed class StyledButton : Button
         ApplyState(LauncherComponentTheme.StateDisabled, LauncherComponentTheme.ButtonDisabled, LauncherComponentTheme.GoldDim.Darkened(0.35f), radius, border);
     }
 
+    // Letterpress slab: flat fill, a parchment-toned rule across the top and
+    // a dark hairline under the bottom. No radius, no outline box, no glow.
     private void ApplyState(string state, Color background, Color borderColor, int radius, int border)
-        => AddThemeStyleboxOverride(
-            state,
-            LauncherStyleBoxes.MakeFramed(
-                background,
-                borderColor,
-                radius,
-                border,
-                LauncherComponentTheme.ScaleInt(_scale, 12),
-                LauncherComponentTheme.ScaleInt(_scale, 5)
-            )
-        );
+    {
+        var style = new StyleBoxFlat { BgColor = background };
+        style.BorderColor = borderColor;
+        style.BorderWidthTop = Math.Max(3, LauncherComponentTheme.ScaleInt(_scale, 2));
+        style.BorderWidthBottom = 1;
+        style.BorderWidthLeft = 0;
+        style.BorderWidthRight = 0;
+        style.SetCornerRadiusAll(0);
+        style.ContentMarginLeft = LauncherComponentTheme.ScaleInt(_scale, 20);
+        style.ContentMarginRight = LauncherComponentTheme.ScaleInt(_scale, 20);
+        style.ContentMarginTop = LauncherComponentTheme.ScaleInt(_scale, 5);
+        style.ContentMarginBottom = LauncherComponentTheme.ScaleInt(_scale, 5);
+        AddThemeStyleboxOverride(state, style);
+        Alignment = HorizontalAlignment.Left;
+    }
 }

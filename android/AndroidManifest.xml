@@ -74,6 +74,15 @@
       tools:ignore="UnusedAttribute"
     />
     <activity
+      android:name=".RestartTrampolineActivity"
+      android:process=":phoenix"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar"
+      android:excludeFromRecents="true"
+      android:exported="false"
+      android:taskAffinity=""
+      tools:ignore="UnusedAttribute"
+    />
+    <activity
       android:name=".NativeFallbackActivity"
       android:label="Slay the Spire 2 Portrait"
       android:theme="@style/GodotAppSplashTheme"

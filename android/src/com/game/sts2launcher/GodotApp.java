@@ -1229,11 +1229,14 @@ public class GodotApp extends GodotActivity {
 
 	public void restartApp() {
 		Log.i(TAG, "Restarting app...");
-		Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
-		if (intent != null) {
-			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-			startActivity(intent);
-		}
+		// Neither startActivity+exit nor a post-mortem PendingIntent survives
+		// modern background-launch restrictions (Android 16 / OnePlus killed
+		// both: the app just closed). A trampoline activity in its own
+		// ":phoenix" process outlives this exit and relaunches from the
+		// foreground, where no restriction applies.
+		Intent trampoline = new Intent(this, RestartTrampolineActivity.class);
+		trampoline.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+		startActivity(trampoline);
 		Runtime.getRuntime().exit(0);
 	}
 
