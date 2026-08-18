@@ -148,9 +148,9 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Expected**: icons hold the positions the portrait layout assigns.
 - **Actual**: a tug of war between our 0.5s reflow and the game's writers.
 - **Root cause (diagnosed so far)**: two writers. `LeftAlignedStuff`/`RightAlignedStuff` are containers whose sort pass re-lays children every frame, and the buttons' own anim-state machinery (`NTopBar.ToggleAnimState` fires on capstone child enter/exit; `NTopBarDeckButton`/`NTopBarPauseButton`) repositions them on screen-open transitions. Reparenting the controls out of the containers made it worse (buttons then landed at the origin) and was reverted.
-- **Fix direction**: Harmony-prefix the game-side writers (the container sort cannot be patched, so the per-button anim/update methods and whatever lays the strip must be identified from the decompiled source) or adopt the game's own positions per state instead of fighting them. Needs a dedicated pass.
-- **Status**: open (0.6.0)
-- **Fixed in**: -
+- **Fix**: stopped fighting the writers and adopted them. Outside combat the slim bar places the two HBox CONTAINERS (`PlaceRow`) and lets their native sort arrange the children — hidden children are skipped by the sort, which is how the room/floor/boss cluster leaves row 1. Two grandchildren the sort cannot fix (the potion capsule inside `PotionMarginifier`, the room icon inside its resizer) are handed back to their slots explicitly on every compact reflow, because the combat branch pins them directly and margin containers do not re-sort them on the way back. Capstone screens are detected via `PortraitCapstone.IsOpen` (pause/settings live under the submenu stack's `Submenus` node, deck view is a direct container child; the container's other children are permanent furniture) and drop the whole HUD cluster.
+- **Status**: fixed-pending-device; PC-visual PASS (`shots-20260818-163729/` nav clicks stable across rounds: Deck 930,203 / Pause 1062,203; potion slot restore verified in the follow-up round)
+- **Fixed in**: 0.6.0-dev
 
 ## BUG-011: Non-combat screens without portrait handling
 
@@ -161,3 +161,14 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Root cause**: v0.3.0 scope covered the core run loop only.
 - **Status**: open (0.6.0 wave 1: card reward, pause, deck viewer, run end/death; 0.7.0 wave 2: overlays and tooltips)
 - **Fixed in**: -
+
+## BUG-015: Slim-bar re-show turned the relic strip into a fullscreen click shield
+
+- **Where**: every non-combat screen since the capstone-hide change; found via the PC rig's merchant probe (`STS2_PCTEST_SCENARIO=merchant`).
+- **Repro**: outside combat, click room content between roughly y 243 and y 2280 canvas (the merchant mat, campfire options, anything mid-screen). Hover and press never arrive; the merchant button stays enabled but unreachable.
+- **Expected**: only the relic icons capture input; the strip's container stays input-transparent as authored.
+- **Actual**: dead input across most of the canvas. Top-bar buttons (above y 243) and the bottom map point (below y 2280) kept working, which hid the regression for several rounds.
+- **Root cause**: the capstone hide/show helper (`SetVisible`) stamped `MouseFilter=Stop` onto every control it re-showed. `RelicInventory`'s control rect is 1084x2036 (relic rows grow downward), so re-showing it every reflow tick installed a near-fullscreen invisible click shield. Diagnosis chain that got here: merchant button `IsEnabled=True` and `ActiveScreenContext` current = `NMerchantRoom`, yet synthesized hover+press never fired `NClickableControl.HandleMousePress` (which requires focus from a real hover hit).
+- **Fix**: `SetVisible` parks the authored filter in node meta while hidden (`Ignore`) and restores it exactly on show; controls that were never hidden are never touched.
+- **Status**: fixed-pending-device; PC-visual PASS (merchant probe opens the inventory, full round clean)
+- **Fixed in**: 0.6.0-dev

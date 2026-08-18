@@ -250,6 +250,45 @@ internal static class MainMenuWindowChangePatch
     }
 }
 
+internal static class PortraitCapstone
+{
+    // The capstone container keeps permanent furniture visible (backstop
+    // ColorRect, submenu stack, screen proxy), so "any visible child" reads
+    // as always-open. Real screens appear in two distinct places: pause and
+    // settings as children of the stack's "Submenus" node, deck view as a
+    // direct child of the container itself.
+    internal static bool IsOpen(Node anchor)
+    {
+        if (anchor is null || !GodotObject.IsInstanceValid(anchor) || !anchor.IsInsideTree())
+            return false;
+        var capstone = PortraitNodes.FindByType(anchor.GetTree().Root, "NCapstoneContainer");
+        if (capstone is null)
+            return false;
+        foreach (var child in capstone.GetChildren())
+        {
+            if (child is not Control { Visible: true } control)
+                continue;
+            var name = control.Name.ToString();
+            if (name is "CapstoneBackstop" or "ActiveScreenProxy")
+                continue;
+            if (name == "CapstoneSubmenuStack")
+            {
+                if (PortraitNodes.FindControl(control, "Submenus") is { } submenus)
+                {
+                    foreach (var sub in submenus.GetChildren())
+                    {
+                        if (sub is Control { Visible: true })
+                            return true;
+                    }
+                }
+                continue;
+            }
+            return true;
+        }
+        return false;
+    }
+}
+
 internal static class PortraitCombat
 {
     private const string FrameName = "Sts2PortraitCombatFrame";
@@ -314,19 +353,7 @@ internal static class PortraitCombat
     // Hide the holder while such a screen is open; restore only what we hid.
     private static void ApplyCapstoneHandVisibility(Node hand, Control holder)
     {
-        var capstone = PortraitNodes.FindByType(hand.GetTree().Root, "NCapstoneContainer");
-        var open = false;
-        if (capstone is not null)
-        {
-            foreach (var child in capstone.GetChildren())
-            {
-                if (child is Control { Visible: true })
-                {
-                    open = true;
-                    break;
-                }
-            }
-        }
+        var open = PortraitCapstone.IsOpen(hand);
 
         if (open && holder.Visible)
         {
@@ -808,9 +835,17 @@ internal static class PortraitTopBar
             if (IsBuildWatermarkText(root, richText.Text ?? ""))
                 richText.Visible = false;
         }
-        else if (root is CanvasItem canvasItem && root.GetType().Name == "NDebugInfoLabelManager")
+        else if (root.GetType().Name == "NDebugInfoLabelManager")
         {
-            canvasItem.Visible = false;
+            // The manager is a plain Node; its labels are scene-unique nodes
+            // elsewhere in the owning scene (in-run text is "[ver] (date)" and
+            // "MODDED (n)", which no text rule can safely match), so hide them
+            // by identity through the unique-name lookup instead.
+            foreach (var unique in new[] { "%ReleaseInfo", "%ModdedWarning", "%DebugSeed" })
+            {
+                if (root.GetNodeOrNull(unique) is CanvasItem info)
+                    info.Visible = false;
+            }
         }
 
         foreach (var child in root.GetChildren())
@@ -926,6 +961,12 @@ internal static class PortraitTopBar
             SetVisible(boss, false);
 
             PlaceRow(left, new Vector2(38f, top + 4f), 0.95f);
+            // Combat pins these two as grandchildren of the row (Place writes
+            // their transforms directly); their margin-container slots do not
+            // re-sort them on the way back to the slim bar, so hand them back
+            // explicitly or they linger at the combat coordinates (BUG-014).
+            RestoreIntoSlot(potions);
+            RestoreIntoSlot(room);
             if (right is not null)
             {
                 const float rightScale = 1.05f;
@@ -951,23 +992,14 @@ internal static class PortraitTopBar
     // Visible=false loses against the game's own top-bar show tweens; a
     // per-node modulate alpha survives them (the tweens animate position and
     // the bar-level modulate, not each icon's own).
-    private static bool IsCapstoneScreenOpen(Node anchor)
-    {
-        var capstone = PortraitNodes.FindByType(anchor.GetTree().Root, "NCapstoneContainer");
-        if (capstone is null)
-            return false;
-        foreach (var child in capstone.GetChildren())
-        {
-            if (child is Control { Visible: true })
-                return true;
-        }
-        return false;
-    }
+    private static bool IsCapstoneScreenOpen(Node anchor) => PortraitCapstone.IsOpen(anchor);
 
     // Both flags together: Visible=false removes the node from container
     // sorting (and can be re-shown by game code, which the reflow undoes
     // within a tick), while the modulate alpha survives the game's own show
     // tweens as a second line of defense.
+    private const string MouseFilterMeta = "Sts2PortraitMouseFilter";
+
     private static void SetVisible(Control control, bool visible)
     {
         if (control is null)
@@ -977,9 +1009,32 @@ internal static class PortraitTopBar
         var alpha = visible ? 1f : 0f;
         if (Math.Abs(control.Modulate.A - alpha) > 0.01f)
             control.Modulate = new Color(1f, 1f, 1f, alpha);
-        control.MouseFilter = visible
-            ? Control.MouseFilterEnum.Stop
-            : Control.MouseFilterEnum.Ignore;
+        // Never force Stop on show: RelicInventory's rect spans most of the
+        // canvas (rows grow downward), and stamping Stop onto it turned the
+        // whole room into a click shield (the merchant button was unreachable
+        // by mouse). Park the original filter in meta while hidden and hand
+        // it back untouched on show.
+        if (!visible)
+        {
+            if (!control.HasMeta(MouseFilterMeta))
+                control.SetMeta(MouseFilterMeta, (long)control.MouseFilter);
+            control.MouseFilter = Control.MouseFilterEnum.Ignore;
+        }
+        else if (control.HasMeta(MouseFilterMeta))
+        {
+            control.MouseFilter = (Control.MouseFilterEnum)(long)control.GetMeta(MouseFilterMeta);
+            control.RemoveMeta(MouseFilterMeta);
+        }
+    }
+
+    private static void RestoreIntoSlot(Control control)
+    {
+        if (control is null)
+            return;
+        PortraitNodes.ClearAnchors(control);
+        control.PivotOffset = Vector2.Zero;
+        control.Scale = Vector2.One;
+        control.Position = Vector2.Zero;
     }
 
     private static void ResetRow(Control row)
@@ -1474,7 +1529,12 @@ internal static class EventRoomPatch
                 options.GlobalPosition = new Vector2((canvas.X - optionsWidth) * 0.5f, optionsTop);
             }
 
-            // Event art: center-crop horizontally and fill the free band.
+            // Event art: fill the free band and crop with a rule-of-thirds
+            // bias. The portraits are wide (~2560x1200) and paint the subject
+            // left of center (the landscape screen puts prose on the right),
+            // so a straight center crop routinely cuts the subject in half;
+            // anchor the visible window around the 38% mark instead, clamped
+            // so it never slides past the texture edges.
             if (PortraitNodes.FindControl(layout, "Portrait") is { } art)
             {
                 var bandTop = contentTop + 470f;
@@ -1482,10 +1542,15 @@ internal static class EventRoomPatch
                 var artBaseHeight = art.Size.Y > 1f ? art.Size.Y : 1200f;
                 var artBaseWidth = art.Size.X > 1f ? art.Size.X : 2560f;
                 var scale = Mathf.Clamp((bandBottom - bandTop) / artBaseHeight, 0.7f, 1.35f);
+                var renderedWidth = artBaseWidth * scale;
+                const float focus = 0.38f;
+                var artX = renderedWidth <= canvas.X
+                    ? (canvas.X - renderedWidth) * 0.5f
+                    : Mathf.Clamp(canvas.X * 0.5f - renderedWidth * focus, canvas.X - renderedWidth, 0f);
                 art.PivotOffset = Vector2.Zero;
                 art.Scale = Vector2.One * scale;
                 art.GlobalPosition = new Vector2(
-                    (canvas.X - artBaseWidth * scale) * 0.5f,
+                    artX,
                     bandTop + (bandBottom - bandTop - artBaseHeight * scale) * 0.5f
                 );
             }

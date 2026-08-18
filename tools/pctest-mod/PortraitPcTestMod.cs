@@ -196,6 +196,51 @@ public static class PortraitPcTestMod
     private static Step Cmd(string command, double settle)
         => new($"console {command}", () => { Console(command); return true; }, settle);
 
+    // Minimal bisect walk: straight to the merchant with no capstone screens
+    // touched first. Selected via STS2_PCTEST_SCENARIO=merchant.
+    private static readonly Step[] MerchantProbeScenario =
+    {
+        new(
+            "wait main menu",
+            () => FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true },
+            0.4,
+            25.0
+        ),
+        Click("SingleplayerButton", 2.0),
+        Click("ConfirmButton", 2.5),
+        Click("NoButton", 7.0, 4.0),
+        Cmd("room shop", 4.0),
+        new(
+            "open merchant inventory",
+            () =>
+            {
+                var ctx = MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext.ActiveScreenContext.Instance.GetCurrentScreen();
+                PcTestLog.Write($"active screen: {ctx?.GetType().Name ?? "null"}");
+                if (FindNodeByName(_tree.Root, "MerchantButton") is MegaCrit.Sts2.Core.Nodes.GodotExtensions.NClickableControl mb)
+                    PcTestLog.Write($"merchant IsEnabled: {mb.IsEnabled}");
+                return !HideMapScreenOverlay() && ClickControlByName("MerchantButton");
+            },
+            1.0
+        ),
+        new(
+            "wait merchant slide-in",
+            () =>
+            {
+                var inv = FindNodeByName(_tree.Root, "Inventory");
+                var slots = inv is null ? null : FindNodeByName(inv, "SlotsContainer");
+                return slots is Control { Visible: true } landed && landed.GlobalPosition.Y > 0f;
+            },
+            1.2,
+            12.0
+        ),
+        Shot("m1-merchant-fresh"),
+    };
+
+    private static Step[] ActiveScenario =>
+        System.Environment.GetEnvironmentVariable("STS2_PCTEST_SCENARIO") == "merchant"
+            ? MerchantProbeScenario
+            : Scenario;
+
     private static readonly Step[] Scenario =
     {
         new(
@@ -256,8 +301,39 @@ public static class PortraitPcTestMod
         Cmd("room shop", 3.5),
         new(
             "open merchant inventory",
-            () => !HideMapScreenOverlay() && ClickControlByName("MerchantButton"),
-            3.0
+            () =>
+            {
+                if (_tree.Paused)
+                {
+                    PcTestLog.Write("WARN tree still paused before merchant click; unpausing");
+                    _tree.Paused = false;
+                }
+                return !HideMapScreenOverlay() && ClickControlByName("MerchantButton");
+            },
+            1.0
+        ),
+        // The click first walks the character to the merchant, then the
+        // inventory slides down from above the canvas; a fixed settle is
+        // not enough on far spawns, so wait for the mat to actually land.
+        new(
+            "wait merchant slide-in",
+            () =>
+            {
+                // Resume leaves the tree paused in some rounds (walks and the
+                // inventory slide never run); measure it loudly and heal so
+                // the rest of the walk still produces evidence.
+                if (_tree.Paused)
+                {
+                    PcTestLog.Write("WARN tree still paused after Resume; unpausing");
+                    _tree.Paused = false;
+                    return false;
+                }
+                var inv = FindNodeByName(_tree.Root, "Inventory");
+                var slots = inv is null ? null : FindNodeByName(inv, "SlotsContainer");
+                return slots is Control { Visible: true } landed && landed.GlobalPosition.Y > 0f;
+            },
+            1.2,
+            12.0
         ),
         Shot("15-shop-inventory"),
         Cmd("event NEOW", 3.5),
@@ -271,7 +347,7 @@ public static class PortraitPcTestMod
         if (elapsed < _stepReadyAt)
             return;
 
-        if (_step >= Scenario.Length)
+        if (_step >= ActiveScenario.Length)
         {
             if (!_quitRequested)
             {
@@ -285,7 +361,7 @@ public static class PortraitPcTestMod
         if (_stepStartedAt < 0)
             _stepStartedAt = elapsed;
 
-        var step = Scenario[_step];
+        var step = ActiveScenario[_step];
         if (elapsed - _stepStartedAt > step.Timeout)
         {
             PcTestLog.Write($"step {_step} ({step.Name}) timed out, skipping");
@@ -343,13 +419,27 @@ public static class PortraitPcTestMod
     // on the NEXT rendered frame, so the caller must capture one tick later.
     private static bool HideMapScreenOverlay()
     {
-        if (FindNodeByName(_tree.Root, "MapScreen") is Control { Visible: true } map)
+        // Console room/event jumps leave the map screen OPEN over the new
+        // room. Setting Visible=false only hides pixels: the screen still
+        // owns ActiveScreenContext and keeps CombatManager paused, which
+        // disables room controls (the merchant button ignored clicks for
+        // exactly this reason). Close it through the game's own teardown.
+        // When the map IS the current room, leave it alone.
+        if (FindNodeByName(_tree.Root, "MapRoom") is Control { Visible: true })
+            return false;
+        if (FindNodeByName(_tree.Root, "MapScreen") is not Control map)
+            return false;
+        var isOpen = map.GetType().GetProperty("IsOpen")?.GetValue(map) as bool? ?? map.Visible;
+        if (!isOpen && !map.Visible)
+            return false;
+        if (isOpen && map.GetType().GetMethod("Close") is { } close)
         {
-            map.Visible = false;
-            PcTestLog.Write("map screen overlay hidden for capture");
-            return true;
+            close.Invoke(map, new object[] { false });
+            PcTestLog.Write("map screen closed via game path for capture");
         }
-        return false;
+        if (map.Visible)
+            map.Visible = false;
+        return true;
     }
 
     // The game's own dev-console commands (event/room/fight/...) are plain

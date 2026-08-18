@@ -12,7 +12,7 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | main menu | temiz |
 | character select | patch'li temiz |
 | map | patch'li temiz (BUG-013 kapali) |
-| event (Byrdonis) | yeni kompozisyon dogrulama bekliyor |
+| event (Byrdonis) | dogrulandi: metin bar altinda, art 0.38 odakli kirpma ile bandi dolduruyor, secenekler basparmak bolgesinde |
 | rest site | temiz |
 | shop room | temiz |
 | shop inventory | patch'li temiz (alt raf duzeltildi) |
@@ -23,7 +23,7 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | deck view | capstone muamelesi ile temiz |
 | pause menu | temiz |
 | settings body | capstone + safe-top ofseti |
-| Neow (ancient) | balon kompozisyonu tasarlanacak |
+| Neow (ancient) | secenekler basparmak bolgesinde temiz; balon hala options blogunun ilk satiri, konusana baglanacak (siradaki kompozisyon pasi) |
 | death (Devastation) | temiz |
 | deck transform overlay (NDeckTransformSelectScreen) | kesfedildi, incelenmedi |
 
