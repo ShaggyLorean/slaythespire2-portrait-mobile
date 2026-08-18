@@ -26,6 +26,7 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | Neow (ancient) | dogrulandi: balon konusanin yaninda (bar alti), secenekler basparmak bolgesinde; spacer'li vbox tasarimi tum ancient'lara uygulanir |
 | death (Devastation) | dogrulandi: Continue TouchScale ile alt bantta buyutuldu |
 | compendium (ana menu) | dogrulandi: margin kutusu canvas genislikte, Character Stats iceride; watermark ana menude de gizli; card library 2 sutunla temiz |
+| relic collection / potion lab | dogrulandi: 10 sutun kategori gridleri patchsiz temiz |
 | deck upgrade select (Smith) | dogrulandi: 3 sutun grid + alt bilgi satiri portrait-temiz, cikis "Close" oku; transform/enchant ayni aile, ayni yerlesim beklenir |
 
 ## scenes/screens/ sahneleri
