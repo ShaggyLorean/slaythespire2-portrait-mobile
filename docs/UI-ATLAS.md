@@ -28,6 +28,8 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | compendium (ana menu) | dogrulandi: margin kutusu canvas genislikte, Character Stats iceride; watermark ana menude de gizli; card library 2 sutunla temiz |
 | relic collection / potion lab | dogrulandi: 10 sutun kategori gridleri patchsiz temiz |
 | modding ekrani | dogrulandi: liste ustte, detay paneli altinda dikey istif; her sey canvas icinde |
+| act 2 ortami (map/combat/rest) | dogrulandi: petek magara combat seridi + kamp duzeni ayni pinlerle temiz |
+| karakter secimi Confirm kaymasi | FIX: karakter degisince Confirm canvas disina kayiyordu (Silent x1300); kelepce dongusu eklendi. Silent oynanabilirligi profil kilidinde, rig erisemiyor |
 | draw/discard pile ekranlari | dogrulandi: 3 sutun kart grid patchsiz temiz |
 | boss loot (Lava Rock cift relic) | dogrulandi: relicler loot paneline buyuk satirlar olarak girer, secim ekrani yok |
 | timeline (intro) | dogrulandi: kilitli-profil tanitim metni ortalanmis temiz; icerik unlock gerektirir |

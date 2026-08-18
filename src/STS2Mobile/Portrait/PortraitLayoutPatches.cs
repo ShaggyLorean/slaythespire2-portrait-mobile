@@ -2357,5 +2357,23 @@ internal static class CharacterSelectPatch
         Traverse.Create(__instance).Field("_infoPanelTween").GetValue<Tween>()?.Kill();
         panel.Position = new Vector2(40f, panel.Position.Y);
         Traverse.Create(__instance).Field("_infoPanelPosFinalVal").SetValue(panel.Position);
+
+        // Switching characters slides the confirm button toward its
+        // landscape target, which can carry it past the canvas edge
+        // (found via the Silent: the button parked at x 1300 on an 1180
+        // canvas, untappable). Keep it clamped for the screen's lifetime.
+        var confirm = PortraitNodes.FindControl(__instance, "ConfirmButton");
+        if (confirm is not null && !confirm.HasMeta("Sts2PortraitConfirmClamp"))
+        {
+            confirm.SetMeta("Sts2PortraitConfirmClamp", true);
+            PortraitNodes.AssertLoop(confirm, () =>
+            {
+                var canvas = PortraitDisplay.CanvasSize;
+                var width = confirm.Size.X * Math.Max(confirm.Scale.X, 1f);
+                var maxX = canvas.X - width - 20f;
+                if (confirm.GlobalPosition.X > maxX)
+                    confirm.GlobalPosition = new Vector2(maxX, confirm.GlobalPosition.Y);
+            });
+        }
     }
 }

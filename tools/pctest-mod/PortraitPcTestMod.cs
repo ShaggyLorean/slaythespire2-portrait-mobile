@@ -347,8 +347,41 @@ public static class PortraitPcTestMod
             "extras" => ExtrasProbeScenario,
             "modding" => ModdingProbeScenario,
             "piles" => PilesProbeScenario,
+            "wave2" => Wave2ProbeScenario,
             _ => Scenario,
         };
+
+    // Second character and second act: the Silent's combat layout, then the
+    // act 2 environment (map, combat, rest) under the same pins.
+    private static readonly Step[] Wave2ProbeScenario =
+    {
+        new(
+            "wait main menu",
+            () => FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true },
+            0.4,
+            25.0
+        ),
+        Cmd("unlock all", 1.0),
+        Click("SingleplayerButton", 2.0),
+        Click("SILENT_button", 1.2),
+        Click("SILENT_button", 1.2),
+        Click("ConfirmButton", 2.0),
+        // unlock all opens the ascension panel plus its FTUE popup on the
+        // first confirm; dismiss and confirm again to actually start.
+        Click("FtueConfirmButton", 1.5, 5.0),
+        Click("ConfirmButton", 2.5),
+        Click("NoButton", 7.0, 4.0),
+        Cmd("room monster", 4.5),
+        Shot("w1-silent-combat"),
+        Cmd("win", 6.0),
+        Cmd("act 2", 5.0),
+        Shot("w2-act2-map"),
+        Cmd("room monster", 4.5),
+        Shot("w3-act2-combat"),
+        Cmd("win", 6.0),
+        Cmd("room restsite", 3.5),
+        Shot("w4-act2-rest"),
+    };
 
     // Draw/discard pile screens in combat, then the boss relic choice via
     // Neow's Lava Rock (the act boss drops two relics to pick from).
