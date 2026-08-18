@@ -16,9 +16,9 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | rest site | temiz |
 | shop room | temiz |
 | shop inventory | patch'li temiz (alt raf duzeltildi) |
-| treasure | temiz (kompozisyon pasi planli: olu alan) |
+| treasure | dogrulandi: sandik FillScale ile yan marjlara kadar buyur, bantta ortalanir |
 | combat | patch'li temiz (el fix'i dahil) |
-| rewards/loot | temiz (kompozisyon pasi planli: olu alan) |
+| rewards/loot | dogrulandi: panel tam genislik (combat-aware bant), Proceed panel altinda ZIndex 460 |
 | card choice (Choose a Card) | temiz |
 | deck view | capstone muamelesi ile temiz |
 | pause menu | temiz |

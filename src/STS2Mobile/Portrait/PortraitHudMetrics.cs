@@ -48,4 +48,61 @@ internal static class PortraitHudMetrics
 
     internal static float CombatTopBandHeight(float safeTop)
         => Math.Max(CombatArtStripCover, safeTop + CombatTopBandExtra);
+
+    // ---- Touch layout rules (phone-first sizing) ----
+    // Every screen treats the canvas as a touch surface: controls grow to
+    // use the free band, nothing renders into the gesture strip at the
+    // bottom or the cutout at the top, and hit targets never fall under
+    // the minimum touch side. Content patches must size through these
+    // helpers instead of per-screen constants.
+
+    // Extra clearance kept above the OS gesture area, below the safe inset.
+    internal const float NavClearance = 24f;
+
+    // Minimum acceptable side of a touch target, canvas units (~10mm on the
+    // reference device: 1180-unit canvas over a ~68mm-wide panel).
+    internal const float MinTouchSide = 96f;
+
+    // Side margin content keeps from the canvas edges.
+    internal const float EdgeMargin = 30f;
+
+    // Last Y non-combat content may reach (start of the gesture strip).
+    internal static float ContentBottom(float canvasY, float safeBottom)
+        => canvasY - safeBottom - NavClearance;
+
+    // Height of the free band between the bar and the gesture strip.
+    internal static float ContentBandHeight(float canvasY, float safeTop, float safeBottom)
+        => ContentBottom(canvasY, safeBottom) - ContentTop(safeTop);
+
+    // Largest uniform scale that fits base content into the given box,
+    // clamped so growth stays sane and shrink below authored size is
+    // impossible (growing is the point; fitting is the constraint).
+    internal static float FillScale(
+        float baseWidth,
+        float baseHeight,
+        float maxWidth,
+        float maxHeight,
+        float maxScale)
+    {
+        var byWidth = baseWidth > 1f ? maxWidth / baseWidth : maxScale;
+        var byHeight = baseHeight > 1f ? maxHeight / baseHeight : maxScale;
+        return Math.Clamp(Math.Min(byWidth, byHeight), 1f, maxScale);
+    }
+
+    internal static float CenterX(float canvasX, float width) => (canvasX - width) * 0.5f;
+
+    // Y for a control hanging from the bottom of the content band.
+    internal static float BottomAnchoredY(float canvasY, float safeBottom, float height)
+        => ContentBottom(canvasY, safeBottom) - height;
+
+    // Scale that lifts a control's smaller side up to the touch minimum,
+    // never shrinking and never exceeding maxScale.
+    internal static float TouchScale(float baseWidth, float baseHeight, float maxScale)
+    {
+        var smallSide = Math.Min(
+            baseWidth > 1f ? baseWidth : MinTouchSide,
+            baseHeight > 1f ? baseHeight : MinTouchSide
+        );
+        return Math.Clamp(MinTouchSide / smallSide, 1f, maxScale);
+    }
 }

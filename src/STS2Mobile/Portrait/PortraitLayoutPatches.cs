@@ -1763,6 +1763,11 @@ internal static class PortraitAncientEvent
         content.Position = new Vector2(80f, 0f);
         content.Size = new Vector2(canvas.X - 180f, bottom - top);
 
+        // Touch rule: the bubble reads from an arm's length; scaling the
+        // vbox child only grows its render into the empty spacer below.
+        dialogue.PivotOffset = Vector2.Zero;
+        dialogue.Scale = Vector2.One * 1.2f;
+
         Control spacer = null;
         foreach (var child in content.GetChildren())
         {
@@ -1795,6 +1800,169 @@ internal static class PortraitAncientEvent
                 fakeNext.GlobalPosition.X,
                 top + dialogue.Size.Y + 12f
             );
+    }
+}
+
+internal static class PortraitRewards
+{
+    private const string LoopMeta = "Sts2PortraitRewardsLoop";
+
+    internal static void EnsureLoop(Control screen)
+    {
+        if (screen is null || !GodotObject.IsInstanceValid(screen) || screen.HasMeta(LoopMeta))
+            return;
+        screen.SetMeta(LoopMeta, true);
+        Tick(screen);
+    }
+
+    private static void Tick(Control screen)
+    {
+        if (!GodotObject.IsInstanceValid(screen) || !screen.IsInsideTree())
+            return;
+        Apply(screen);
+        PortraitNodes.After(screen, 0.5, () => Tick(screen));
+    }
+
+    // The loot panel is authored for a landscape center: a 526x640 plate in
+    // the middle of a 2596-tall canvas reads as a postage stamp with dead
+    // space above and below. Touch rules: the panel grows through FillScale
+    // until it presses against the side margins, hangs from the content top,
+    // and the proceed control grows into a thumb-sized plate hanging from
+    // the bottom of the band.
+    private static void Apply(Control screen)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        var safeTop = PortraitDisplay.SafeTop();
+        var safeBottom = PortraitDisplay.SafeBottom();
+        // Rewards show over the combat room, where the HUD is still the
+        // expanded stack; the band starts below whichever bar is active.
+        var bandTop = PortraitCombat.CombatHudActive
+            ? PortraitHudMetrics.CombatHudBottom(safeTop) + PortraitHudMetrics.ContentMargin
+            : PortraitHudMetrics.ContentTop(safeTop);
+        var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, safeBottom);
+        var panelBottom = bandBottom;
+
+        if (PortraitNodes.FindControl(screen, "Rewards") is { } panel)
+        {
+            var baseW = panel.Size.X > 1f ? panel.Size.X : 526f;
+            var baseH = panel.Size.Y > 1f ? panel.Size.Y : 640f;
+            // The proceed strip keeps the lower part of the band.
+            var scale = PortraitHudMetrics.FillScale(
+                baseW,
+                baseH,
+                canvas.X - PortraitHudMetrics.EdgeMargin * 2f,
+                bandBottom - bandTop - 260f,
+                2.2f
+            );
+            panel.PivotOffset = Vector2.Zero;
+            panel.Scale = Vector2.One * scale;
+            panel.GlobalPosition = new Vector2(
+                PortraitHudMetrics.CenterX(canvas.X, baseW * scale),
+                bandTop + 24f
+            );
+            panelBottom = bandTop + 24f + baseH * scale;
+        }
+
+        if (PortraitNodes.FindControl(screen, "ProceedButton") is { Visible: true } proceed)
+        {
+            var baseW = proceed.Size.X > 1f ? proceed.Size.X : 269f;
+            var baseH = proceed.Size.Y > 1f ? proceed.Size.Y : 108f;
+            var scale = PortraitHudMetrics.FillScale(baseW, baseH, canvas.X * 0.38f, 190f, 1.7f);
+            proceed.PivotOffset = Vector2.Zero;
+            proceed.Scale = Vector2.One * scale;
+            // Hangs off the panel's lower right, above the leftover hand
+            // fan the combat room keeps drawing in front of everything.
+            proceed.ZAsRelative = false;
+            proceed.ZIndex = 460;
+            proceed.GlobalPosition = new Vector2(
+                canvas.X - PortraitHudMetrics.EdgeMargin - baseW * scale,
+                Math.Min(panelBottom + 36f, bandBottom - baseH * scale)
+            );
+        }
+    }
+}
+
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen), "_Ready")]
+internal static class RewardsScreenPatch
+{
+    private static void Postfix(object __instance)
+    {
+        var screen = (Control)__instance;
+        PortraitNodes.After(screen, 0.25, () => PortraitRewards.EnsureLoop(screen));
+    }
+}
+
+internal static class PortraitTreasure
+{
+    private const string LoopMeta = "Sts2PortraitTreasureLoop";
+
+    internal static void EnsureLoop(Node room)
+    {
+        if (room is null || !GodotObject.IsInstanceValid(room) || room.HasMeta(LoopMeta))
+            return;
+        room.SetMeta(LoopMeta, true);
+        Tick(room);
+    }
+
+    private static void Tick(Node room)
+    {
+        if (!GodotObject.IsInstanceValid(room) || !room.IsInsideTree())
+            return;
+        Apply(room);
+        PortraitNodes.After(room, 0.5, () => Tick(room));
+    }
+
+    // The chest is a 800x500 button floating in a dark landscape room; in
+    // portrait that leaves the top and bottom thirds pitch black. Touch
+    // rules: grow it through FillScale until it presses the side margins
+    // and center it in the free band; the post-open relic reveal gets the
+    // same treatment.
+    private static void Apply(Node room)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        var safeTop = PortraitDisplay.SafeTop();
+        var safeBottom = PortraitDisplay.SafeBottom();
+        var bandTop = PortraitHudMetrics.ContentTop(safeTop);
+        var bandHeight = PortraitHudMetrics.ContentBandHeight(canvas.Y, safeTop, safeBottom);
+
+        PlaceCentered(PortraitNodes.FindControl(room, "Chest"), 800f, 500f);
+        if (PortraitNodes.FindControl(room, "RelicCollection") is { Visible: true } relics)
+            PlaceCentered(relics, 900f, 580f);
+
+        void PlaceCentered(Control control, float fallbackW, float fallbackH)
+        {
+            if (control is null)
+                return;
+            var baseW = control.Size.X > 1f ? control.Size.X : fallbackW;
+            var baseH = control.Size.Y > 1f ? control.Size.Y : fallbackH;
+            var scale = PortraitHudMetrics.FillScale(
+                baseW,
+                baseH,
+                canvas.X - PortraitHudMetrics.EdgeMargin * 2f,
+                bandHeight * 0.8f,
+                1.75f
+            );
+            control.PivotOffset = Vector2.Zero;
+            control.Scale = Vector2.One * scale;
+            control.GlobalPosition = new Vector2(
+                PortraitHudMetrics.CenterX(canvas.X, baseW * scale),
+                bandTop + (bandHeight - baseH * scale) * 0.5f
+            );
+        }
+    }
+}
+
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Rooms.NTreasureRoom), "_Ready")]
+internal static class TreasureRoomPatch
+{
+    private static void Postfix(object __instance)
+    {
+        var room = (Node)__instance;
+        PortraitNodes.After(room, 0.25, () => PortraitTreasure.EnsureLoop(room));
     }
 }
 
