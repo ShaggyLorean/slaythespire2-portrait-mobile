@@ -72,6 +72,14 @@ $settings | Add-Member -NotePropertyName "mod_settings" -NotePropertyValue $modS
 $settings | Add-Member -NotePropertyName "seen_ea_disclaimer" -NotePropertyValue $true -Force
 $settings | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
 
+# Drop all profile state from previous rounds (runs live under
+# default/1/modded/profile1) so every walk starts from a virgin main menu;
+# otherwise the menu switches to Continue mode and the scripted scenario
+# diverges. Steamless test profile only; Steam-account profiles are elsewhere.
+foreach ($profileDir in @("modded", "profile1")) {
+    Remove-Item (Join-Path $settingsDir $profileDir) -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 $gameLog = Join-Path $ShotsDir "game-stdout.log"
 $gameErr = Join-Path $ShotsDir "game-stderr.log"
 

@@ -16,16 +16,16 @@ namespace Sts2PortraitPcTest;
 [ModInitializer(nameof(Initialize))]
 public static class PortraitPcTestMod
 {
-    private static readonly double[] CaptureAtSeconds = { 4.0, 8.0, 12.0, 16.0, 20.0, 24.0 };
-    private const double QuitAtSeconds = 26.0;
+    private const double QuitAtSeconds = 40.0;
 
     private static SceneTree _tree;
     private static Assembly _sts2Mobile;
     private static MethodInfo _portraitApply;
     private static ulong _startTicksMs;
     private static ulong _lastPortraitApplyMs;
-    private static int _nextCapture;
     private static bool _quitRequested;
+    private static int _step;
+    private static double _stepReadyAt;
 
     public static void Initialize()
     {
@@ -103,16 +103,12 @@ public static class PortraitPcTestMod
                 _portraitApply?.Invoke(null, null);
             }
 
-            if (_nextCapture < CaptureAtSeconds.Length && elapsed >= CaptureAtSeconds[_nextCapture])
-            {
-                Capture($"t{CaptureAtSeconds[_nextCapture]:00}");
-                _nextCapture++;
-            }
+            RunScenario(elapsed);
 
             if (!_quitRequested && elapsed >= QuitAtSeconds)
             {
                 _quitRequested = true;
-                PcTestLog.Write("driver run complete, quitting game");
+                PcTestLog.Write("driver timeout, quitting game");
                 _tree.Quit();
             }
         }
@@ -120,6 +116,229 @@ public static class PortraitPcTestMod
         {
             PcTestLog.Write($"tick FAILED: {ex.Message}");
         }
+    }
+
+    // Scripted walk: capture, synthesize an in-process click, settle, repeat.
+    // Coordinates are canvas units read from the previous round's tree dumps;
+    // the canvas is pinned (1180x2596), so they are deterministic per game
+    // version. All input is Input.ParseInputEvent inside the game process; the
+    // user's OS mouse is never touched.
+    private static double _stepStartedAt = -1;
+
+    // Conditional steps must never wedge the walk, but each has a different
+    // patience: the first menu wait spans the whole boot, required clicks get
+    // a few retries, one-time popups are skipped quickly when absent.
+    private static double StepTimeout(int step) => step switch
+    {
+        0 => 25.0,
+        1 or 3 => 6.0,
+        5 => 4.0,
+        _ => 3.0,
+    };
+
+    private static void RunScenario(double elapsed)
+    {
+        if (elapsed < _stepReadyAt)
+            return;
+        if (_stepStartedAt < 0)
+            _stepStartedAt = elapsed;
+
+        var timedOut = elapsed - _stepStartedAt > StepTimeout(_step);
+        if (timedOut && _step is 0 or 1 or 3 or 5 or 8)
+        {
+            PcTestLog.Write($"step {_step} timed out, skipping");
+            Advance(elapsed, 0.1);
+            return;
+        }
+
+        switch (_step)
+        {
+            case 0:
+                if (FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true })
+                {
+                    Capture("01-main-menu");
+                    Advance(elapsed, 0.4);
+                }
+                break;
+            case 1:
+                if (ClickControlByName("SingleplayerButton"))
+                    Advance(elapsed, 2.0);
+                break;
+            case 2:
+                Capture("02-character-select");
+                Advance(elapsed, 0.3);
+                break;
+            case 3:
+                if (ClickControlByName("ConfirmButton"))
+                    Advance(elapsed, 2.5);
+                break;
+            case 4:
+                Capture("03-after-confirm");
+                Advance(elapsed, 0.3);
+                break;
+            case 5:
+                // First-run tutorial popup: decline so screen sweeps stay
+                // deterministic and free of FTUE overlays. Optional: skips on
+                // timeout when the profile already answered it.
+                if (ClickControlByName("NoButton"))
+                    Advance(elapsed, 7.0);
+                break;
+            case 6:
+                Capture("04-run-start");
+                Advance(elapsed, 5.0);
+                break;
+            case 7:
+                Capture("05-run-settled");
+                Advance(elapsed, 0.3);
+                break;
+            case 8:
+                if (ClickBottomMapPoint())
+                    Advance(elapsed, 6.0);
+                break;
+            case 9:
+                Capture("06-first-room");
+                Advance(elapsed, 5.0);
+                break;
+            case 10:
+                Capture("07-first-room-settled");
+                Advance(elapsed, 0.1);
+                break;
+            default:
+                if (!_quitRequested)
+                {
+                    _quitRequested = true;
+                    PcTestLog.Write("scenario complete, quitting game");
+                    _tree.Quit();
+                }
+                break;
+        }
+    }
+
+    private static void Advance(double elapsed, double settleSeconds)
+    {
+        _step++;
+        _stepReadyAt = elapsed + settleSeconds;
+        _stepStartedAt = -1;
+    }
+
+    // Click a control's live center so layout shifts never break the walk.
+    // Several screens keep same-named controls parked off-canvas (inactive
+    // submenus), so prefer a visible match whose center is inside the canvas.
+    private static bool ClickControlByName(string name)
+    {
+        var canvas = (Vector2)_tree.Root.ContentScaleSize;
+        Control fallback = null;
+
+        foreach (var control in FindControlsByName(_tree.Root, name))
+        {
+            if (!control.IsVisibleInTree())
+                continue;
+            fallback ??= control;
+            var center = control.GlobalPosition + control.Size * 0.5f;
+            if (center.X >= 0 && center.X <= canvas.X && center.Y >= 0 && center.Y <= canvas.Y)
+            {
+                ClickCanvas(center, name);
+                return true;
+            }
+        }
+
+        if (fallback is not null)
+        {
+            ClickCanvas(fallback.GlobalPosition + fallback.Size * 0.5f, $"{name} (off-canvas fallback)");
+            return true;
+        }
+
+        return false;
+    }
+
+    // The entry map node is the bottom-most reachable point; its position is
+    // seed-dependent, so resolve it live by script-class name.
+    private static bool ClickBottomMapPoint()
+    {
+        var canvas = (Vector2)_tree.Root.ContentScaleSize;
+        Control best = null;
+        var bestY = float.MinValue;
+
+        foreach (var control in FindControlsByType(_tree.Root, "MapPoint"))
+        {
+            if (!control.IsVisibleInTree())
+                continue;
+            var center = control.GlobalPosition + control.Size * 0.5f;
+            if (center.X < 0 || center.X > canvas.X || center.Y < 0 || center.Y > canvas.Y)
+                continue;
+            if (center.Y > bestY)
+            {
+                bestY = center.Y;
+                best = control;
+            }
+        }
+
+        if (best is null)
+            return false;
+
+        ClickCanvas(best.GlobalPosition + best.Size * 0.5f, $"map point {best.GetType().Name}");
+        return true;
+    }
+
+    private static System.Collections.Generic.IEnumerable<Control> FindControlsByType(Node root, string typeNameContains)
+    {
+        if (root is Control control && root.GetType().Name.Contains(typeNameContains))
+            yield return control;
+        foreach (var child in root.GetChildren())
+        {
+            foreach (var found in FindControlsByType(child, typeNameContains))
+                yield return found;
+        }
+    }
+
+    private static System.Collections.Generic.IEnumerable<Control> FindControlsByName(Node root, string name)
+    {
+        if (root is Control control && root.Name == name)
+            yield return control;
+        foreach (var child in root.GetChildren())
+        {
+            foreach (var found in FindControlsByName(child, name))
+                yield return found;
+        }
+    }
+
+    private static void ClickCanvas(Vector2 canvasPos, string label)
+    {
+        var windowSize = (Vector2)DisplayServer.WindowGetSize();
+        var canvasSize = (Vector2)_tree.Root.ContentScaleSize;
+        var pos = canvasPos * (windowSize / canvasSize);
+
+        var motion = new InputEventMouseMotion { Position = pos, GlobalPosition = pos };
+        Input.ParseInputEvent(motion);
+        var down = new InputEventMouseButton
+        {
+            ButtonIndex = MouseButton.Left,
+            Pressed = true,
+            Position = pos,
+            GlobalPosition = pos,
+        };
+        var up = new InputEventMouseButton
+        {
+            ButtonIndex = MouseButton.Left,
+            Pressed = false,
+            Position = pos,
+            GlobalPosition = pos,
+        };
+        Input.ParseInputEvent(down);
+        Input.ParseInputEvent(up);
+        PcTestLog.Write($"clicked {label} at canvas {canvasPos.X:F0},{canvasPos.Y:F0} window {pos.X:F0},{pos.Y:F0}");
+    }
+
+    private static Node FindNodeByName(Node root, string name)
+    {
+        if (root.Name == name)
+            return root;
+        foreach (var child in root.GetChildren())
+        {
+            if (FindNodeByName(child, name) is { } found)
+                return found;
+        }
+        return null;
     }
 
     private static void EnforceTestWindow()
@@ -166,7 +385,7 @@ public static class PortraitPcTestMod
         try
         {
             var sb = new StringBuilder();
-            Dump(_tree.Root, sb, 0, 4);
+            Dump(_tree.Root, sb, 0, DumpDepth);
             File.WriteAllText(Path.Combine(PcTestLog.OutDir, $"{label}-tree.txt"), sb.ToString());
         }
         catch (Exception ex)
@@ -174,6 +393,8 @@ public static class PortraitPcTestMod
             PcTestLog.Write($"tree dump {label} FAILED: {ex.Message}");
         }
     }
+
+    private const int DumpDepth = 9;
 
     private static void Dump(Node node, StringBuilder sb, int depth, int maxDepth)
     {
