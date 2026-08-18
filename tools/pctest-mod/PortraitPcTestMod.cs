@@ -348,8 +348,30 @@ public static class PortraitPcTestMod
             "modding" => ModdingProbeScenario,
             "piles" => PilesProbeScenario,
             "wave2" => Wave2ProbeScenario,
+            "wave3" => Wave3ProbeScenario,
             _ => Scenario,
         };
+
+    // Act 3 environment and an elite encounter under the same pins.
+    private static readonly Step[] Wave3ProbeScenario =
+    {
+        new(
+            "wait main menu",
+            () => FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true },
+            0.4,
+            25.0
+        ),
+        Click("SingleplayerButton", 2.0),
+        Click("ConfirmButton", 2.5),
+        Click("NoButton", 7.0, 4.0),
+        Cmd("act 3", 5.0),
+        Shot("v1-act3-map"),
+        Cmd("room elite", 4.5),
+        Shot("v2-act3-elite"),
+        Cmd("win", 6.0),
+        Cmd("room monster", 4.5),
+        Shot("v3-act3-combat"),
+    };
 
     // Second character and second act: the Silent's combat layout, then the
     // act 2 environment (map, combat, rest) under the same pins.
