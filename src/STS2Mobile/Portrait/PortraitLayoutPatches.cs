@@ -2213,13 +2213,17 @@ internal static class PortraitRewards
             var scale = PortraitHudMetrics.FillScale(baseW, baseH, canvas.X * 0.38f, 190f, 1.7f);
             proceed.PivotOffset = Vector2.Zero;
             proceed.Scale = Vector2.One * scale;
-            // Sits inside the panel's lower-right corner: below the panel it
-            // collided with the leftover hand fan on narrow buckets.
+            // Anchors under the reward rows themselves (the mask is the real
+            // content edge); panel-height guesses drifted into the hand fan
+            // on short buckets.
+            var anchorBottom = panelBottom;
+            if (PortraitNodes.FindControl(screen, "RewardContainerMask") is { } mask)
+                anchorBottom = mask.GlobalPosition.Y + mask.Size.Y * mask.GetGlobalTransform().Scale.Y;
             proceed.ZAsRelative = false;
             proceed.ZIndex = 460;
             proceed.GlobalPosition = new Vector2(
                 canvas.X - PortraitHudMetrics.EdgeMargin - baseW * scale - 24f,
-                Math.Min(panelBottom - baseH * scale - 24f, bandBottom - baseH * scale)
+                Math.Min(anchorBottom + 20f, bandBottom - baseH * scale)
             );
         }
     }
