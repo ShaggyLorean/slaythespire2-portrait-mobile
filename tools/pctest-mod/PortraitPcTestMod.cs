@@ -47,6 +47,7 @@ public static class PortraitPcTestMod
             // parameter type Apply actually declares to stay in one context.
             var harmonyType = apply.GetParameters()[0].ParameterType;
             var harmony = Activator.CreateInstance(harmonyType, "sts2.portrait.pctest");
+            BridgePatchLogs();
             apply.Invoke(null, new[] { harmony });
             PcTestLog.Write("portrait patch group applied");
 
@@ -69,6 +70,35 @@ public static class PortraitPcTestMod
         _startTicksMs = Time.GetTicksMsec();
         tree.ProcessFrame += Tick;
         PcTestLog.Write("frame driver installed");
+    }
+
+    // PatchHelper.Log feeds BootstrapTrace, which is inert outside the Android
+    // bootstrap, so on PC every portrait log would vanish. Splice a GD.Print
+    // sink into the LogEmitted event so the rig's godot.log carries them.
+    private static void BridgePatchLogs()
+    {
+        try
+        {
+            var helper = _sts2Mobile.GetType("STS2Mobile.PatchHelper");
+            var field = helper?.GetField(
+                "LogEmitted",
+                BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public
+            );
+            if (field is null)
+            {
+                PcTestLog.Write("patch log bridge: LogEmitted field not found");
+                return;
+            }
+
+            Action<string> sink = message => GD.Print($"[STS2M] {message}");
+            var current = (Delegate)field.GetValue(null);
+            field.SetValue(null, Delegate.Combine(current, sink));
+            PcTestLog.Write("patch log bridge installed");
+        }
+        catch (Exception ex)
+        {
+            PcTestLog.Write($"patch log bridge FAILED: {ex.Message}");
+        }
     }
 
     // STS2Mobile must land in the SAME AssemblyLoadContext as this mod so its
@@ -231,6 +261,16 @@ public static class PortraitPcTestMod
                 if (HideMapScreenOverlay())
                     break;
                 Capture("09-treasure");
+                Advance(elapsed, 0.3);
+                break;
+            case 16:
+                Console("room monster");
+                Advance(elapsed, 6.0);
+                break;
+            case 17:
+                if (HideMapScreenOverlay())
+                    break;
+                Capture("10-combat");
                 Advance(elapsed, 0.1);
                 break;
             default:
