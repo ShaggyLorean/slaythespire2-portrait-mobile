@@ -1692,12 +1692,96 @@ internal static class RestSitePatch
         var room = (Node)__instance;
         PortraitNodes.After(room, 0.15, () =>
         {
-            var background = PortraitNodes.FindControl(room, "BgContainer");
-            if (background is null || !PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
+            if (!PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
                 return;
-            background.PivotOffset = background.Size * 0.5f;
-            background.Scale = Vector2.One * 1.72f;
+            var background = PortraitNodes.FindControl(room, "BgContainer");
+            if (background is not null)
+            {
+                background.PivotOffset = background.Size * 0.5f;
+                background.Scale = Vector2.One * 1.72f;
+            }
+            PortraitRestSite.EnsureLoop(room);
         });
+    }
+}
+
+internal static class PortraitRestSite
+{
+    private const string LoopMeta = "Sts2PortraitRestLoop";
+
+    internal static void EnsureLoop(Node room)
+    {
+        if (room is null || !GodotObject.IsInstanceValid(room) || room.HasMeta(LoopMeta))
+            return;
+        room.SetMeta(LoopMeta, true);
+        Tick(room);
+    }
+
+    private static void Tick(Node room)
+    {
+        if (!GodotObject.IsInstanceValid(room) || !room.IsInsideTree())
+            return;
+        Apply(room);
+        PortraitNodes.After(room, 0.5, () => Tick(room));
+    }
+
+    // The campfire choices are authored for a landscape center: prompt and
+    // two cards floating high above the character. Touch rules: the card
+    // row grows and drops into the thumb zone (the seated character stays
+    // visible above it), the prompt rides right above the row, and the
+    // hover description text sits above the prompt.
+    private static void Apply(Node room)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        var choices = PortraitNodes.FindControl(room, "ChoicesContainer");
+        if (choices is null)
+            return;
+
+        var safeBottom = PortraitDisplay.SafeBottom();
+        var baseW = choices.Size.X > 1f ? choices.Size.X : 799f;
+        var baseH = choices.Size.Y > 1f ? choices.Size.Y : 163f;
+        var scale = PortraitHudMetrics.FillScale(
+            baseW,
+            baseH,
+            canvas.X - PortraitHudMetrics.EdgeMargin * 2f,
+            280f,
+            1.4f
+        );
+        var rowHeight = baseH * scale;
+        var rowY = PortraitHudMetrics.BottomAnchoredY(canvas.Y, safeBottom, rowHeight) - 40f;
+        PortraitNodes.ClearAnchors(choices);
+        choices.PivotOffset = Vector2.Zero;
+        choices.Scale = Vector2.One * scale;
+        choices.GlobalPosition = new Vector2(
+            PortraitHudMetrics.CenterX(canvas.X, baseW * scale),
+            rowY
+        );
+
+        var headerY = rowY - 110f;
+        if (choices.GetParent() is Control screen)
+        {
+            if (PortraitNodes.FindControl(screen, "Header") is { } header)
+            {
+                const float headerScale = 1.2f;
+                var headerWidth = (header.Size.X > 1f ? header.Size.X : 1000f) * headerScale;
+                header.PivotOffset = Vector2.Zero;
+                header.Scale = Vector2.One * headerScale;
+                header.GlobalPosition = new Vector2(
+                    PortraitHudMetrics.CenterX(canvas.X, headerWidth),
+                    headerY
+                );
+            }
+            if (PortraitNodes.FindControl(screen, "Description") is { } description)
+            {
+                var descHeight = description.Size.Y > 1f ? description.Size.Y : 393f;
+                description.GlobalPosition = new Vector2(
+                    description.GlobalPosition.X,
+                    headerY - 24f - descHeight
+                );
+            }
+        }
     }
 }
 
@@ -2015,8 +2099,83 @@ internal static class ProceedButtonPatch
         if (!PortraitDisplay.IsPortrait(canvas))
             return;
         var button = (Control)__instance;
-        var width = button.Size.X > 1f ? button.Size.X : 300f;
+        var width = (button.Size.X > 1f ? button.Size.X : 300f) * Math.Max(button.Scale.X, 1f);
         __result.X = Math.Min(__result.X, canvas.X - width - 20f);
+    }
+}
+
+[HarmonyPatch(typeof(NProceedButton), "_Ready")]
+internal static class ProceedButtonReadyPatch
+{
+    private static void Postfix(object __instance)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        var button = (Control)__instance;
+        var baseW = button.Size.X > 1f ? button.Size.X : 269f;
+        var baseH = button.Size.Y > 1f ? button.Size.Y : 108f;
+        var scale = PortraitHudMetrics.FillScale(baseW, baseH, canvas.X * 0.36f, 170f, 1.5f);
+        button.PivotOffset = Vector2.Zero;
+        button.Scale = Vector2.One * scale;
+    }
+}
+
+internal static class PortraitGameOver
+{
+    private const string LoopMeta = "Sts2PortraitGameOverLoop";
+
+    internal static void EnsureLoop(Control screen)
+    {
+        if (screen is null || !GodotObject.IsInstanceValid(screen) || screen.HasMeta(LoopMeta))
+            return;
+        screen.SetMeta(LoopMeta, true);
+        Tick(screen);
+    }
+
+    private static void Tick(Control screen)
+    {
+        if (!GodotObject.IsInstanceValid(screen) || !screen.IsInsideTree())
+            return;
+        Apply(screen);
+        PortraitNodes.After(screen, 0.5, () => Tick(screen));
+    }
+
+    // Touch rules for the run-end buttons: lift them to the touch minimum
+    // and hang them from the bottom of the band, stacked when both show.
+    private static void Apply(Control screen)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        var safeBottom = PortraitDisplay.SafeBottom();
+        var nextBottom = PortraitHudMetrics.ContentBottom(canvas.Y, safeBottom);
+        foreach (var name in new[] { "ContinueButton", "LeaderboardButton" })
+        {
+            if (PortraitNodes.FindControl(screen, name) is not { Visible: true } button)
+                continue;
+            var baseW = button.Size.X > 1f ? button.Size.X : 260f;
+            var baseH = button.Size.Y > 1f ? button.Size.Y : 58f;
+            var scale = PortraitHudMetrics.TouchScale(baseW, baseH, 1.8f);
+            var height = baseH * scale;
+            button.PivotOffset = Vector2.Zero;
+            button.Scale = Vector2.One * scale;
+            button.GlobalPosition = new Vector2(
+                PortraitHudMetrics.CenterX(canvas.X, baseW * scale),
+                nextBottom - height
+            );
+            nextBottom -= height + 28f;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NGameOverScreen), "_Ready")]
+internal static class GameOverScreenPatch
+{
+    private static void Postfix(object __instance)
+    {
+        var screen = (Control)__instance;
+        PortraitNodes.After(screen, 0.25, () => PortraitGameOver.EnsureLoop(screen));
     }
 }
 

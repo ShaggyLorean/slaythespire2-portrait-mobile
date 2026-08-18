@@ -13,8 +13,8 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | character select | patch'li temiz |
 | map | patch'li temiz (BUG-013 kapali) |
 | event (Byrdonis) | dogrulandi: metin bar altinda, art 0.38 odakli kirpma ile bandi dolduruyor, secenekler basparmak bolgesinde |
-| rest site | temiz |
-| shop room | temiz |
+| rest site | dogrulandi: kamp kartlari FillScale ile basparmak bolgesinde, prompt ustunde, karakter gorunur |
+| shop room | Proceed _Ready buyutmesi + scale-aware sag clamp |
 | shop inventory | patch'li temiz (alt raf duzeltildi) |
 | treasure | dogrulandi: sandik FillScale ile yan marjlara kadar buyur, bantta ortalanir |
 | combat | patch'li temiz (el fix'i dahil) |
@@ -24,7 +24,7 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | pause menu | temiz |
 | settings body | capstone + safe-top ofseti |
 | Neow (ancient) | dogrulandi: balon konusanin yaninda (bar alti), secenekler basparmak bolgesinde; spacer'li vbox tasarimi tum ancient'lara uygulanir |
-| death (Devastation) | temiz |
+| death (Devastation) | dogrulandi: Continue TouchScale ile alt bantta buyutuldu |
 | deck transform overlay (NDeckTransformSelectScreen) | kesfedildi, incelenmedi |
 
 ## scenes/screens/ sahneleri

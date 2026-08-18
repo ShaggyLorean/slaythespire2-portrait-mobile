@@ -38,6 +38,8 @@ internal static class PortraitPatches
         typeof(AncientEventDialoguePatch),
         typeof(RewardsScreenPatch),
         typeof(TreasureRoomPatch),
+        typeof(ProceedButtonReadyPatch),
+        typeof(GameOverScreenPatch),
         typeof(MerchantOpenPatch),
         typeof(MerchantClosePatch),
         typeof(MerchantRoomPatch),
