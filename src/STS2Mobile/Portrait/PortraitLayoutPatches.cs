@@ -1861,6 +1861,62 @@ internal static class PortraitRestSite
     }
 }
 
+internal static class PortraitModding
+{
+    private const string LoopMeta = "Sts2PortraitModdingLoop";
+
+    internal static void EnsureLoop(Control screen)
+    {
+        if (screen is null || !GodotObject.IsInstanceValid(screen) || screen.HasMeta(LoopMeta))
+            return;
+        screen.SetMeta(LoopMeta, true);
+        Tick(screen);
+    }
+
+    private static void Tick(Control screen)
+    {
+        if (!GodotObject.IsInstanceValid(screen) || !screen.IsInsideTree())
+            return;
+        Apply(screen);
+        PortraitNodes.After(screen, 0.5, () => Tick(screen));
+    }
+
+    // Landscape puts the mod list and the detail panel side by side, which
+    // pushes the detail half off a portrait canvas; stack them instead.
+    private static void Apply(Control screen)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        var border = PortraitNodes.FindControl(screen, "ModsBorder");
+        var info = PortraitNodes.FindControl(screen, "ModInfoContainer");
+        if (border is null || info is null)
+            return;
+
+        var top = PortraitDisplay.SafeTop() + 80f;
+        PortraitNodes.ClearAnchors(border);
+        border.GlobalPosition = new Vector2(
+            PortraitHudMetrics.CenterX(canvas.X, border.Size.X),
+            top
+        );
+        PortraitNodes.ClearAnchors(info);
+        info.GlobalPosition = new Vector2(
+            PortraitHudMetrics.CenterX(canvas.X, info.Size.X),
+            top + border.Size.Y + 28f
+        );
+    }
+}
+
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.ModdingScreen.NModdingScreen), "_Ready")]
+internal static class ModdingScreenPatch
+{
+    private static void Postfix(object __instance)
+    {
+        var screen = (Control)__instance;
+        PortraitNodes.After(screen, 0.25, () => PortraitModding.EnsureLoop(screen));
+    }
+}
+
 internal static class PortraitCompendium
 {
     private const string LoopMeta = "Sts2PortraitCompendiumLoop";
