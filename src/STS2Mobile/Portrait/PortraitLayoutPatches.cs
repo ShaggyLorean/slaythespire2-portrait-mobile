@@ -1910,6 +1910,30 @@ internal static class PortraitRestSite
     }
 }
 
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.PauseMenu.NPauseMenu), "_Ready")]
+internal static class PauseMenuTouchPatch
+{
+    // Pause options sit at 80 canvas units tall (74 on narrow buckets),
+    // under the touch minimum. Containers honor CustomMinimumSize, so the
+    // lift goes through it instead of a scale the sort would reset.
+    private static void Postfix(object __instance)
+    {
+        var menu = (Control)__instance;
+        PortraitNodes.AssertLoop(menu, () =>
+        {
+            if (!PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
+                return;
+            var buttons = new List<Control>();
+            PortraitNodes.CollectByType(menu, "NPauseMenuButton", buttons);
+            foreach (var button in buttons)
+            {
+                var width = Math.Max(button.CustomMinimumSize.X, 440f);
+                button.CustomMinimumSize = new Vector2(width, PortraitHudMetrics.MinTouchSide);
+            }
+        });
+    }
+}
+
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.NDeckViewScreen), "_Ready")]
 internal static class DeckViewSortRowPatch
 {

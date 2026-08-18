@@ -45,6 +45,7 @@ internal static class PortraitPatches
         typeof(CompendiumSubmenuPatch),
         typeof(ModdingScreenPatch),
         typeof(DeckViewSortRowPatch),
+        typeof(PauseMenuTouchPatch),
         typeof(MerchantOpenPatch),
         typeof(MerchantClosePatch),
         typeof(MerchantRoomPatch),
