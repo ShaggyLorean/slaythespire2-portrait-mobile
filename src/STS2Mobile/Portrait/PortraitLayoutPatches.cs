@@ -82,6 +82,25 @@ internal static class PortraitNodes
                 action();
         };
     }
+
+    // Apply-now-and-keep-asserting: one tick after _Ready (the parent is no
+    // longer busy adding children), a fast burst that outpaces the game's
+    // intro tweens (the visible one-to-two-second "vanilla first, then the
+    // patch snaps in" came from quarter-second entry delays plus half-second
+    // re-assert ticks), then a calm steady tick for the node's lifetime.
+    internal static void AssertLoop(Node node, Action action)
+    {
+        var ticks = 0;
+        void Run()
+        {
+            if (!GodotObject.IsInstanceValid(node) || !node.IsInsideTree())
+                return;
+            action();
+            ticks++;
+            After(node, ticks < 14 ? 0.12 : 0.5, Run);
+        }
+        After(node, 0.02, Run);
+    }
 }
 
 internal sealed class PortraitCombatFrame : Control
@@ -231,7 +250,7 @@ internal static class MainMenuReadyPatch
     }
 
     private static void Postfix(NMainMenu __instance)
-        => PortraitNodes.After(__instance, 0.35, () =>
+        => PortraitNodes.AssertLoop(__instance, () =>
         {
             PortraitMainMenu.Apply(__instance);
             // The run-scene watermark sweep rides the top-bar reflow, which
@@ -1555,7 +1574,7 @@ internal static class EventRoomPatch
     private static void Postfix(object __instance)
     {
         var room = (Node)__instance;
-        PortraitNodes.After(room, 0.25, () =>
+        PortraitNodes.AssertLoop(room, () =>
         {
             var canvas = PortraitDisplay.CanvasSize;
             if (!PortraitDisplay.IsPortrait(canvas))
@@ -1749,7 +1768,7 @@ internal static class MerchantRoomPatch
     private static void Postfix(object __instance)
     {
         var room = (Node)__instance;
-        PortraitNodes.After(room, 0.15, () =>
+        PortraitNodes.AssertLoop(room, () =>
         {
             var background = PortraitNodes.FindControl(room, "BgContainer");
             if (background is null || !PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
@@ -1766,7 +1785,7 @@ internal static class RestSitePatch
     private static void Postfix(object __instance)
     {
         var room = (Node)__instance;
-        PortraitNodes.After(room, 0.15, () =>
+        PortraitNodes.AssertLoop(room, () =>
         {
             if (!PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
                 return;
@@ -1790,15 +1809,7 @@ internal static class PortraitRestSite
         if (room is null || !GodotObject.IsInstanceValid(room) || room.HasMeta(LoopMeta))
             return;
         room.SetMeta(LoopMeta, true);
-        Tick(room);
-    }
-
-    private static void Tick(Node room)
-    {
-        if (!GodotObject.IsInstanceValid(room) || !room.IsInsideTree())
-            return;
-        Apply(room);
-        PortraitNodes.After(room, 0.5, () => Tick(room));
+        PortraitNodes.AssertLoop(room, () => Apply(room));
     }
 
     // The campfire choices are authored for a landscape center: prompt and
@@ -1870,15 +1881,7 @@ internal static class PortraitModding
         if (screen is null || !GodotObject.IsInstanceValid(screen) || screen.HasMeta(LoopMeta))
             return;
         screen.SetMeta(LoopMeta, true);
-        Tick(screen);
-    }
-
-    private static void Tick(Control screen)
-    {
-        if (!GodotObject.IsInstanceValid(screen) || !screen.IsInsideTree())
-            return;
-        Apply(screen);
-        PortraitNodes.After(screen, 0.5, () => Tick(screen));
+        PortraitNodes.AssertLoop(screen, () => Apply(screen));
     }
 
     // Landscape puts the mod list and the detail panel side by side, which
@@ -1913,7 +1916,7 @@ internal static class ModdingScreenPatch
     private static void Postfix(object __instance)
     {
         var screen = (Control)__instance;
-        PortraitNodes.After(screen, 0.25, () => PortraitModding.EnsureLoop(screen));
+        PortraitModding.EnsureLoop(screen);
     }
 }
 
@@ -1926,15 +1929,7 @@ internal static class PortraitCompendium
         if (submenu is null || !GodotObject.IsInstanceValid(submenu) || submenu.HasMeta(LoopMeta))
             return;
         submenu.SetMeta(LoopMeta, true);
-        Tick(submenu);
-    }
-
-    private static void Tick(Control submenu)
-    {
-        if (!GodotObject.IsInstanceValid(submenu) || !submenu.IsInsideTree())
-            return;
-        Apply(submenu);
-        PortraitNodes.After(submenu, 0.5, () => Tick(submenu));
+        PortraitNodes.AssertLoop(submenu, () => Apply(submenu));
     }
 
     // The compendium's margin container keeps its landscape footprint
@@ -1983,7 +1978,7 @@ internal static class CompendiumSubmenuPatch
     private static void Postfix(object __instance)
     {
         var submenu = (Control)__instance;
-        PortraitNodes.After(submenu, 0.25, () => PortraitCompendium.EnsureLoop(submenu));
+        PortraitCompendium.EnsureLoop(submenu);
     }
 }
 
@@ -2001,15 +1996,7 @@ internal static class PortraitAncientEvent
         if (layout is null || !GodotObject.IsInstanceValid(layout) || layout.HasMeta(LoopMeta))
             return;
         layout.SetMeta(LoopMeta, true);
-        Tick(layout);
-    }
-
-    private static void Tick(Control layout)
-    {
-        if (!GodotObject.IsInstanceValid(layout) || !layout.IsInsideTree())
-            return;
-        Apply(layout);
-        PortraitNodes.After(layout, 0.5, () => Tick(layout));
+        PortraitNodes.AssertLoop(layout, () => Apply(layout));
     }
 
     // Ancient events (Neow and act ancients) stack the speech bubble and the
@@ -2098,15 +2085,7 @@ internal static class PortraitRewards
         if (screen is null || !GodotObject.IsInstanceValid(screen) || screen.HasMeta(LoopMeta))
             return;
         screen.SetMeta(LoopMeta, true);
-        Tick(screen);
-    }
-
-    private static void Tick(Control screen)
-    {
-        if (!GodotObject.IsInstanceValid(screen) || !screen.IsInsideTree())
-            return;
-        Apply(screen);
-        PortraitNodes.After(screen, 0.5, () => Tick(screen));
+        PortraitNodes.AssertLoop(screen, () => Apply(screen));
     }
 
     // The loot panel is authored for a landscape center: a 526x640 plate in
@@ -2176,7 +2155,7 @@ internal static class RewardsScreenPatch
     private static void Postfix(object __instance)
     {
         var screen = (Control)__instance;
-        PortraitNodes.After(screen, 0.25, () => PortraitRewards.EnsureLoop(screen));
+        PortraitRewards.EnsureLoop(screen);
     }
 }
 
@@ -2189,15 +2168,7 @@ internal static class PortraitTreasure
         if (room is null || !GodotObject.IsInstanceValid(room) || room.HasMeta(LoopMeta))
             return;
         room.SetMeta(LoopMeta, true);
-        Tick(room);
-    }
-
-    private static void Tick(Node room)
-    {
-        if (!GodotObject.IsInstanceValid(room) || !room.IsInsideTree())
-            return;
-        Apply(room);
-        PortraitNodes.After(room, 0.5, () => Tick(room));
+        PortraitNodes.AssertLoop(room, () => Apply(room));
     }
 
     // The chest is a 800x500 button floating in a dark landscape room; in
@@ -2248,7 +2219,7 @@ internal static class TreasureRoomPatch
     private static void Postfix(object __instance)
     {
         var room = (Node)__instance;
-        PortraitNodes.After(room, 0.25, () => PortraitTreasure.EnsureLoop(room));
+        PortraitTreasure.EnsureLoop(room);
     }
 }
 
@@ -2258,7 +2229,7 @@ internal static class AncientEventReadyPatch
     private static void Postfix(object __instance)
     {
         var layout = (Control)__instance;
-        PortraitNodes.After(layout, 0.25, () => PortraitAncientEvent.EnsureLoop(layout));
+        PortraitAncientEvent.EnsureLoop(layout);
     }
 }
 
@@ -2332,15 +2303,7 @@ internal static class PortraitGameOver
         if (screen is null || !GodotObject.IsInstanceValid(screen) || screen.HasMeta(LoopMeta))
             return;
         screen.SetMeta(LoopMeta, true);
-        Tick(screen);
-    }
-
-    private static void Tick(Control screen)
-    {
-        if (!GodotObject.IsInstanceValid(screen) || !screen.IsInsideTree())
-            return;
-        Apply(screen);
-        PortraitNodes.After(screen, 0.5, () => Tick(screen));
+        PortraitNodes.AssertLoop(screen, () => Apply(screen));
     }
 
     // Touch rules for the run-end buttons: lift them to the touch minimum
@@ -2377,7 +2340,7 @@ internal static class GameOverScreenPatch
     private static void Postfix(object __instance)
     {
         var screen = (Control)__instance;
-        PortraitNodes.After(screen, 0.25, () => PortraitGameOver.EnsureLoop(screen));
+        PortraitGameOver.EnsureLoop(screen);
     }
 }
 

@@ -346,8 +346,36 @@ public static class PortraitPcTestMod
             "relics" => RelicsProbeScenario,
             "extras" => ExtrasProbeScenario,
             "modding" => ModdingProbeScenario,
+            "piles" => PilesProbeScenario,
             _ => Scenario,
         };
+
+    // Draw/discard pile screens in combat, then the boss relic choice via
+    // Neow's Lava Rock (the act boss drops two relics to pick from).
+    private static readonly Step[] PilesProbeScenario =
+    {
+        new(
+            "wait main menu",
+            () => FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true },
+            0.4,
+            25.0
+        ),
+        Click("SingleplayerButton", 2.0),
+        Click("ConfirmButton", 2.5),
+        Click("NoButton", 7.0, 4.0),
+        Cmd("relic add LAVA_ROCK", 0.6),
+        Cmd("room monster", 4.0),
+        Click("DrawPile", 2.0, 6.0),
+        Shot("q1-draw-pile"),
+        Click("Close", 1.5, 5.0, "BackButton"),
+        Click("DiscardPile", 2.0, 6.0),
+        Shot("q2-discard-pile"),
+        Click("Close", 1.5, 5.0, "BackButton"),
+        Cmd("win", 6.0),
+        Cmd("room boss", 5.0),
+        Cmd("win", 8.0),
+        Shot("q3-boss-relic-choice"),
+    };
 
     // Last unexplored menu screens: the timeline (handler-invoked like the
     // compendium) and the modding screen inside settings.
