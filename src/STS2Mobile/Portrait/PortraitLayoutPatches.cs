@@ -1910,6 +1910,36 @@ internal static class PortraitRestSite
     }
 }
 
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.NDeckViewScreen), "_Ready")]
+internal static class DeckViewSortRowPatch
+{
+    // The sort row is a 1150-wide hbox centered inside a 545-wide holder;
+    // on narrow canvases its first tab started off-screen ("Obtained" read
+    // as "ed"). The holder is a plain Control, so a fitted scale sticks.
+    private static void Postfix(object __instance)
+    {
+        var screen = (Control)__instance;
+        PortraitNodes.AssertLoop(screen, () =>
+        {
+            var canvas = PortraitDisplay.CanvasSize;
+            if (!PortraitDisplay.IsPortrait(canvas))
+                return;
+            if (PortraitNodes.FindControl(screen, "SortingOptions") is not { } holder)
+                return;
+            if (holder.GetNodeOrNull<Control>("HBoxContainer") is not { } row)
+                return;
+            var rowWidth = row.Size.X > 1f ? row.Size.X : 1150f;
+            var fit = Math.Min(1f, (canvas.X - 2f * PortraitHudMetrics.EdgeMargin) / rowWidth);
+            row.PivotOffset = Vector2.Zero;
+            row.Scale = Vector2.One * fit;
+            row.GlobalPosition = new Vector2(
+                PortraitHudMetrics.CenterX(canvas.X, rowWidth * fit),
+                row.GlobalPosition.Y
+            );
+        });
+    }
+}
+
 internal static class PortraitModding
 {
     private const string LoopMeta = "Sts2PortraitModdingLoop";
@@ -2175,6 +2205,16 @@ internal static class PortraitRewards
         var canvas = PortraitDisplay.CanvasSize;
         if (!PortraitDisplay.IsPortrait(canvas))
             return;
+        // A capstone screen (deck view opened from the rewards) draws over
+        // everything at its own layer; the Z-pinned proceed arrow punched
+        // through it. Hand the arrow back to normal layering while one is
+        // open and skip the layout pass.
+        if (PortraitCapstone.IsOpen(screen))
+        {
+            if (PortraitNodes.FindControl(screen, "ProceedButton") is { } pinned)
+                pinned.ZAsRelative = true;
+            return;
+        }
         var safeTop = PortraitDisplay.SafeTop();
         var safeBottom = PortraitDisplay.SafeBottom();
         // Rewards show over the combat room, where the HUD is still the
