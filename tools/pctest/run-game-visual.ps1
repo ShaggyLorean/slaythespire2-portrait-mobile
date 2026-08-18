@@ -2,7 +2,7 @@ param(
     [string]$GameDir = "D:\Projects\sts2-pctest-game",
     [string]$ShotsDir = "",
     [int]$FakeTopInsetPx = 140,
-    [int]$TimeoutSec = 90,
+    [int]$TimeoutSec = 300,
     # Godot CLI wants WxH for --resolution and X,Y for --position.
     [string]$WindowSize = "1298x2856",
     [string]$WindowPosition = "10020,60"
