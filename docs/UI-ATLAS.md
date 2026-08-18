@@ -25,7 +25,7 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | settings body | capstone + safe-top ofseti |
 | Neow (ancient) | dogrulandi: balon konusanin yaninda (bar alti), secenekler basparmak bolgesinde; spacer'li vbox tasarimi tum ancient'lara uygulanir |
 | death (Devastation) | dogrulandi: Continue TouchScale ile alt bantta buyutuldu |
-| deck transform overlay (NDeckTransformSelectScreen) | kesfedildi, incelenmedi |
+| deck upgrade select (Smith) | dogrulandi: 3 sutun grid + alt bilgi satiri portrait-temiz, cikis "Close" oku; transform/enchant ayni aile, ayni yerlesim beklenir |
 
 ## scenes/screens/ sahneleri
 

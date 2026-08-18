@@ -16,7 +16,7 @@ namespace Sts2PortraitPcTest;
 [ModInitializer(nameof(Initialize))]
 public static class PortraitPcTestMod
 {
-    private const double QuitAtSeconds = 140.0;
+    private const double QuitAtSeconds = 200.0;
 
     private static SceneTree _tree;
     private static Assembly _sts2Mobile;
@@ -299,6 +299,35 @@ public static class PortraitPcTestMod
         Shot("06-event-byrdonis"),
         Cmd("room restsite", 3.5),
         Shot("07-rest-site"),
+        new(
+            "open smith upgrade select",
+            () =>
+            {
+                // Second campfire card is Smith; the buttons carry no
+                // distinct names, so resolve by type and order.
+                Control smith = null;
+                var seen = 0;
+                foreach (var button in FindControlsByType(_tree.Root, "NRestSiteButton"))
+                {
+                    if (!button.IsVisibleInTree())
+                        continue;
+                    seen++;
+                    if (seen == 2)
+                    {
+                        smith = button;
+                        break;
+                    }
+                }
+                if (smith is null)
+                    return false;
+                ClickCanvas(smith.GlobalPosition + smith.Size * smith.Scale * 0.5f, "Smith card");
+                return true;
+            },
+            3.0,
+            6.0
+        ),
+        Shot("07b-upgrade-select"),
+        Click("Close", 1.5, 6.0, "BackButton"),
         Cmd("room shop", 3.5),
         Shot("08-shop"),
         Cmd("room treasure", 3.5),
