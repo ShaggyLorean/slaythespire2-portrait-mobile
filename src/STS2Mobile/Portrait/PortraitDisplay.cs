@@ -101,12 +101,33 @@ internal static class PortraitDisplay
                     (float)AndroidGodotAppBridge.GetDisplayCutoutTopInsetPixels()
                 );
             }
+            if (!OperatingSystem.IsAndroid())
+                insetPixels = Math.Max(insetPixels, SimulatedInsetPixels(top));
             return insetPixels * CanvasSize.X / physicalSize.X + SafeAreaPadding;
         }
         catch
         {
             return SafeAreaPadding;
         }
+    }
+
+    // Desktop pre-screening only: the project plan requires PC debugging to
+    // simulate the punch-hole/safe-area, which desktop windows do not have.
+    // Values are physical pixels of the test window, matching how Android
+    // reports its cutout inset. Never read on Android.
+    private static float SimulatedInsetPixels(bool top)
+    {
+        var value = System.Environment.GetEnvironmentVariable(
+            top ? "STS2_PORTRAIT_FAKE_TOP_INSET" : "STS2_PORTRAIT_FAKE_BOTTOM_INSET"
+        );
+        return float.TryParse(
+            value,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var pixels
+        )
+            ? Math.Max(0f, pixels)
+            : 0f;
     }
 
     private static void RemoveLegacyFrame(Window window)
