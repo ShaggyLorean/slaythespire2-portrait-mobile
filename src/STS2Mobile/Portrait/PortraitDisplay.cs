@@ -90,19 +90,29 @@ internal static class PortraitDisplay
             if (physicalSize.X <= 0 || !IsPortrait(physicalSize))
                 return SafeAreaPadding;
 
-            var safe = DisplayServer.GetDisplaySafeArea();
-            var insetPixels = top
-                ? safe.Position.Y
-                : Math.Max(0f, physicalSize.Y - safe.End.Y);
-            if (top && OperatingSystem.IsAndroid())
+            float insetPixels;
+            if (OperatingSystem.IsAndroid())
             {
-                insetPixels = Math.Max(
-                    insetPixels,
-                    (float)AndroidGodotAppBridge.GetDisplayCutoutTopInsetPixels()
-                );
+                var safe = DisplayServer.GetDisplaySafeArea();
+                insetPixels = top
+                    ? safe.Position.Y
+                    : Math.Max(0f, physicalSize.Y - safe.End.Y);
+                if (top)
+                {
+                    insetPixels = Math.Max(
+                        insetPixels,
+                        (float)AndroidGodotAppBridge.GetDisplayCutoutTopInsetPixels()
+                    );
+                }
             }
-            if (!OperatingSystem.IsAndroid())
-                insetPixels = Math.Max(insetPixels, SimulatedInsetPixels(top));
+            else
+            {
+                // Desktop "safe area" is the monitor's usable rect; against a
+                // phone-shaped window that is larger than the monitor (the PC
+                // rig) it reports a huge phantom bottom inset. Desktop windows
+                // have no cutouts, so the simulated inset is the only input.
+                insetPixels = SimulatedInsetPixels(top);
+            }
             return insetPixels * CanvasSize.X / physicalSize.X + SafeAreaPadding;
         }
         catch
