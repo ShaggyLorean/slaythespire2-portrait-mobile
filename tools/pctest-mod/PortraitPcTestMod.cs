@@ -343,8 +343,45 @@ public static class PortraitPcTestMod
             "neow" => NeowProbeScenario,
             "compendium" => CompendiumProbeScenario,
             "potions" => PotionsProbeScenario,
+            "relics" => RelicsProbeScenario,
             _ => Scenario,
         };
+
+    // Many-relic bar stress: unknown ids fail loudly in the log and are
+    // simply skipped, so the belt ends up with however many stick.
+    private static readonly Step[] RelicsProbeScenario =
+    {
+        new(
+            "wait main menu",
+            () => FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true },
+            0.4,
+            25.0
+        ),
+        Click("SingleplayerButton", 2.0),
+        Click("ConfirmButton", 2.5),
+        Click("NoButton", 7.0, 4.0),
+        new(
+            "stack relics",
+            () =>
+            {
+                foreach (var id in new[]
+                {
+                    "AKABEKO", "ANCHOR", "BAG_OF_MARBLES", "BAG_OF_PREPARATION",
+                    "BRONZE_SCALES", "VAJRA", "LANTERN", "HAPPY_FLOWER",
+                    "PEN_NIB", "ORICHALCUM", "CENTENNIAL_PUZZLE", "OLD_COIN",
+                    "SMILING_MASK", "TOUGH_BANDAGES", "MEAT_ON_THE_BONE", "BLOOD_VIAL",
+                })
+                    Console($"relic add {id}");
+                return true;
+            },
+            2.0
+        ),
+        Shot("r1-map-manyrelics"),
+        Cmd("event BYRDONIS_NEST", 4.0),
+        Shot("r2-event-manyrelics"),
+        Cmd("room monster", 4.0),
+        Shot("r3-combat-manyrelics"),
+    };
 
     private static readonly Step[] Scenario =
     {
