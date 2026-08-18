@@ -1701,6 +1701,120 @@ internal static class RestSitePatch
     }
 }
 
+internal static class PortraitAncientEvent
+{
+    private const string SpacerName = "Sts2PortraitAncientSpacer";
+    private const string LoopMeta = "Sts2PortraitAncientLoop";
+
+    // The layout's own intro tween keeps writing the authored (bottom
+    // anchored) content position for a while after _Ready, so a one-shot
+    // apply always loses; the same steady chain that guards the hand keeps
+    // re-asserting until the screen leaves the tree.
+    internal static void EnsureLoop(Control layout)
+    {
+        if (layout is null || !GodotObject.IsInstanceValid(layout) || layout.HasMeta(LoopMeta))
+            return;
+        layout.SetMeta(LoopMeta, true);
+        Tick(layout);
+    }
+
+    private static void Tick(Control layout)
+    {
+        if (!GodotObject.IsInstanceValid(layout) || !layout.IsInsideTree())
+            return;
+        Apply(layout);
+        PortraitNodes.After(layout, 0.5, () => Tick(layout));
+    }
+
+    // Ancient events (Neow and act ancients) stack the speech bubble and the
+    // options in one bottom-anchored vbox, which buries the bubble at the
+    // bottom of a portrait canvas while the speaker fills the top half. The
+    // portrait composition stretches that vbox over the whole free band and
+    // pushes a stretchy spacer between bubble and options: the bubble sits
+    // up with the speaker, the options stay in the thumb zone, and the vbox
+    // keeps doing its own sorting (BUG-014 rule: never fight a container).
+    internal static void Apply(Control layout)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas)
+            || layout is null
+            || !GodotObject.IsInstanceValid(layout)
+            || !layout.IsInsideTree())
+            return;
+
+        var container = PortraitNodes.FindControl(layout, "ContentContainer");
+        var content = PortraitNodes.FindControl(layout, "Content");
+        var dialogue = PortraitNodes.FindControl(layout, "DialogueContainer");
+        var options = PortraitNodes.FindControl(layout, "OptionsContainer");
+        if (container is null || content is null || dialogue is null || options is null)
+            return;
+        if (dialogue.GetParent() != content || options.GetParent() != content)
+            return;
+
+        var safeTop = PortraitDisplay.SafeTop();
+        var top = PortraitHudMetrics.ContentTop(safeTop) + 26f;
+        var bottom = canvas.Y - PortraitDisplay.SafeBottom() - 24f;
+
+        PortraitNodes.ClearAnchors(container);
+        container.Position = new Vector2(10f, top);
+        container.Size = new Vector2(canvas.X - 20f, bottom - top);
+
+        PortraitNodes.ClearAnchors(content);
+        content.Position = new Vector2(80f, 0f);
+        content.Size = new Vector2(canvas.X - 180f, bottom - top);
+
+        Control spacer = null;
+        foreach (var child in content.GetChildren())
+        {
+            if (child is Control c && c.Name == SpacerName)
+            {
+                spacer = c;
+                break;
+            }
+        }
+        if (spacer is null)
+        {
+            spacer = new Control
+            {
+                Name = SpacerName,
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+            };
+            content.AddChild(spacer);
+        }
+        spacer.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+        var optionsIndex = options.GetIndex();
+        if (spacer.GetIndex() > optionsIndex)
+            content.MoveChild(spacer, optionsIndex);
+        else if (spacer.GetIndex() < optionsIndex - 1)
+            content.MoveChild(spacer, optionsIndex - 1);
+
+        // The "next" hint follows the bubble instead of floating at the
+        // bottom edge of the screen.
+        if (PortraitNodes.FindControl(layout, "FakeNextButtonContainer") is { } fakeNext)
+            fakeNext.GlobalPosition = new Vector2(
+                fakeNext.GlobalPosition.X,
+                top + dialogue.Size.Y + 12f
+            );
+    }
+}
+
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Events.NAncientEventLayout), "_Ready")]
+internal static class AncientEventReadyPatch
+{
+    private static void Postfix(object __instance)
+    {
+        var layout = (Control)__instance;
+        PortraitNodes.After(layout, 0.25, () => PortraitAncientEvent.EnsureLoop(layout));
+    }
+}
+
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Events.NAncientEventLayout), "SetDialogueLineAndAnimate")]
+internal static class AncientEventDialoguePatch
+{
+    private static void Postfix(object __instance) =>
+        PortraitAncientEvent.Apply((Control)__instance);
+}
+
 [HarmonyPatch(typeof(NAncientNameBanner), "_Ready")]
 internal static class NeowBannerPatch
 {

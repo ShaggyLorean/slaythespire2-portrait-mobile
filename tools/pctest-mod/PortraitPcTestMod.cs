@@ -236,10 +236,28 @@ public static class PortraitPcTestMod
         Shot("m1-merchant-fresh"),
     };
 
+    private static readonly Step[] NeowProbeScenario =
+    {
+        new(
+            "wait main menu",
+            () => FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true },
+            0.4,
+            25.0
+        ),
+        Click("SingleplayerButton", 2.0),
+        Click("ConfirmButton", 2.5),
+        Click("NoButton", 7.0, 4.0),
+        Cmd("event NEOW", 4.5),
+        Shot("n1-neow"),
+    };
+
     private static Step[] ActiveScenario =>
-        System.Environment.GetEnvironmentVariable("STS2_PCTEST_SCENARIO") == "merchant"
-            ? MerchantProbeScenario
-            : Scenario;
+        System.Environment.GetEnvironmentVariable("STS2_PCTEST_SCENARIO") switch
+        {
+            "merchant" => MerchantProbeScenario,
+            "neow" => NeowProbeScenario,
+            _ => Scenario,
+        };
 
     private static readonly Step[] Scenario =
     {
@@ -601,7 +619,7 @@ public static class PortraitPcTestMod
         }
     }
 
-    private const int DumpDepth = 9;
+    private const int DumpDepth = 12;
 
     private static void Dump(Node node, StringBuilder sb, int depth, int maxDepth)
     {
@@ -613,7 +631,9 @@ public static class PortraitPcTestMod
 
         if (depth >= maxDepth)
             return;
-        foreach (var child in node.GetChildren())
+        // includeInternal: container-spawned rows (event options, dialogue)
+        // can be internal children; the default enumeration hides them.
+        foreach (var child in node.GetChildren(includeInternal: true))
             Dump(child, sb, depth + 1, maxDepth);
     }
 }
