@@ -222,10 +222,12 @@ public static class PortraitPcTestMod
             "relics + reported event",
             () =>
             {
+                // Passive-pickup relics only: ASTROLABE opens a transform
+                // overlay on pickup and hijacks the rest of the walk.
                 Console("relic add AKABEKO");
                 Console("relic add ANCHOR");
-                Console("relic add ASTROLABE");
                 Console("relic add BAG_OF_MARBLES");
+                Console("relic add BAG_OF_PREPARATION");
                 Console("event BYRDONIS_NEST");
                 return true;
             },

@@ -833,25 +833,6 @@ internal static class PortraitTopBar
         var left = bar.GetNodeOrNull<Control>("LeftAlignedStuff");
         var right = bar.GetNodeOrNull<Control>("RightAlignedStuff");
 
-        // Do not scale the two desktop rows as single 1280px/640px strips. That
-        // made every icon and number microscopic. Reset their transforms and lay
-        // out the actual controls as a compact portrait HUD instead.
-        if (left is not null)
-        {
-            PortraitNodes.ClearAnchors(left);
-            left.PivotOffset = Vector2.Zero;
-            left.Scale = Vector2.One;
-            left.Position = Vector2.Zero;
-        }
-
-        if (right is not null)
-        {
-            PortraitNodes.ClearAnchors(right);
-            right.PivotOffset = Vector2.Zero;
-            right.Scale = Vector2.One;
-            right.Position = Vector2.Zero;
-        }
-
         var hp = PortraitNodes.FindControl(bar, "TopBarHp");
         var gold = PortraitNodes.FindControl(bar, "TopBarGold");
         var portrait = PortraitNodes.FindControl(bar, "TopBarPortrait");
@@ -904,7 +885,11 @@ internal static class PortraitTopBar
         if (combat)
         {
             // Combat: the expanded stack tuned in v0.3.0; the combat frame's
-            // ink band owns the top of the screen, no shared backdrop.
+            // ink band owns the top of the screen, no shared backdrop. The
+            // rows' transforms are reset so the per-control placement below
+            // works in bar space.
+            ResetRow(left);
+            ResetRow(right);
             SetBackdropVisible(bar, canvas, safeTop, visible: false);
             SetVisible(room, true);
             SetVisible(floor, true);
@@ -926,32 +911,29 @@ internal static class PortraitTopBar
         }
         else
         {
-            // Outside combat: a slim two-row bar over one shared backdrop band,
-            // so screen content starts high and every screen wears the same top.
-            // Row 1 keeps vitals and the right-side screen buttons; row 2 packs
-            // the run trinkets so the left cluster never fights the buttons.
+            // Outside combat: a slim two-row bar over one shared backdrop band.
+            // The rows are HBox containers whose sort re-lays children on any
+            // dirty event; fighting that per child lost every time (BUG-014),
+            // so the CONTAINERS are placed and their native row arrangement is
+            // the design. Hidden children are skipped by the sort, which is
+            // how the trinket cluster leaves row 1.
             SetBackdropVisible(bar, canvas, safeTop, visible: true);
             var top = PortraitHudMetrics.HudTop(safeTop);
             var row2 = top + PortraitHudMetrics.CompactRowPitch;
 
-            Place(hp, new Vector2(38f, top), 1.02f);
-            Place(gold, new Vector2(330f, top), 1.02f);
-
-            var rightEdge = canvas.X - 30f;
-            rightEdge = PlaceFromRight(pause, rightEdge, top, 1.12f);
-            rightEdge = PlaceFromRight(deck, rightEdge, top, 1.12f);
-            PlaceFromRight(map, rightEdge, top, 1.12f);
-
-            Place(potions, new Vector2(38f, row2), 0.92f);
-            // The game continuously tweens the room/floor/boss cluster for its
-            // own top-bar anim states; pinning loses that fight and they land
-            // over screen content. The slim bar drops them (combat's expanded
-            // stack still shows all three, and the map screen itself carries
-            // the progress information).
             SetVisible(room, false);
             SetVisible(floor, false);
             SetVisible(boss, false);
-            PlaceRelics(relics, canvas, new Vector2(330f, row2 + 4f), 1.12f, canvas.X - 330f - 30f);
+
+            PlaceRow(left, new Vector2(38f, top + 4f), 0.95f);
+            if (right is not null)
+            {
+                const float rightScale = 1.05f;
+                var width = right.Size.X > 1f ? right.Size.X : 340f;
+                PlaceRow(right, new Vector2(canvas.X - 30f - width * rightScale, top), rightScale);
+            }
+
+            PlaceRelics(relics, canvas, new Vector2(38f, row2 + 10f), 1.12f, canvas.X - 68f);
         }
 
         var signature = $"portrait-zones-6:{canvas.X:F0}:{(combat ? "combat" : "compact")}:{relics?.GetChildCount() ?? 0}";
@@ -982,16 +964,42 @@ internal static class PortraitTopBar
         return false;
     }
 
+    // Both flags together: Visible=false removes the node from container
+    // sorting (and can be re-shown by game code, which the reflow undoes
+    // within a tick), while the modulate alpha survives the game's own show
+    // tweens as a second line of defense.
     private static void SetVisible(Control control, bool visible)
     {
         if (control is null)
             return;
+        if (control.Visible != visible)
+            control.Visible = visible;
         var alpha = visible ? 1f : 0f;
         if (Math.Abs(control.Modulate.A - alpha) > 0.01f)
             control.Modulate = new Color(1f, 1f, 1f, alpha);
         control.MouseFilter = visible
             ? Control.MouseFilterEnum.Stop
             : Control.MouseFilterEnum.Ignore;
+    }
+
+    private static void ResetRow(Control row)
+    {
+        if (row is null)
+            return;
+        PortraitNodes.ClearAnchors(row);
+        row.PivotOffset = Vector2.Zero;
+        row.Scale = Vector2.One;
+        row.Position = Vector2.Zero;
+    }
+
+    private static void PlaceRow(Control row, Vector2 position, float scale)
+    {
+        if (row is null)
+            return;
+        PortraitNodes.ClearAnchors(row);
+        row.PivotOffset = Vector2.Zero;
+        row.Scale = Vector2.One * scale;
+        row.Position += position - row.GlobalPosition;
     }
 
     private static void PlaceRelics(
@@ -1422,17 +1430,65 @@ internal static class EventRoomPatch
             if (!PortraitDisplay.IsPortrait(canvas))
                 return;
 
+            var layout = PortraitNodes.FindControl(room, "DefaultEventLayout");
             var title = PortraitNodes.FindControl(room, "Title");
-            if (title?.GetParent() is not Control block)
+            if (layout is null || title?.GetParent() is not Control block)
                 return;
-            var width = title.Size.X > 1f ? title.Size.X : Math.Min(800f, canvas.X - 80f);
 
-            // The authored event layout is top-anchored for a landscape canvas,
-            // which lands the first text lines inside the run HUD band. Keep
-            // the authored Y when it already clears the HUD, push down when not.
-            var contentTop = PortraitHudMetrics.ContentTop(PortraitDisplay.SafeTop());
-            var y = Math.Max(block.GlobalPosition.Y, contentTop);
-            block.GlobalPosition = new Vector2((canvas.X - width) * 0.5f, y);
+            // Portrait composition instead of overlap-avoidance: the text
+            // block sits right under the bar, the options anchor to the thumb
+            // zone at the bottom, and the event art fills the band between
+            // them. The authored layout stacked all of it in the top third of
+            // a landscape canvas and left the rest empty.
+            layout.Position = new Vector2(layout.Position.X, 0f);
+
+            var safeTop = PortraitDisplay.SafeTop();
+            var contentTop = PortraitHudMetrics.ContentTop(safeTop);
+            var options = PortraitNodes.FindControl(layout, "OptionsContainer");
+
+            // The options live inside the text VBox; the container's sort
+            // would keep pulling them back up, so they move out once.
+            if (options is not null && options.GetParent() != layout)
+            {
+                var keep = options.GlobalPosition;
+                options.GetParent().RemoveChild(options);
+                layout.AddChild(options);
+                options.GlobalPosition = keep;
+            }
+
+            const float textScale = 1.1f;
+            block.PivotOffset = Vector2.Zero;
+            block.Scale = Vector2.One * textScale;
+            var blockWidth = (block.Size.X > 1f ? block.Size.X : 800f) * textScale;
+            block.GlobalPosition = new Vector2((canvas.X - blockWidth) * 0.5f, contentTop);
+
+            var optionsTop = canvas.Y;
+            if (options is not null)
+            {
+                const float optionsScale = 1.18f;
+                options.PivotOffset = Vector2.Zero;
+                options.Scale = Vector2.One * optionsScale;
+                var optionsWidth = (options.Size.X > 1f ? options.Size.X : 800f) * optionsScale;
+                var optionsHeight = (options.Size.Y > 1f ? options.Size.Y : 220f) * optionsScale;
+                optionsTop = canvas.Y - PortraitDisplay.SafeBottom() - optionsHeight - 90f;
+                options.GlobalPosition = new Vector2((canvas.X - optionsWidth) * 0.5f, optionsTop);
+            }
+
+            // Event art: center-crop horizontally and fill the free band.
+            if (PortraitNodes.FindControl(layout, "Portrait") is { } art)
+            {
+                var bandTop = contentTop + 470f;
+                var bandBottom = optionsTop - 40f;
+                var artBaseHeight = art.Size.Y > 1f ? art.Size.Y : 1200f;
+                var artBaseWidth = art.Size.X > 1f ? art.Size.X : 2560f;
+                var scale = Mathf.Clamp((bandBottom - bandTop) / artBaseHeight, 0.7f, 1.35f);
+                art.PivotOffset = Vector2.Zero;
+                art.Scale = Vector2.One * scale;
+                art.GlobalPosition = new Vector2(
+                    (canvas.X - artBaseWidth * scale) * 0.5f,
+                    bandTop + (bandBottom - bandTop - artBaseHeight * scale) * 0.5f
+                );
+            }
         });
     }
 }
