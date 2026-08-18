@@ -11,10 +11,14 @@ internal static class Program
 
     private static int Main()
     {
-        // HUD band geometry at zero inset (cutout-less device).
-        AssertEqual(24f, PortraitHudMetrics.HudTop(0f), "HudTop at 0 inset");
-        AssertEqual(24f + 394f + 104f, PortraitHudMetrics.HudBottom(0f), "HudBottom at 0 inset");
+        // Compact bar geometry at zero inset (cutout-less device).
+        AssertEqual(8f, PortraitHudMetrics.HudTop(0f), "HudTop at 0 inset");
+        AssertEqual(8f + 86f * 2f, PortraitHudMetrics.HudBottom(0f), "HudBottom at 0 inset");
         AssertEqual(PortraitHudMetrics.HudBottom(0f) + 16f, PortraitHudMetrics.ContentTop(0f), "ContentTop at 0 inset");
+
+        // Combat stack geometry stays the v0.3.0 tuning.
+        AssertEqual(24f, PortraitHudMetrics.CombatHudTop(0f), "CombatHudTop at 0 inset");
+        AssertEqual(24f + 394f + 104f, PortraitHudMetrics.CombatHudBottom(0f), "CombatHudBottom at 0 inset");
 
         // The band tracks the safe-area inset one to one.
         AssertEqual(
@@ -40,15 +44,14 @@ internal static class Program
             PortraitHudMetrics.RelicRowOffset
         );
 
-        // Sanity: on a tall reference-like canvas (about 1073x2361 units for a
-        // 1440x3168 phone), pushing event text below the HUD still leaves well
-        // over half of the screen for the event body and choices.
+        // Sanity: on a tall reference-like canvas, content now starts in the
+        // top ~15% of the screen (slim bar), not buried below a tall stack.
         var referenceInsetCanvasUnits = 127f;
         var referenceCanvasHeight = 2361f;
         var contentTop = PortraitHudMetrics.ContentTop(referenceInsetCanvasUnits);
         Assert(
-            contentTop < referenceCanvasHeight * 0.30f,
-            $"ContentTop {contentTop:F0} stays above 30% of the reference canvas"
+            contentTop < referenceCanvasHeight * 0.15f,
+            $"ContentTop {contentTop:F0} stays above 15% of the reference canvas"
         );
 
         Console.WriteLine(

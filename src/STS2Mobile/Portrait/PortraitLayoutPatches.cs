@@ -302,13 +302,71 @@ internal static class PortraitCombat
 
     internal static float CompressFan(float value) => value * FanCompression;
 
+    // Card art reaches roughly this far below the fan's baseline at hand
+    // scale; the baseline must keep that plus the safe-area inset on screen.
+    private const float HandBottomClearance = 240f;
+
+    private const string HandGuardMeta = "sts2_portrait_hand_guard";
+
+    private static float HandBaselineY(Vector2 canvas)
+        => Math.Min(
+            canvas.Y * HandBaseline,
+            canvas.Y - PortraitDisplay.SafeBottom() - HandBottomClearance
+        );
+
     internal static void PlaceHand(Control holder, Vector2 canvas)
     {
         holder.Scale = Vector2.One * HandScaleFor(holder);
-        holder.Position = new Vector2(holder.Position.X, canvas.Y * HandBaseline);
+        // Anchor in GLOBAL space like every other placement helper: the
+        // holder's parent is not at the canvas origin on every combat entry
+        // path (console/room teleports differ from map clicks), so a raw
+        // local Position put the fan mid-screen there.
+        holder.Position += new Vector2(0f, HandBaselineY(canvas) - holder.GlobalPosition.Y);
         holder.ZAsRelative = false;
         holder.ZIndex = 320;
     }
+
+    // The card holder can be created AFTER every burst retry has passed
+    // (combat entry timing differs per path), and the game's own layout can
+    // re-position it later. Anchor a light self-rescheduling guard on the
+    // hand node, which exists from _Ready, and resolve the holder fresh each
+    // tick. SceneTreeTimer callbacks are plain delegates and run in every
+    // load context, unlike Node._Process which needs script registration.
+    internal static void EnsureHandGuard(Node hand)
+    {
+        if (hand.HasMeta(HandGuardMeta))
+            return;
+        hand.SetMeta(HandGuardMeta, true);
+        PatchHelper.Log("[Portrait] Hand guard installed");
+        ScheduleHandGuard(hand);
+    }
+
+    private static void ScheduleHandGuard(Node hand)
+    {
+        if (!GodotObject.IsInstanceValid(hand) || !hand.IsInsideTree())
+            return;
+        hand.GetTree().CreateTimer(0.5).Timeout += () =>
+        {
+            if (!GodotObject.IsInstanceValid(hand) || !hand.IsInsideTree())
+                return;
+            var canvas = PortraitDisplay.CanvasSize;
+            if (PortraitDisplay.IsPortrait(canvas))
+            {
+                var holder = PortraitNodes.FindControl(hand, "CardHolderContainer");
+                if (holder is not null
+                    && Math.Abs(holder.GlobalPosition.Y - HandBaselineY(canvas)) > 4f)
+                {
+                    var before = holder.GlobalPosition.Y;
+                    PlaceHand(holder, canvas);
+                    PatchHelper.Log(
+                        $"[Portrait] Hand guard corrected holder Y {before:F0} -> {holder.GlobalPosition.Y:F0}"
+                    );
+                }
+            }
+            ScheduleHandGuard(hand);
+        };
+    }
+
 
     internal static void PlaceEndTurn(Control button, Vector2 canvas)
     {
@@ -339,6 +397,10 @@ internal static class PortraitCombat
         pile.ZIndex = 520;
     }
 
+    // The run HUD switches between the compact bar and the combat stack based
+    // on this flag; the combat frame's lifecycle is the authoritative signal.
+    internal static bool CombatHudActive { get; private set; }
+
     internal static void EnsureFrame(Node ui, Vector2 canvas)
     {
         // CombatUi and CombatRoom both inherit the room's landscape transform.
@@ -359,6 +421,7 @@ internal static class PortraitCombat
             host.AddChild(frame);
             ui.TreeExiting += () =>
             {
+                CombatHudActive = false;
                 if (GodotObject.IsInstanceValid(frame))
                     frame.QueueFree();
                 if (OperatingSystem.IsAndroid())
@@ -369,6 +432,7 @@ internal static class PortraitCombat
             };
         }
 
+        CombatHudActive = true;
         PortraitNodes.ClearAnchors(frame);
         frame.Position = Vector2.Zero;
         frame.Size = canvas;
@@ -418,6 +482,8 @@ internal static class PlayerHandReadyPatch
         var canvas = PortraitDisplay.CanvasSize;
         if (!PortraitDisplay.IsPortrait(canvas))
             return;
+
+        PortraitCombat.EnsureHandGuard((Node)instance);
 
         var holder = Traverse.Create(instance).Property("CardHolderContainer").GetValue<Control>();
         if (holder is null)
@@ -566,6 +632,11 @@ internal static class CombatUiPatch
         }
 
         var hand = PortraitNodes.FindControl(ui, "Hand");
+        // Combat entry paths differ in when the holder exists and when the
+        // hand's _Ready fires; installing the guard here too keeps the fan
+        // pinned regardless of which path created this combat.
+        if (hand is not null)
+            PortraitCombat.EnsureHandGuard(hand);
         var holder = hand is null ? null : PortraitNodes.FindControl(hand, "CardHolderContainer");
         if (holder is not null)
             PortraitCombat.PlaceHand(holder, canvas);
@@ -690,6 +761,7 @@ internal static class PortraitTopBar
         bar.ZAsRelative = false;
         bar.ZIndex = 400;
         var safeTop = PortraitDisplay.SafeTop();
+        var combat = PortraitCombat.CombatHudActive;
         var left = bar.GetNodeOrNull<Control>("LeftAlignedStuff");
         var right = bar.GetNodeOrNull<Control>("RightAlignedStuff");
 
@@ -712,7 +784,6 @@ internal static class PortraitTopBar
             right.Position = Vector2.Zero;
         }
 
-        var top = PortraitHudMetrics.HudTop(safeTop);
         var hp = PortraitNodes.FindControl(bar, "TopBarHp");
         var gold = PortraitNodes.FindControl(bar, "TopBarGold");
         var portrait = PortraitNodes.FindControl(bar, "TopBarPortrait");
@@ -730,18 +801,6 @@ internal static class PortraitTopBar
             portrait.Visible = false;
         if (portraitTip is not null)
             portraitTip.Visible = false;
-
-        Place(hp, new Vector2(38f, top), 1.28f);
-        Place(gold, new Vector2(38f, top + PortraitHudMetrics.GoldRowOffset), 1.28f);
-        Place(potions, new Vector2(38f, top + PortraitHudMetrics.PotionRowOffset), 1.25f);
-        Place(room, new Vector2(38f, top + PortraitHudMetrics.RoomRowOffset), 1.32f);
-        Place(floor, new Vector2(168f, top + PortraitHudMetrics.RoomRowOffset), 1.32f);
-        Place(boss, new Vector2(322f, top + PortraitHudMetrics.RoomRowOffset), 1.32f);
-
-        var rightEdge = canvas.X - 38f;
-        rightEdge = PlaceFromRight(pause, rightEdge, top, 1.50f);
-        rightEdge = PlaceFromRight(deck, rightEdge, top, 1.50f);
-        PlaceFromRight(map, rightEdge, top, 1.50f);
         if (timer is not null)
             timer.Visible = false;
 
@@ -751,29 +810,120 @@ internal static class PortraitTopBar
         {
             relics.ZAsRelative = false;
             relics.ZIndex = 410;
-            var count = 0;
-            foreach (var child in relics.GetChildren())
-            {
-                if (child is CanvasItem { Visible: true })
-                    count++;
-            }
+        }
 
-            var contentWidth = Math.Max(72f, 14f + count * 68f);
-            var maxWidth = canvas.X * 0.78f;
-            var scale = Mathf.Min(1.48f, maxWidth / contentWidth);
-            relics.PivotOffset = Vector2.Zero;
-            relics.Scale = Vector2.One * scale;
-            relics.Position += new Vector2(38f, top + PortraitHudMetrics.RelicRowOffset) - relics.GlobalPosition;
+        if (combat)
+        {
+            // Combat: the expanded stack tuned in v0.3.0; the combat frame's
+            // ink band owns the top of the screen, no shared backdrop.
+            SetBackdropVisible(bar, canvas, safeTop, visible: false);
+            var top = PortraitHudMetrics.CombatHudTop(safeTop);
+            Place(hp, new Vector2(38f, top), 1.28f);
+            Place(gold, new Vector2(38f, top + PortraitHudMetrics.GoldRowOffset), 1.28f);
+            Place(potions, new Vector2(38f, top + PortraitHudMetrics.PotionRowOffset), 1.25f);
+            Place(room, new Vector2(38f, top + PortraitHudMetrics.RoomRowOffset), 1.32f);
+            Place(floor, new Vector2(168f, top + PortraitHudMetrics.RoomRowOffset), 1.32f);
+            Place(boss, new Vector2(322f, top + PortraitHudMetrics.RoomRowOffset), 1.32f);
+
+            var rightEdge = canvas.X - 38f;
+            rightEdge = PlaceFromRight(pause, rightEdge, top, 1.50f);
+            rightEdge = PlaceFromRight(deck, rightEdge, top, 1.50f);
+            PlaceFromRight(map, rightEdge, top, 1.50f);
+
+            PlaceRelics(relics, canvas, new Vector2(38f, top + PortraitHudMetrics.RelicRowOffset), 1.48f, canvas.X * 0.78f);
+        }
+        else
+        {
+            // Outside combat: a slim two-row bar over one shared backdrop band,
+            // so screen content starts high and every screen wears the same top.
+            SetBackdropVisible(bar, canvas, safeTop, visible: true);
+            var top = PortraitHudMetrics.HudTop(safeTop);
+            var row2 = top + PortraitHudMetrics.CompactRowPitch;
+
+            Place(hp, new Vector2(38f, top), 1.02f);
+            Place(gold, new Vector2(330f, top), 1.02f);
+            Place(room, new Vector2(600f, top + 6f), 0.95f);
+            Place(floor, new Vector2(694f, top + 6f), 0.95f);
+            Place(boss, new Vector2(788f, top + 8f), 0.88f);
+
+            var rightEdge = canvas.X - 30f;
+            rightEdge = PlaceFromRight(pause, rightEdge, top, 1.12f);
+            rightEdge = PlaceFromRight(deck, rightEdge, top, 1.12f);
+            PlaceFromRight(map, rightEdge, top, 1.12f);
+
+            Place(potions, new Vector2(38f, row2), 0.92f);
+            PlaceRelics(relics, canvas, new Vector2(330f, row2 + 4f), 1.12f, canvas.X - 330f - 30f);
         }
 
         HideBuildWatermark(bar.GetTree().Root, canvas);
 
-        var signature = $"portrait-zones-5:{canvas.X:F0}:{relics?.GetChildCount() ?? 0}";
+        var signature = $"portrait-zones-6:{canvas.X:F0}:{(combat ? "combat" : "compact")}:{relics?.GetChildCount() ?? 0}";
         if (_lastSignature != signature)
         {
             _lastSignature = signature;
             PatchHelper.Log($"[Portrait] Top bar reflow {signature}");
         }
+    }
+
+    private static void PlaceRelics(
+        Control relics,
+        Vector2 canvas,
+        Vector2 position,
+        float maxScale,
+        float maxWidth
+    )
+    {
+        if (relics is null)
+            return;
+
+        var count = 0;
+        foreach (var child in relics.GetChildren())
+        {
+            if (child is CanvasItem { Visible: true })
+                count++;
+        }
+
+        var contentWidth = Math.Max(72f, 14f + count * 68f);
+        var scale = Mathf.Min(maxScale, maxWidth / contentWidth);
+        relics.PivotOffset = Vector2.Zero;
+        relics.Scale = Vector2.One * scale;
+        relics.Position += position - relics.GlobalPosition;
+    }
+
+    private const string BackdropName = "Sts2PortraitHudBackdrop";
+
+    // One ink band behind the compact bar, shared by every non-combat screen:
+    // scrolling content passes under it and stays legible, and the punch-hole
+    // area is backed by the same band on every screen (combat has its own).
+    private static void SetBackdropVisible(NTopBar bar, Vector2 canvas, float safeTop, bool visible)
+    {
+        var host = bar.GetParent();
+        if (host is null)
+            return;
+
+        var backdrop = host.GetNodeOrNull<ColorRect>(BackdropName);
+        if (backdrop is null)
+        {
+            if (!visible)
+                return;
+            backdrop = new ColorRect
+            {
+                Name = BackdropName,
+                Color = new Color(0.024f, 0.043f, 0.062f, 0.93f),
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+                ZAsRelative = false,
+                ZIndex = 390,
+            };
+            host.AddChild(backdrop);
+        }
+
+        backdrop.Visible = visible;
+        if (!visible)
+            return;
+
+        PortraitNodes.ClearAnchors(backdrop);
+        backdrop.Position = Vector2.Zero;
+        backdrop.Size = new Vector2(canvas.X, PortraitHudMetrics.HudBottom(safeTop) + 6f);
     }
 }
 
