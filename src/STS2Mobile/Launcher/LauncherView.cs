@@ -270,26 +270,39 @@ internal sealed class LauncherView
         Control.GuiInputEventHandler dismissKeyboard
     )
     {
+        // The console is always on screen as its own framed window at the
+        // bottom: no Show/Hide details toggle, nothing verification-shaped
+        // can hide inside it. It scrolls within itself.
         var right = new VBoxContainer();
         right.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        right.CustomMinimumSize = new Vector2(0, LauncherViewLayoutMetrics.ScaleInt(92, scale));
         root.AddChild(right);
 
-        var detailsButton = new StyledButton("Show details", scale, fontSize: 13, height: 42);
-        right.AddChild(detailsButton);
+        var consoleHeader = new StyledLabel("CONSOLE", scale, fontSize: 12);
+        consoleHeader.AddThemeFontOverride("font", LauncherComponentTheme.DisplayFont);
+        consoleHeader.AddThemeColorOverride(
+            LauncherViewLayoutMetrics.ThemeFontColor,
+            LauncherComponentTheme.GoldDim
+        );
+        right.AddChild(consoleHeader);
 
-        var details = new VBoxContainer { Visible = false };
-        right.AddChild(details);
+        var consoleFrame = new PanelContainer();
+        var frameStyle = new StyleBoxFlat { BgColor = LauncherComponentTheme.LogBackground };
+        frameStyle.BorderColor = LauncherComponentTheme.SlabRule;
+        frameStyle.BorderWidthTop = 3;
+        frameStyle.BorderWidthBottom = 1;
+        frameStyle.SetCornerRadiusAll(0);
+        consoleFrame.AddThemeStyleboxOverride(LauncherComponentTheme.Panel, frameStyle);
+        consoleFrame.CustomMinimumSize = new Vector2(
+            0,
+            LauncherViewLayoutMetrics.ScaleInt(240, scale)
+        );
+        right.AddChild(consoleFrame);
 
         var log = new LogView(scale);
         log.GuiInput += dismissKeyboard;
-        details.AddChild(log);
-        details.AddChild(new FmodAttributionSection(scale));
-        detailsButton.Pressed += () =>
-        {
-            details.Visible = !details.Visible;
-            detailsButton.Text = details.Visible ? "Hide details" : "Show details";
-        };
+        log.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+        consoleFrame.AddChild(log);
+        right.AddChild(new FmodAttributionSection(scale));
         return log;
     }
 
