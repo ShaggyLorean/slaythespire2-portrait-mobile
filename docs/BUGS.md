@@ -117,6 +117,26 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Status**: fixed-pending-device (removed with BUG-006's cleanup)
 - **Fixed in**: 0.4.0
 
+## BUG-012: Combat hand clips below the bottom edge
+
+- **Where**: in-game combat, PC rig round `tmp/pctest/shots-20260818-133912/06-first-room.png` (1180x2596 canvas, 4-card hand).
+- **Repro**: enter turn-1 combat; the card fan's lower quarter renders past the canvas bottom.
+- **Expected**: full cards visible above the bottom edge (plus gesture inset on device).
+- **Actual**: card bottoms cut off; `HandBaseline = canvas.Y * 0.925` plus current card scale exceeds the canvas, and the baseline ignores `SafeBottom()`.
+- **Root cause**: candidate: fixed baseline ratio + card scale tuned on a different state; needs device cross-check before the fix lands (v0.3.0 device round validated the hand, so PC evidence must be compared against a device screenshot first).
+- **Status**: open (0.6.0; verify on device, then derive the baseline from SafeBottom and hand height)
+- **Fixed in**: -
+
+## BUG-013: Map nodes render under the HUD stack
+
+- **Where**: in-game map screen, PC rig round `tmp/pctest/shots-20260818-133123/05-run-settled.png`.
+- **Repro**: open the act map; upper-left map points sit behind the HP/gold text (HUD ZIndex 400 draws over them).
+- **Expected**: map content clears the HUD band like events do after the 0.5.0 fix, or the map scroll area starts below `PortraitHudMetrics.ContentTop`.
+- **Actual**: top map rows overlap the HUD column.
+- **Root cause**: map patches center and fill the map but do not reserve the HUD band (BUG-003 family, map slice).
+- **Status**: open (0.6.0)
+- **Fixed in**: -
+
 ## BUG-011: Non-combat screens without portrait handling
 
 - **Where**: in-game. Card reward layout, deck/master-deck viewer, pause menu body, relic/keyword tooltips, run end / victory / death / score, boss relic select, potion use/discard prompts, card/grid/hand select overlays, campfire action menu, merchant purchase confirm, compendium/stats/unlocks/credits, mod menu, LAN screens, settings body.
