@@ -231,7 +231,16 @@ internal static class MainMenuReadyPatch
     }
 
     private static void Postfix(NMainMenu __instance)
-        => PortraitNodes.After(__instance, 0.35, () => PortraitMainMenu.Apply(__instance));
+        => PortraitNodes.After(__instance, 0.35, () =>
+        {
+            PortraitMainMenu.Apply(__instance);
+            // The run-scene watermark sweep rides the top-bar reflow, which
+            // never runs on the menu scene; sweep here for the menu and its
+            // submenus (compendium included).
+            var canvas = PortraitDisplay.CanvasSize;
+            if (PortraitDisplay.IsPortrait(canvas))
+                PortraitTopBar.HideBuildWatermark(__instance.GetTree().Root, canvas);
+        });
 }
 
 [HarmonyPatch(typeof(NMainMenuBg), "OnWindowChange")]
@@ -823,7 +832,7 @@ internal static class PortraitTopBar
             || text.Contains("[NONE]", StringComparison.OrdinalIgnoreCase)
             || text.Contains("(???)", StringComparison.OrdinalIgnoreCase);
 
-    private static void HideBuildWatermark(Node root, Vector2 canvas)
+    internal static void HideBuildWatermark(Node root, Vector2 canvas)
     {
         if (root is Label label)
         {
@@ -1782,6 +1791,76 @@ internal static class PortraitRestSite
                 );
             }
         }
+    }
+}
+
+internal static class PortraitCompendium
+{
+    private const string LoopMeta = "Sts2PortraitCompendiumLoop";
+
+    internal static void EnsureLoop(Control submenu)
+    {
+        if (submenu is null || !GodotObject.IsInstanceValid(submenu) || submenu.HasMeta(LoopMeta))
+            return;
+        submenu.SetMeta(LoopMeta, true);
+        Tick(submenu);
+    }
+
+    private static void Tick(Control submenu)
+    {
+        if (!GodotObject.IsInstanceValid(submenu) || !submenu.IsInsideTree())
+            return;
+        Apply(submenu);
+        PortraitNodes.After(submenu, 0.5, () => Tick(submenu));
+    }
+
+    // The compendium's margin container keeps its landscape footprint
+    // (1920x1080 centered on the canvas), which pushes the right-aligned
+    // bottom row's visible button past the canvas edge. Sizing the margin
+    // box to the canvas pulls everything inside; the rows keep their own
+    // container arrangement.
+    private static void Apply(Control submenu)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        var margin = PortraitNodes.FindControl(submenu, "MarginContainer");
+        var content = PortraitNodes.FindControl(submenu, "VBoxContainer");
+        if (margin is null || content is null)
+            return;
+
+        var safeTop = PortraitDisplay.SafeTop();
+        var safeBottom = PortraitDisplay.SafeBottom();
+        var bandTop = PortraitHudMetrics.ContentTop(safeTop);
+        var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, safeBottom);
+        var contentHeight = content.Size.Y > 1f ? content.Size.Y : 714f;
+
+        // The vbox ships a 1520-wide custom minimum, which balloons the
+        // margin box back to its landscape footprint one layout pass after
+        // any resize; drop the minimums so the canvas width can hold.
+        content.CustomMinimumSize = Vector2.Zero;
+        margin.CustomMinimumSize = Vector2.Zero;
+        // The scene ships 200-unit side margins tuned for 1920.
+        margin.AddThemeConstantOverride("margin_left", 26);
+        margin.AddThemeConstantOverride("margin_right", 26);
+        margin.AddThemeConstantOverride("margin_top", 20);
+        margin.AddThemeConstantOverride("margin_bottom", 20);
+        PortraitNodes.ClearAnchors(margin);
+        margin.Position = new Vector2(
+            0f,
+            bandTop + (bandBottom - bandTop - contentHeight) * 0.5f - 20f
+        );
+        margin.Size = new Vector2(canvas.X, contentHeight + 40f);
+    }
+}
+
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NCompendiumSubmenu), "_Ready")]
+internal static class CompendiumSubmenuPatch
+{
+    private static void Postfix(object __instance)
+    {
+        var submenu = (Control)__instance;
+        PortraitNodes.After(submenu, 0.25, () => PortraitCompendium.EnsureLoop(submenu));
     }
 }
 

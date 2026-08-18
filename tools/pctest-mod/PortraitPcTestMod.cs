@@ -251,11 +251,56 @@ public static class PortraitPcTestMod
         Shot("n1-neow"),
     };
 
+    // Main-menu compendium family. The Compendium button only exists on the
+    // has-a-run menu page, so the probe starts a run, saves and quits, and
+    // returns to the menu first. Tab names are guesses backed by timeouts.
+    private static readonly Step[] CompendiumProbeScenario =
+    {
+        new(
+            "wait main menu",
+            () => FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true },
+            0.4,
+            25.0
+        ),
+        // The menu button is gated on NumberOfRuns > 0, which the wiped
+        // sandbox profile never has; call the open handler directly.
+        new(
+            "open compendium submenu",
+            () =>
+            {
+                var menu = FindNodeByName(_tree.Root, "MainMenu");
+                var open = menu?.GetType().GetMethod(
+                    "OpenCompendiumSubmenu",
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public,
+                    binder: null,
+                    types: new[] { typeof(MegaCrit.Sts2.Core.Nodes.GodotExtensions.NButton) },
+                    modifiers: null
+                );
+                if (open is null)
+                    return false;
+                open.Invoke(menu, new object[] { null });
+                return true;
+            },
+            2.5,
+            8.0
+        ),
+        Shot("c1-compendium"),
+        Click("CardLibraryButton", 2.0, 5.0),
+        Shot("c2-card-library"),
+        Click("Close", 1.5, 5.0, "BackButton"),
+        Click("RelicCollectionButton", 2.0, 5.0),
+        Shot("c3-relic-collection"),
+        Click("Close", 1.5, 5.0, "BackButton"),
+        Click("PotionLabButton", 2.0, 5.0),
+        Shot("c4-potion-lab"),
+    };
+
     private static Step[] ActiveScenario =>
         System.Environment.GetEnvironmentVariable("STS2_PCTEST_SCENARIO") switch
         {
             "merchant" => MerchantProbeScenario,
             "neow" => NeowProbeScenario,
+            "compendium" => CompendiumProbeScenario,
             _ => Scenario,
         };
 
