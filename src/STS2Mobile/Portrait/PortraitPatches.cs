@@ -29,6 +29,7 @@ internal static class PortraitPatches
         typeof(PortraitFtuePatch),
         typeof(TopBarInitializePatch),
         typeof(TopBarPotionPatch),
+        typeof(PotionPopupPatch),
         typeof(MapBackgroundReadyPatch),
         typeof(MapBackgroundWindowPatch),
         typeof(MapScreenReadyPatch),

@@ -295,12 +295,54 @@ public static class PortraitPcTestMod
         Shot("c4-potion-lab"),
     };
 
+    // Potion-use overlay in combat, then the boss room and its rewards.
+    private static readonly Step[] PotionsProbeScenario =
+    {
+        new(
+            "wait main menu",
+            () => FindNodeByName(_tree.Root, "MainMenu") is Control { Visible: true },
+            0.4,
+            25.0
+        ),
+        Click("SingleplayerButton", 2.0),
+        Click("ConfirmButton", 2.5),
+        Click("NoButton", 7.0, 4.0),
+        Cmd("potion ENTROPIC_BREW", 0.8),
+        Cmd("room monster", 4.0),
+        new(
+            "click first potion",
+            () =>
+            {
+                foreach (var holder in FindControlsByType(_tree.Root, "PotionHolder"))
+                {
+                    if (!holder.IsVisibleInTree() || holder.Size.X < 4f)
+                        continue;
+                    ClickCanvas(
+                        holder.GlobalPosition + holder.Size * holder.Scale * 0.5f,
+                        $"potion holder {holder.Name}"
+                    );
+                    return true;
+                }
+                return false;
+            },
+            2.0,
+            8.0
+        ),
+        Shot("p1-potion-prompt"),
+        Cmd("win", 6.0),
+        Cmd("room boss", 5.0),
+        Shot("p2-boss-room"),
+        Cmd("win", 7.0),
+        Shot("p3-boss-rewards"),
+    };
+
     private static Step[] ActiveScenario =>
         System.Environment.GetEnvironmentVariable("STS2_PCTEST_SCENARIO") switch
         {
             "merchant" => MerchantProbeScenario,
             "neow" => NeowProbeScenario,
             "compendium" => CompendiumProbeScenario,
+            "potions" => PotionsProbeScenario,
             _ => Scenario,
         };
 

@@ -27,6 +27,8 @@ konusma balonlari konusana bagli. Sadece "ust uste binmiyor" yeterli DEGIL.
 | death (Devastation) | dogrulandi: Continue TouchScale ile alt bantta buyutuldu |
 | compendium (ana menu) | dogrulandi: margin kutusu canvas genislikte, Character Stats iceride; watermark ana menude de gizli; card library 2 sutunla temiz |
 | relic collection / potion lab | dogrulandi: 10 sutun kategori gridleri patchsiz temiz |
+| potion Drink/Discard popup | dogrulandi: aktif barin altina kenar payiyla acilir, 1.2x; kat/boss satiri cakismasi bitti |
+| boss odasi + boss rewards | dogrulandi: normal loot akisiyla ayni (buyuk panel); boss relic secimi ayri mekanik (Neow reliciyle) |
 | deck upgrade select (Smith) | dogrulandi: 3 sutun grid + alt bilgi satiri portrait-temiz, cikis "Close" oku; transform/enchant ayni aile, ayni yerlesim beklenir |
 
 ## scenes/screens/ sahneleri

@@ -1353,6 +1353,33 @@ internal static class TopBarInitializePatch
     }
 }
 
+[HarmonyPatch(typeof(NPotionPopup), "_Ready")]
+internal static class PotionPopupPatch
+{
+    // The drink/discard popup opens hanging off the holder, which on a
+    // portrait canvas shoves it past the left edge and straight into the
+    // combat floor/boss row. Touch rules: park it right under the active
+    // bar at the edge margin and let it read at 1.2x.
+    private static void Postfix(object __instance)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        var popup = (Control)__instance;
+        PortraitNodes.After(popup, 0.05, () =>
+        {
+            var safeTop = PortraitDisplay.SafeTop();
+            var top = (PortraitCombat.CombatHudActive
+                ? PortraitHudMetrics.CombatHudBottom(safeTop)
+                : PortraitHudMetrics.HudBottom(safeTop)) + 12f;
+            const float scale = 1.2f;
+            popup.PivotOffset = Vector2.Zero;
+            popup.Scale = Vector2.One * scale;
+            popup.GlobalPosition = new Vector2(PortraitHudMetrics.EdgeMargin, top);
+        });
+    }
+}
+
 [HarmonyPatch(typeof(NPotionContainer), "GrowPotionHolders")]
 internal static class TopBarPotionPatch
 {
