@@ -299,4 +299,14 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Root cause**: three stacked costs. (1) The game ships uncapped and the panel runs 90-120Hz. (2) Rendering happened at the native 1440x3168 through canvas_items scaling. (3) The PCK carries only desktop texture formats (683 bptc, 539 s3tc, zero ETC2/ASTC), so every compressed texture is decompressed to RGBA8 at load: 4x the VRAM and the memory bandwidth bill that turns into heat. A fourth, self-inflicted cost: the portrait layout guards walked all ~3700 nodes through the C# interop several times a second (130-145ms frame spikes).
 - **Fix**: 60fps budget re-asserted at runtime (user://sts2_fps_cap overrides); viewport scaling renders at the 1180x2596 canvas (user://sts2_render_mode "native" reverts); scene queries answered by NOverlayStack.Peek plus a WeakReference node cache (idle combat fps 47 -> 56, spikes halved); and tools/pck/transcode_textures.py rewrites every bptc/s3tc ctex payload to ASTC 4x4 (natively supported by the device GPU) and repacks the PCK.
 - **Note**: measurements taken while the phone was fast-charging, which adds its own heat; validate unplugged.
-- **Status**: fixed-pending-device (ASTC pack built; device swap and visual pass pending)
+- **Status**: partially fixed; texture work parked by decision
+- **Update 2026-08-20**: the ASTC pack passed PSNR gates (56-59dB) and removed
+  every load-time conversion, but on device one class of sprites (spine
+  atlases, several UI icons) rendered invisible with no loader error. Rolled
+  back to the original PCK per the standing rule that the original experience
+  loses nothing. Kept: the 60fps budget (the game itself settles at 60), the
+  scene-query caches (pure CPU win, idle combat 47->56fps), and the viewport
+  render mode as an opt-IN experiment (user://sts2_render_mode "viewport");
+  the default is the panel's native resolution. The transcoder and findings
+  live in tools/pck/transcode_textures.py for a future pass that first solves
+  the silent-invisible class on a single texture.

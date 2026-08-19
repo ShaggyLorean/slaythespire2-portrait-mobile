@@ -34,7 +34,11 @@ internal static class PortraitDisplay
         if (_canvasResolution is { } cached)
             return cached;
 
-        var mode = "viewport";
+        // Default is the panel's native resolution: the user's rule is that
+        // the original experience loses nothing, and the viewport downscale
+        // is a (mild) visual trade. The file opts INTO viewport for thermal
+        // experiments instead of out of it.
+        var mode = "native";
         try
         {
             var path = System.IO.Path.Combine(OS.GetUserDataDir(), "sts2_render_mode");
@@ -46,7 +50,7 @@ internal static class PortraitDisplay
             // Unreadable override keeps the default.
         }
 
-        _canvasResolution = OperatingSystem.IsAndroid() && mode != "native";
+        _canvasResolution = OperatingSystem.IsAndroid() && mode == "viewport";
         PatchHelper.Log($"[Portrait] Render mode: {(_canvasResolution.Value ? "viewport (canvas-res)" : "native")}");
         return _canvasResolution.Value;
     }
