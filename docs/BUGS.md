@@ -258,3 +258,36 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Verified**: rig at 7 cards (both edges inside, centred), device at 4-5 cards; a device check with 8+ cards is still pending.
 - **Status**: fixed-pending-device
 - **Fixed in**: 0.4.0
+
+## BUG-024: Settings screen unusable on device
+
+- **Where**: in-run settings, device.
+- **Actual**: tabs flush against the cutout band, rows at landscape pitch above a dead lower half, the back tab half off the canvas, and the combat piles, energy and End Turn drawn over the open screen.
+- **Fix**: content block scaled through the plain-Control Clipper (row internals stay intact; growing per-row minimums split rows from their own backgrounds), tabs dropped below the safe inset, back tab placed inside the canvas, and fullscreen capstones now hide every absolute-Z combat control with the hand.
+- **Status**: verified
+
+## BUG-025: Loot banner buried in darkness, then flickering
+
+- **Where**: rewards screen, device.
+- **Root cause**: the compact bar's gradient scrim (Sts2PortraitHudBackdrop, ~800 units deep, absolute z 390) covered the banner while the loot rows started below its fade. The first fix had the hand guard hide the scrim while the top bar reflow re-showed it, which turned the burial into a flicker.
+- **Fix**: the scrim has one owner: the reflow itself skips it while a rewards screen is visible. The rewards pass is also re-driven from the hand guard, because the screen's own assert loop died silently on device more than once.
+- **Status**: verified (three consecutive captures stable)
+
+## BUG-026: Two Skips at once on the card selection overlay
+
+- **Root cause**: the rewards proceed arrow is Z-pinned at 460 and the selection overlays live in the same canvas layer, so the arrow punched through them. Type-name detection failed twice; the game's own overlay stack (NOverlayStack.Peek) is the source of truth.
+- **Fix**: the rewards pass unpins and zeroes the arrow whenever its screen is not the top overlay, and the map's assert loop clears it as well for the window after combat dies.
+- **Status**: verified (single Skip on the overlay, none leaking onto the map)
+
+## BUG-027: Skip arrow shrank under the finger and dropped the press
+
+- **Root cause**: the portrait pass scaled the proceed control while the game's press animation writes that same Scale, and the assert loop repositioned it mid-press, which the drag threshold read as a cancel.
+- **Fix**: no scale on the proceed arrow, and repositioning only on real drift (>3 units).
+- **Status**: verified (Skip and Proceed both fire first tap)
+
+## BUG-028: .NET file gates dead on device
+
+- **Root cause**: SELinux hides /data/local/tmp from the managed side on this device even though the Java boot path reads it, so every managed file gate there (bisect switches, dump trigger) silently never fired.
+- **Fix**: managed triggers moved into the app's own user data directory (OS.GetUserDataDir()). The Java-side override directory stays where it was, since Java demonstrably reads it.
+- **Lesson**: any future managed-side device switch goes under user://, never /data/local/tmp.
+- **Status**: verified (region dump consumed and logged from user://)
