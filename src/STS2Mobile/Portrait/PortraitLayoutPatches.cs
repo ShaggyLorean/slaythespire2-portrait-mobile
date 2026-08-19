@@ -3081,9 +3081,12 @@ internal static class PortraitRewards
         {
             // No scale from this layer: the press animation writes the
             // control's own Scale, and the two writers fighting shrank the
-            // arrow under the finger and cancelled the press.
-            var baseW = proceed.Size.X > 1f ? proceed.Size.X : 269f;
-            var baseH = proceed.Size.Y > 1f ? proceed.Size.Y : 108f;
+            // arrow under the finger and cancelled the press. The game DOES
+            // scale it though (1.5x on this screen), so the placement math
+            // uses the visual size or the arrowhead pokes off the canvas.
+            var proceedScale = Math.Max(proceed.GetGlobalTransform().Scale.X, 0.01f);
+            var baseW = (proceed.Size.X > 1f ? proceed.Size.X : 269f) * proceedScale;
+            var baseH = (proceed.Size.Y > 1f ? proceed.Size.Y : 108f) * proceedScale;
             // Anchors under the reward rows themselves (the mask is the real
             // content edge); panel-height guesses drifted into the hand fan
             // on short buckets.
@@ -3092,8 +3095,11 @@ internal static class PortraitRewards
                 anchorBottom = mask.GlobalPosition.Y + mask.Size.Y * mask.GetGlobalTransform().Scale.Y;
             proceed.ZAsRelative = false;
             proceed.ZIndex = 460;
+            // The arrow art overhangs its control rect by ~40 units on the
+            // right, like every torn-banner button in this game; the margin
+            // covers the art, not just the rect.
             var target = new Vector2(
-                canvas.X - PortraitHudMetrics.EdgeMargin - baseW - 24f,
+                canvas.X - PortraitHudMetrics.EdgeMargin - baseW - 64f,
                 Math.Min(anchorBottom + 36f, bandBottom - baseH)
             );
             // Repositioning every assert tick cancelled presses mid-animation;
@@ -3331,7 +3337,10 @@ internal static class ProceedButtonPatch
         ApplyScale(button, canvas);
 
         var width = (button.Size.X > 1f ? button.Size.X : 300f) * Math.Max(button.Scale.X, 1f);
-        __result.X = Math.Min(__result.X, canvas.X - width - EdgeGap);
+        // Same clamp as the rewards pass target: edge margin plus the ~40
+        // units of banner art overhanging the control rect. Two different
+        // clamps had the arrow ping-ponging between two X positions.
+        __result.X = Math.Min(__result.X, canvas.X - width - PortraitHudMetrics.EdgeMargin - 64f);
     }
 
     private static void ApplyScale(Control button, Vector2 canvas)
