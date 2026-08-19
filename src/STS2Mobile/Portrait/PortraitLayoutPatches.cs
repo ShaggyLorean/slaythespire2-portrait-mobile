@@ -82,20 +82,26 @@ internal static class PortraitNodes
         var found = 0;
         void Walk(Node node)
         {
-            if (found >= 8)
+            if (found >= 12)
                 return;
 
             if (node is Control control && control.Visible && control.IsInsideTree())
             {
                 var rect = control.GetGlobalRect();
+                var path = control.GetPath().ToString();
+                // Parked back/unready buttons overhang the edge by ~40 units on
+                // every screen; they are a known, separate nuisance. Skip them
+                // so the cap is spent on the unknown peeker.
                 if (rect.Position.X < 4f
                     && rect.End.X > 2f
                     && rect.End.X < 60f
                     && rect.Size.Y > 80f
-                    && rect.Size.Y < canvas.Y * 0.6f)
+                    && rect.Size.Y < canvas.Y * 0.6f
+                    && !path.Contains("BackButton")
+                    && !path.Contains("UnreadyButton"))
                 {
                     PatchHelper.Log(
-                        $"[Portrait] edge peek: {control.GetType().Name} '{control.Name}' rect={rect.Position.X:F0},{rect.Position.Y:F0} {rect.Size.X:F0}x{rect.Size.Y:F0} path={control.GetPath()}"
+                        $"[Portrait] edge peek: {control.GetType().Name} '{control.Name}' rect={rect.Position.X:F0},{rect.Position.Y:F0} {rect.Size.X:F0}x{rect.Size.Y:F0} path={path}"
                     );
                     found++;
                 }
@@ -1003,12 +1009,16 @@ internal static class PortraitCombat
                 if (holder is not null)
                 {
                     ApplyCapstoneHandVisibility(hand, holder);
-                    if (Math.Abs(holder.GlobalPosition.Y - HandBaselineY(canvas)) > 4f)
+                    // The combat intro tween slides the holder after _Ready,
+                    // and it drifts on both axes: Y alone left the fan centred
+                    // where the landscape scene wanted it, off to the left.
+                    if (Math.Abs(holder.GlobalPosition.Y - HandBaselineY(canvas)) > 4f
+                        || Math.Abs(holder.GlobalPosition.X - canvas.X * 0.5f) > 4f)
                     {
-                        var before = holder.GlobalPosition.Y;
+                        var before = holder.GlobalPosition;
                         PlaceHand(holder, canvas);
                         PatchHelper.Log(
-                            $"[Portrait] Hand guard corrected holder Y {before:F0} -> {holder.GlobalPosition.Y:F0}"
+                            $"[Portrait] Hand guard corrected holder {before.X:F0},{before.Y:F0} -> {holder.GlobalPosition.X:F0},{holder.GlobalPosition.Y:F0}"
                         );
                     }
                 }
