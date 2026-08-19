@@ -152,6 +152,52 @@ internal static class PatchHelper
         return false;
     }
 
+
+    // Mono on Android aborts the process inside mono_class_from_mono_type_internal
+    // ("implement me 0x00", class.c:2324) when Harmony copies a method whose
+    // signature carries a nullable game struct. The abort is native, so no
+    // try/catch can contain it and the only defence is to leave the method alone.
+    internal static bool IsUnpatchableOnDevice(MethodBase target, out string reason)
+    {
+        reason = null;
+        if (target == null || !OperatingSystem.IsAndroid())
+            return false;
+
+        if (ContainsNullable((target as MethodInfo)?.ReturnType))
+        {
+            reason = "nullable return value aborts Mono on Android";
+            return true;
+        }
+
+        foreach (var parameter in target.GetParameters())
+        {
+            if (!ContainsNullable(parameter.ParameterType))
+                continue;
+
+            reason = $"nullable parameter '{parameter.Name}' aborts Mono on Android";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool ContainsNullable(Type type)
+    {
+        if (type == null || !type.IsGenericType)
+            return false;
+
+        if (type.GetGenericTypeDefinition() == typeof(Nullable<>))
+            return true;
+
+        foreach (var argument in type.GetGenericArguments())
+        {
+            if (ContainsNullable(argument))
+                return true;
+        }
+
+        return false;
+    }
+
     private static void PatchMethod(
         Harmony harmony,
         MethodInfo target,
@@ -160,6 +206,12 @@ internal static class PatchHelper
         MethodInfo transpiler = null
     )
     {
+        if (IsUnpatchableOnDevice(target, out var reason))
+        {
+            Log($"SKIPPED {target.DeclaringType?.Name}.{target.Name}: {reason}");
+            return;
+        }
+
         harmony.Patch(
             target,
             prefix: ToHarmonyMethod(prefix),

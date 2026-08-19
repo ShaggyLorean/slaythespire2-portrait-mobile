@@ -169,6 +169,14 @@ public static class ModEntry
                 $"Sentry guard: dsn cleared (was {(string.IsNullOrEmpty(previous) ? "empty" : "set")})"
             );
             ProbeRuntimeCodegen();
+            ProbeRuntimeIdentity();
+            SubscribeMonoModLog();
+            InstallMonoModNativeShim();
+            PrepareNativeTempDir();
+            ProbeMemoryPermissions();
+            ForceLinuxDetourPlatform();
+            ProbeDetourPlatform();
+            FixDetourPageSize();
         }
         catch (Exception ex)
         {
@@ -203,6 +211,410 @@ public static class ModEntry
         catch (Exception ex)
         {
             BootstrapTrace.Log($"Codegen probe FAILED: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+
+    // Harmony's detour engine (MonoMod.Core, merged into 0Harmony) refuses to
+    // patch anything here with a bare NotImplementedException. Ask it directly
+    // what it thinks this machine is: architecture, OS and runtime kind. The
+    // answer says whether the arm64/Android/Mono combination is unsupported or
+    // simply mis-detected.
+
+    // MonoMod picks its detour backend from what the runtime says it is
+    // running on. If this reports Android rather than Linux, the newer
+    // MonoMod.Core has no matching system implementation and every patch
+    // dies with NotImplementedException - which is exactly the symptom.
+    private static void ProbeRuntimeIdentity()
+    {
+        try
+        {
+            var isAndroid = System.OperatingSystem.IsAndroid();
+            var isLinux = System.OperatingSystem.IsLinux();
+            BootstrapTrace.Log(
+                "Runtime identity: "
+                + $"OSDescription='{System.Runtime.InteropServices.RuntimeInformation.OSDescription}' "
+                + $"RID='{System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier}' "
+                + $"Framework='{System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription}' "
+                + $"Arch={System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture} "
+                + $"IsAndroid={isAndroid} IsLinux={isLinux}"
+            );
+        }
+        catch (Exception ex)
+        {
+            BootstrapTrace.Log($"Runtime identity probe failed: {ex.GetBaseException().Message}");
+        }
+    }
+
+
+    // THE fix for "no patch applies on device". MonoMod (inside 0Harmony)
+    // detects OS=Android, and its platform layer only implements Windows,
+    // Linux and macOS, so PlatformTriple.CreateCurrentSystem() throws
+    // NotImplementedException and every single patch fails.
+    //
+    // Android *is* Linux: same /proc, same mmap/mprotect, same ELF layout,
+    // and Mono already JITs here (verified by the codegen probe). So tell
+    // MonoMod it is on Linux before anything asks for the platform triple.
+    // Done by reflection because these fields are internal, and guarded so a
+    // future MonoMod that supports Android natively is left alone.
+
+    // Second half of the Android detour fix. Once MonoMod believes it is on
+    // Linux it P/Invokes glibc names bionic does not have - __errno_location
+    // above all - and dies with EntryPointNotFoundException before any patch
+    // lands. libmonomodshim.so exports those names and forwards to bionic;
+    // this resolver points MonoMod's "libc"/"libdl" imports at it. Other
+    // libraries keep their normal resolution.
+
+    // Pipe MonoMod's own diagnostics into our trace file. Its detour work is
+    // native and its exceptions surface as bare errno values ("Invalid
+    // argument"), so without this the failing operation is invisible.
+    private static void SubscribeMonoModLog()
+    {
+        try
+        {
+            var debugLog = HarmonyLib.AccessTools.TypeByName("MonoMod.Logs.DebugLog");
+            var handlerType = HarmonyLib.AccessTools.TypeByName("MonoMod.Logs.DebugLog+OnLogMessage");
+            var filterType = HarmonyLib.AccessTools.TypeByName("MonoMod.Logs.LogLevelFilter");
+            if (debugLog is null || handlerType is null || filterType is null)
+            {
+                BootstrapTrace.Log("MonoMod log: types not found");
+                return;
+            }
+
+            var sink = typeof(ModEntry).GetMethod(
+                nameof(OnMonoModLog),
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static
+            );
+            var handler = Delegate.CreateDelegate(handlerType, sink);
+            var subscribe = debugLog.GetMethod(
+                "Subscribe",
+                new[] { filterType, handlerType }
+            );
+            subscribe?.Invoke(null, new[] { Enum.ToObject(filterType, -1), handler });
+            BootstrapTrace.Log("MonoMod log: subscribed");
+        }
+        catch (Exception ex)
+        {
+            BootstrapTrace.Log($"MonoMod log subscribe failed: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private static void OnMonoModLog(string source, DateTime time, object level, string message)
+        => BootstrapTrace.Log($"[monomod/{source}] {message}");
+
+    private static void InstallMonoModNativeShim()
+    {
+        try
+        {
+            var harmonyAssembly = typeof(HarmonyLib.Harmony).Assembly;
+            var shim = IntPtr.Zero;
+
+            System.Runtime.InteropServices.NativeLibrary.SetDllImportResolver(
+                harmonyAssembly,
+                (name, assembly, searchPath) =>
+                {
+                    var wantsLibc =
+                        name is "libc" or "libc.so" or "libc.so.6"
+                        or "libdl" or "libdl.so" or "libdl.so.2";
+                    if (!wantsLibc)
+                        return IntPtr.Zero;
+
+                    if (shim == IntPtr.Zero)
+                    {
+                        foreach (var candidate in new[]
+                        {
+                            "/data/local/tmp/libmonomodshim.so",
+                            "libmonomodshim.so",
+                        })
+                        {
+                            if (System.Runtime.InteropServices.NativeLibrary.TryLoad(candidate, out var handle))
+                            {
+                                shim = handle;
+                                BootstrapTrace.Log($"MonoMod shim loaded from {candidate}");
+                                break;
+                            }
+                        }
+                    }
+
+                    return shim;
+                }
+            );
+
+            BootstrapTrace.Log("MonoMod shim resolver installed");
+        }
+        catch (Exception ex)
+        {
+            BootstrapTrace.Log($"MonoMod shim resolver failed: {ex.GetBaseException().Message}");
+        }
+    }
+
+
+
+
+    [System.Runtime.InteropServices.DllImport("libc.so", EntryPoint = "sysconf")]
+    private static extern long LibcSysconf(int name);
+
+    // glibc numbers _SC_PAGESIZE 30, bionic numbers it 39. MonoMod is compiled
+    // against the glibc value, so on Android it asks for the wrong limit, gets
+    // a nonsense page size back and rounds detour addresses to an unaligned
+    // boundary. mprotect then rejects the call with EINVAL and every patch
+    // fails. Correct the page size on the live objects before the first patch.
+    private static void FixDetourPageSize()
+    {
+        try
+        {
+            const int glibcPageSizeName = 30;
+            const int bionicPageSizeName = 39;
+            var reported = LibcSysconf(glibcPageSizeName);
+            var actual = (nint)LibcSysconf(bionicPageSizeName);
+            BootstrapTrace.Log($"Page size: MonoMod would read {reported}, real is {actual}");
+            if (actual <= 0 || reported == actual)
+                return;
+
+            var tripleType = HarmonyLib.AccessTools.TypeByName("MonoMod.Core.Platforms.PlatformTriple");
+            var triple = tripleType?.GetProperty("Current")?.GetValue(null);
+            var system = tripleType?.GetProperty("System")?.GetValue(triple);
+            if (system is null)
+            {
+                BootstrapTrace.Log("Page size: platform system not reachable");
+                return;
+            }
+
+            const System.Reflection.BindingFlags instanceFlags =
+                System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Public;
+
+            var fixedCount = 0;
+            var systemPage = system.GetType().GetField("PageSize", instanceFlags);
+            if (systemPage is not null)
+            {
+                systemPage.SetValue(system, actual);
+                fixedCount++;
+            }
+
+            var allocator = system.GetType().GetField("allocator", instanceFlags)?.GetValue(system);
+            for (var type = allocator?.GetType(); type is not null; type = type.BaseType)
+            {
+                var pageSize = type.GetField("pageSize", instanceFlags);
+                if (pageSize is null)
+                    continue;
+
+                pageSize.SetValue(allocator, actual);
+                type.GetField("pageSizeIsPow2", instanceFlags)?.SetValue(allocator, (actual & (actual - 1)) == 0);
+                type.GetField("pageBaseMask", instanceFlags)?.SetValue(allocator, ~(actual - 1));
+                fixedCount += 3;
+                break;
+            }
+
+            BootstrapTrace.Log($"Page size: corrected to {actual} ({fixedCount} field(s))");
+        }
+        catch (Exception ex)
+        {
+            BootstrapTrace.Log($"Page size fix failed: {ex.GetBaseException().Message}");
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("libc.so", EntryPoint = "setenv")]
+    private static extern int LibcSetEnv(string name, string value, int overwrite);
+
+    [System.Runtime.InteropServices.DllImport("libc.so", EntryPoint = "getenv")]
+    private static extern IntPtr LibcGetEnv(string name);
+
+    [System.Runtime.InteropServices.DllImport("libc.so", EntryPoint = "mkstemp", SetLastError = true)]
+    private static extern int LibcMkstemp(byte[] template);
+
+    [System.Runtime.InteropServices.DllImport("libc.so", EntryPoint = "close")]
+    private static extern int LibcClose(int fd);
+
+    // MonoMod builds detour trampolines through a temp file so it never needs a
+    // page that is writable and executable at the same time. Android has no
+    // /tmp, so the default template cannot be created and the detour fails with
+    // a bare errno. Point the native side at the app data directory first.
+    private static void PrepareNativeTempDir()
+    {
+        try
+        {
+            var current = LibcGetEnv("TMPDIR");
+            var currentText = current == IntPtr.Zero
+                ? "<unset>"
+                : System.Runtime.InteropServices.Marshal.PtrToStringAnsi(current);
+
+            var tempDir = System.IO.Path.Combine(Godot.OS.GetUserDataDir(), "mmtmp");
+            System.IO.Directory.CreateDirectory(tempDir);
+            LibcSetEnv("TMPDIR", tempDir, 1);
+            System.Environment.SetEnvironmentVariable("TMPDIR", tempDir);
+
+            var template = System.Text.Encoding.UTF8.GetBytes(tempDir + "/mmXXXXXX ");
+            var fd = LibcMkstemp(template);
+            var errno = fd < 0
+                ? System.Runtime.InteropServices.Marshal.GetLastWin32Error()
+                : 0;
+            if (fd >= 0)
+            {
+                LibcClose(fd);
+                var created = System.Text.Encoding.UTF8.GetString(template, 0, template.Length - 1);
+                try
+                {
+                    System.IO.File.Delete(created);
+                }
+                catch
+                {
+                    // The probe file is disposable; a failed delete is not worth reporting.
+                }
+            }
+
+            BootstrapTrace.Log(
+                $"Temp dir: was {currentText}, now {tempDir}, mkstemp={(fd >= 0 ? "ok" : "fail")}({errno})"
+            );
+        }
+        catch (Exception ex)
+        {
+            BootstrapTrace.Log($"Temp dir setup failed: {ex.GetBaseException().Message}");
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("libmonomodshim", EntryPoint = "mm_probe")]
+    private static extern int MmProbe(byte[] buffer, int length);
+
+    // Detours need writable-then-executable memory. Android is stricter than
+    // desktop Linux here, and MonoMod only surfaces the raw errno, so measure
+    // the three operations it depends on directly.
+    private static void ProbeMemoryPermissions()
+    {
+        try
+        {
+            var buffer = new byte[256];
+            var written = MmProbe(buffer, buffer.Length);
+            var text = System.Text.Encoding.ASCII.GetString(buffer, 0, Math.Max(0, Math.Min(written, buffer.Length)));
+            BootstrapTrace.Log($"Memory probe: {text}");
+        }
+        catch (Exception ex)
+        {
+            BootstrapTrace.Log($"Memory probe failed: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private static void ForceLinuxDetourPlatform()
+    {
+        try
+        {
+            var detection = HarmonyLib.AccessTools.TypeByName("MonoMod.Utils.PlatformDetection");
+            var osKind = HarmonyLib.AccessTools.TypeByName("MonoMod.Utils.OSKind");
+            if (detection is null || osKind is null)
+            {
+                BootstrapTrace.Log("Platform override: MonoMod detection types not found");
+                return;
+            }
+
+            var osProperty = HarmonyLib.AccessTools.Property(detection, "OS");
+            var detected = osProperty?.GetValue(null)?.ToString();
+            if (detected is null || !detected.Contains("Android", StringComparison.OrdinalIgnoreCase))
+            {
+                BootstrapTrace.Log($"Platform override: not needed (OS={detected})");
+                return;
+            }
+
+            var linux = Enum.Parse(osKind, "Linux");
+            var patchedFields = 0;
+            foreach (var field in detection.GetFields(
+                System.Reflection.BindingFlags.Static
+                | System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Public))
+            {
+                if (field.FieldType != osKind)
+                    continue;
+                field.SetValue(null, linux);
+                patchedFields++;
+            }
+
+            var after = osProperty.GetValue(null)?.ToString();
+            BootstrapTrace.Log(
+                $"Platform override: {detected} -> {after} ({patchedFields} field(s) rewritten)"
+            );
+        }
+        catch (Exception ex)
+        {
+            BootstrapTrace.Log($"Platform override failed: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private static void ProbeDetourPlatform()
+    {
+        try
+        {
+            var tripleType = HarmonyLib.AccessTools.TypeByName("MonoMod.Core.Platforms.PlatformTriple");
+            if (tripleType is null)
+            {
+                BootstrapTrace.Log("Detour probe: PlatformTriple type not found (old MonoMod?)");
+                ProbeLegacyDetourPlatform();
+                return;
+            }
+
+            var detection = HarmonyLib.AccessTools.TypeByName("MonoMod.Utils.PlatformDetection");
+            if (detection is not null)
+            {
+                string Detected(string name)
+                {
+                    try
+                    {
+                        return HarmonyLib.AccessTools.Property(detection, name)?.GetValue(null)?.ToString() ?? "<null>";
+                    }
+                    catch (Exception ex)
+                    {
+                        return $"<{ex.GetBaseException().GetType().Name}>";
+                    }
+                }
+
+                BootstrapTrace.Log(
+                    $"MonoMod detection: OS={Detected("OS")} Arch={Detected("Architecture")} Runtime={Detected("Runtime")}"
+                );
+            }
+
+            var current = HarmonyLib.AccessTools.Property(tripleType, "Current")?.GetValue(null);
+            if (current is null)
+            {
+                BootstrapTrace.Log("Detour probe: PlatformTriple.Current was null");
+                return;
+            }
+
+            string Read(string name)
+            {
+                try
+                {
+                    return HarmonyLib.AccessTools.Property(tripleType, name)?.GetValue(current)?.ToString()
+                        ?? "<null>";
+                }
+                catch (Exception ex)
+                {
+                    return $"<{ex.GetBaseException().GetType().Name}>";
+                }
+            }
+
+            BootstrapTrace.Log(
+                $"Detour probe: Architecture={Read("Architecture")} System={Read("System")} Runtime={Read("Runtime")}"
+            );
+        }
+        catch (Exception ex)
+        {
+            // The stack trace names the missing piece (system, architecture
+            // or runtime), which is the difference between "patch Harmony" and
+            // "give up on Harmony".
+            BootstrapTrace.Log($"Detour probe FAILED: {ex}");
+        }
+    }
+
+    private static void ProbeLegacyDetourPlatform()
+    {
+        try
+        {
+            var platformHelper = HarmonyLib.AccessTools.TypeByName("MonoMod.Utils.PlatformHelper");
+            var value = HarmonyLib.AccessTools.Property(platformHelper, "Current")?.GetValue(null);
+            BootstrapTrace.Log($"Detour probe (legacy): PlatformHelper.Current={value}");
+        }
+        catch (Exception ex)
+        {
+            BootstrapTrace.Log($"Detour probe (legacy) FAILED: {ex.GetBaseException().Message}");
         }
     }
 

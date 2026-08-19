@@ -52,6 +52,28 @@ internal static class LanMultiplayerPatcher
     private static bool _joinInProgress;
     private static bool _screenContextUpdateFailureLogged;
 
+
+    // Every LAN target goes through the same device guard, so one unpatchable
+    // signature disables that single hook instead of taking down the process.
+    private static void PatchGuarded(
+        Harmony harmony,
+        MethodBase target,
+        HarmonyMethod prefix = null,
+        HarmonyMethod postfix = null
+    )
+    {
+        if (target == null)
+            return;
+
+        if (PatchHelper.IsUnpatchableOnDevice(target, out var reason))
+        {
+            PatchHelper.Log($"LAN: skipped {target.Name} ({reason})");
+            return;
+        }
+
+        harmony.Patch(target, prefix: prefix, postfix: postfix);
+    }
+
     internal static void Apply(Harmony harmony)
     {
         try
@@ -132,7 +154,7 @@ internal static class LanMultiplayerPatcher
                 "_Ready",
                 BindingFlags.Public | BindingFlags.Instance
             );
-            harmony.Patch(
+            PatchGuarded(harmony, 
                 readyMethod,
                 postfix: new HarmonyMethod(
                     patcherType.GetMethod(
@@ -147,7 +169,7 @@ internal static class LanMultiplayerPatcher
                 "OnSubmenuOpened",
                 BindingFlags.Public | BindingFlags.Instance
             );
-            harmony.Patch(
+            PatchGuarded(harmony, 
                 openedMethod,
                 prefix: new HarmonyMethod(
                     patcherType.GetMethod(
@@ -162,7 +184,7 @@ internal static class LanMultiplayerPatcher
                 "OnSubmenuClosed",
                 BindingFlags.Public | BindingFlags.Instance
             );
-            harmony.Patch(
+            PatchGuarded(harmony, 
                 closedMethod,
                 postfix: new HarmonyMethod(
                     patcherType.GetMethod(
@@ -172,8 +194,15 @@ internal static class LanMultiplayerPatcher
                 )
             );
 
-            // Start the LAN beacon when hosting a game.
-            if (hostServiceType != null)
+            // Start the LAN beacon when hosting a game. Reading the method table
+            // of NetHostGameService aborts Mono on Android before any patch is
+            // applied, so the host side stays off there: joining a LAN game still
+            // works, only advertising one from the phone does not.
+            if (hostServiceType != null && OperatingSystem.IsAndroid())
+            {
+                PatchHelper.Log("LAN: host beacon patches skipped (Mono aborts reading NetHostGameService)");
+            }
+            else if (hostServiceType != null)
             {
                 var startHostMethod = hostServiceType.GetMethod(
                     "StartENetHost",
@@ -181,7 +210,7 @@ internal static class LanMultiplayerPatcher
                 );
                 if (startHostMethod != null)
                 {
-                    harmony.Patch(
+                    PatchGuarded(harmony, 
                         startHostMethod,
                         postfix: new HarmonyMethod(
                             patcherType.GetMethod(
@@ -199,7 +228,7 @@ internal static class LanMultiplayerPatcher
                 );
                 if (disconnectMethod != null)
                 {
-                    harmony.Patch(
+                    PatchGuarded(harmony, 
                         disconnectMethod,
                         postfix: new HarmonyMethod(
                             patcherType.GetMethod(
@@ -223,7 +252,7 @@ internal static class LanMultiplayerPatcher
                 );
                 if (getPlayerNameMethod != null)
                 {
-                    harmony.Patch(
+                    PatchGuarded(harmony, 
                         getPlayerNameMethod,
                         prefix: new HarmonyMethod(
                             patcherType.GetMethod(
