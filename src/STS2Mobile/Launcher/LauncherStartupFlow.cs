@@ -122,10 +122,12 @@ internal static class LauncherStartupFlow
         catch (TargetInvocationException ex)
         {
             var root = ex.InnerException ?? ex;
+            LauncherStartupDiagnostics.ReportStartupFailure(root);
             LauncherGameStartupRecovery.HandleFailure(gameNode, startupStatus, root);
         }
         catch (Exception ex)
         {
+            LauncherStartupDiagnostics.ReportStartupFailure(ex);
             LauncherGameStartupRecovery.HandleFailure(gameNode, startupStatus, ex);
         }
     }

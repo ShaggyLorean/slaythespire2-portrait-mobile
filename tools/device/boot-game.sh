@@ -12,13 +12,11 @@ WAIT="${STS2_WAIT:-25}"
 
 export MSYS_NO_PATHCONV=1
 "$ADB" -s "$SERIAL" shell am force-stop "$PKG"
-"$ADB" -s "$SERIAL" shell "su -c 'mkdir -p /data/data/$PKG/shared_prefs; cat > $PREFS <<XML
-<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\" ?>
-<map>
-    <boolean name=\"launch_game_on_next_start\" value=\"true\" />
-</map>
-XML
-chown \$(stat -c %u:%g /data/data/$PKG) $PREFS; chmod 660 $PREFS'"
+# The flag is set by a script that runs on the device: quoting an in-place edit
+# through adb + su mangled the XML and the flag silently never landed.
+"$ADB" -s "$SERIAL" push "$(cygpath -w "$(dirname "$0")/set-launch-flag.sh")" /data/local/tmp/set-launch-flag.sh >/dev/null
+"$ADB" -s "$SERIAL" shell "su -c 'sh /data/local/tmp/set-launch-flag.sh'"
+
 "$ADB" -s "$SERIAL" logcat -c
 "$ADB" -s "$SERIAL" shell am start -n "$PKG/com.game.sts2launcher.LauncherActivity" >/dev/null 2>&1
 sleep "$WAIT"

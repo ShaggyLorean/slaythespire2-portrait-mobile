@@ -172,3 +172,48 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Fix**: `SetVisible` parks the authored filter in node meta while hidden (`Ignore`) and restores it exactly on show; controls that were never hidden are never touched.
 - **Status**: fixed-pending-device; PC-visual PASS (merchant probe opens the inventory, full round clean)
 - **Fixed in**: 0.6.0-dev
+
+## BUG-016: Every Harmony patch failed on device with EINVAL
+
+- **Where**: game leg on device, startup patch orchestration.
+- **Repro**: launch the game on Android. `core/Platform compatibility` reports `criticalFailed=True` and the standalone launcher fallback appears instead of the game.
+- **Expected**: patches apply, the game boots.
+- **Actual**: every patch failed. First with `NotImplementedException` from `PlatformTriple.CreateCurrentSystem()`, then `EntryPointNotFoundException: __errno_location`, then `Win32Exception (22): Invalid argument` right after MonoMod logged `Detouring arm64 from ... to ...`.
+- **Root cause**: three separate Android gaps in MonoMod, which the game bundles inside `0Harmony.dll`.
+  1. MonoMod detects OS `Android` and implements only Windows, Linux and macOS, so the detour platform could not be built at all.
+  2. MonoMod imports the glibc-only `__errno_location`; bionic exports `__errno()`.
+  3. MonoMod reads the page size with `sysconf(_SC_PAGESIZE)` using the glibc constant `30`. Bionic numbers that limit `39`, so it received a nonsense page size, rounded the detour address to an unaligned boundary and `mprotect` rejected it with EINVAL. This was the last blocker and the reason the trace showed a detour being created and then instantly failing.
+- **Fix**: `src/STS2Mobile/ModEntry.cs` forces the detour platform to Linux, resolves libc imports through `native/monomodshim/monomodshim.c`, and corrects the page size on the live `LinuxSystem` and its allocator before the first patch (`FixDetourPageSize`).
+- **Status**: verified
+- **Fixed in**: 0.4.0
+
+## BUG-017: Mono aborts the process while patching nullable signatures
+
+- **Where**: game leg on device, `optional/LAN multiplayer` patch step.
+- **Repro**: with patches applying, boot the game. The process dies with SIGABRT; logcat shows `mono_class_from_mono_type_internal: implement me 0x00` and `Assertion: should not be reached at .../mono/metadata/class.c:2324`, followed by a FORTIFY mutex message from the dying process.
+- **Expected**: an unpatchable method is skipped, not fatal.
+- **Actual**: the whole game process aborted, and because the abort is native no try/catch could contain it.
+- **Root cause**: Mono on Android cannot build Harmony's copy of a method whose signature carries a nullable game struct (`NetHostGameService.StartENetHost` returns `NetErrorInfo?`), and it also aborts while reading that type's method table.
+- **Fix**: `PatchHelper.IsUnpatchableOnDevice` skips nullable signatures on Android for every patch, and `LanMultiplayerPatcher` leaves the host beacon patches alone there. Joining a LAN game still works; advertising one from the phone does not.
+- **Status**: verified
+- **Fixed in**: 0.4.0
+
+## BUG-018: No character art, no logo and no VFX on device
+
+- **Where**: game leg on device, every screen.
+- **Repro**: reach the main menu on device. The logo is missing, character select shows an empty frame instead of the splash art, and the main menu text stays visible over the submenu.
+- **Expected**: the same art the PC rig renders.
+- **Actual**: everything Spine-backed draws nothing. Logcat: `Cannot get class 'SpineSkeletonDataResource'`, then parse errors for every `.skel` and `.tres` that references it.
+- **Root cause**: the game draws characters, the logo and VFX through the Spine GDExtension. `res://addons/spine/spine_godot_extension.gdextension` declares `android.release.arm64`, but the Steam desktop build ships only the Windows, Linux and macOS binaries, so the Android library does not exist and the extension never registers its classes. The same applies to the FMOD extension, which is why the game has no audio on device.
+- **Fix**: `scripts/build-spine-android.ps1` builds `libspine_godot.android.template_release.arm64.so` from Esoteric Software's sources (spine-runtimes 4.2, matching the game's 4.2.43 skeleton data) and stages it into the APK's `arm64-v8a` libraries, where Godot resolves GDExtension libraries by file name. The binary is not committed: the Spine Runtimes License requires each user to hold their own Spine license.
+- **Status**: fixed-pending-device
+- **Fixed in**: 0.4.0
+
+## BUG-019: Game has no audio on device
+
+- **Where**: game leg on device.
+- **Repro**: play on device with the volume up.
+- **Expected**: music and sound effects.
+- **Actual**: silence.
+- **Root cause**: same shape as BUG-018. `res://addons/fmod/fmod.gdextension` declares `android.release.arm64`, but the desktop build carries no Android FMOD libraries, so the extension does not load. Unlike Spine, the FMOD runtime cannot be rebuilt from public sources: it needs the FMOD Engine SDK for Android under Firelight's licence.
+- **Status**: open
