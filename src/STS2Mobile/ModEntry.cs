@@ -129,6 +129,7 @@ public static class ModEntry
 
 
         InstallManagedExceptionHandlers();
+        Portrait.PortraitFrameBudget.ApplyEarly();
         NeutralizeSentryEarly();
         if (!TryBeginApply())
         {

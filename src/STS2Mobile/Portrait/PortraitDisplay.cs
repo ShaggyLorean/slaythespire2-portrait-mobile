@@ -27,6 +27,30 @@ internal static class PortraitDisplay
 
     internal static bool IsPortrait(Vector2 size) => size.Y > size.X;
 
+    private static bool? _canvasResolution;
+
+    private static bool RenderAtCanvasResolution()
+    {
+        if (_canvasResolution is { } cached)
+            return cached;
+
+        var mode = "viewport";
+        try
+        {
+            var path = System.IO.Path.Combine(OS.GetUserDataDir(), "sts2_render_mode");
+            if (System.IO.File.Exists(path))
+                mode = System.IO.File.ReadAllText(path).Trim().ToLowerInvariant();
+        }
+        catch
+        {
+            // Unreadable override keeps the default.
+        }
+
+        _canvasResolution = OperatingSystem.IsAndroid() && mode != "native";
+        PatchHelper.Log($"[Portrait] Render mode: {(_canvasResolution.Value ? "viewport (canvas-res)" : "native")}");
+        return _canvasResolution.Value;
+    }
+
     internal static bool Apply()
     {
         if (Engine.GetMainLoop() is not SceneTree tree)
@@ -61,7 +85,14 @@ internal static class PortraitDisplay
             Mathf.RoundToInt(canvasWidth * physicalSize.Y / physicalSize.X)
         );
 
-        window.ContentScaleMode = Window.ContentScaleModeEnum.CanvasItems;
+        // canvas_items renders at the panel's native pixel count; viewport
+        // mode renders at the canvas size and upscales, cutting GPU work by
+        // a third on this device. The phone runs hot and GPU-bound at native,
+        // so viewport is the Android default; user://sts2_render_mode with
+        // the word "native" switches back for comparison.
+        window.ContentScaleMode = RenderAtCanvasResolution()
+            ? Window.ContentScaleModeEnum.Viewport
+            : Window.ContentScaleModeEnum.CanvasItems;
         window.ContentScaleAspect = Window.ContentScaleAspectEnum.Expand;
         window.ContentScaleSize = target;
 

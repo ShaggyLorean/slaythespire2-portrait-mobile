@@ -17,6 +17,72 @@ using STS2Mobile.Patches;
 
 namespace STS2Mobile.Portrait;
 
+
+// Every layout system here used to answer "what is on screen right now?" by
+// walking the whole scene tree through the C# interop, several times per
+// guard tick. At ~3700 nodes each walk allocates thousands of interop arrays
+// and the ticks showed up as 130ms frame spikes on device: jank and heat.
+// The game already maintains the answer; ask its overlay stack once and cache
+// resolved controls until they leave the tree.
+internal static class PortraitSceneCache
+{
+    private static Type _stackType;
+    private static System.Reflection.PropertyInfo _stackInstance;
+    private static System.Reflection.MethodInfo _stackPeek;
+    private static readonly System.Collections.Generic.Dictionary<string, WeakReference<Control>> Controls = new();
+
+    internal static Control TopOverlay()
+    {
+        try
+        {
+            _stackType ??= AccessTools.TypeByName("MegaCrit.Sts2.Core.Nodes.Screens.Overlays.NOverlayStack");
+            if (_stackType is null)
+                return null;
+            _stackInstance ??= _stackType.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
+            _stackPeek ??= _stackType.GetMethod("Peek", BindingFlags.Public | BindingFlags.Instance);
+            var instance = _stackInstance?.GetValue(null);
+            if (instance is null)
+                return null;
+            return _stackPeek?.Invoke(instance, null) as Control;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // Cached lookups: the full-tree walk happens only when the cached node
+    // has died, which in practice is once per scene change. cacheKey scopes
+    // generic names ("Map", "Pause") to their owner so screens cannot steal
+    // each other's cache slots.
+    internal static Control Find(Node root, string name, string cacheKey = null)
+        => Resolve(cacheKey ?? name, () => PortraitNodes.FindControl(root, name));
+
+    internal static Control FindByType(Node root, string typeName, string cacheKey = null)
+        => Resolve(cacheKey ?? ("type:" + typeName), () => PortraitNodes.FindByType(root, typeName));
+
+    // The pause chip is named "PauseButton" on some screens and "Pause" on
+    // others; one scoped slot covers both spellings.
+    internal static Control Resolve2(Node bar)
+        => Resolve("topbar:pause", () => PortraitNodes.FindControl(bar, "PauseButton", "Pause"));
+
+    private static Control Resolve(string key, Func<Control> finder)
+    {
+        if (Controls.TryGetValue(key, out var slot)
+            && slot.TryGetTarget(out var cached)
+            && GodotObject.IsInstanceValid(cached)
+            && cached.IsInsideTree())
+            return cached;
+
+        var found = finder();
+        if (found is not null)
+            Controls[key] = new WeakReference<Control>(found);
+        else
+            Controls.Remove(key);
+        return found;
+    }
+}
+
 internal static class PortraitNodes
 {
     internal static Control FindControl(Node root, params string[] names)
@@ -865,7 +931,7 @@ internal static class PortraitCapstone
         if (anchor is null || !GodotObject.IsInstanceValid(anchor) || !anchor.IsInsideTree())
             return false;
 
-        var capstone = PortraitNodes.FindByType(anchor.GetTree().Root, "NCapstoneContainer");
+        var capstone = PortraitSceneCache.FindByType(anchor.GetTree().Root, "NCapstoneContainer");
         if (capstone is null)
             return false;
         foreach (var child in capstone.GetChildren())
@@ -1003,9 +1069,15 @@ internal static class PortraitCombat
         if (root is null)
             return;
 
+        // Same-state ticks are free: the expensive lookups only run when the
+        // eclipse state flips.
+        if (open == _lastEclipseState)
+            return;
+        _lastEclipseState = open;
+
         foreach (var name in CapstoneHiddenHud)
         {
-            if (PortraitNodes.FindControl(root, name) is not { } control)
+            if (PortraitSceneCache.Find(root, name) is not { } control)
                 continue;
 
             if (open && control.Visible)
@@ -1020,6 +1092,8 @@ internal static class PortraitCombat
             }
         }
     }
+
+    private static bool? _lastEclipseState;
 
     private static float HandBaselineY(Vector2 canvas)
         => Math.Min(
@@ -1083,12 +1157,12 @@ internal static class PortraitCombat
                     // device; this guard is the one heartbeat that reliably
                     // survives a whole run scene, so it re-drives the rewards
                     // pass and the on-demand region dump too.
-                    if (PortraitNodes.FindByType(hand.GetTree().Root, "NRewardsScreen")
-                        is { Visible: true } rewards)
+                    if (PortraitSceneCache.TopOverlay() is { Visible: true } topOverlay
+                        && topOverlay.GetType().Name == "NRewardsScreen")
                     {
                         try
                         {
-                            PortraitRewards.ApplyNow(rewards);
+                            PortraitRewards.ApplyNow(topOverlay);
                         }
                         catch (Exception ex)
                         {
@@ -1601,18 +1675,18 @@ internal static class PortraitTopBar
         var left = bar.GetNodeOrNull<Control>("LeftAlignedStuff");
         var right = bar.GetNodeOrNull<Control>("RightAlignedStuff");
 
-        var hp = PortraitNodes.FindControl(bar, "TopBarHp");
-        var gold = PortraitNodes.FindControl(bar, "TopBarGold");
-        var portrait = PortraitNodes.FindControl(bar, "TopBarPortrait");
-        var portraitTip = PortraitNodes.FindControl(bar, "TopBarPortraitTip");
-        var potions = PortraitNodes.FindControl(bar, "PotionContainer");
-        var room = PortraitNodes.FindControl(bar, "RoomIcon");
-        var floor = PortraitNodes.FindControl(bar, "FloorIcon");
-        var boss = PortraitNodes.FindControl(bar, "BossIcon");
-        var map = PortraitNodes.FindControl(bar, "Map");
-        var deck = PortraitNodes.FindControl(bar, "Deck");
-        var pause = PortraitNodes.FindControl(bar, "PauseButton", "Pause");
-        var timer = PortraitNodes.FindControl(bar, "TimerContainer");
+        var hp = PortraitSceneCache.Find(bar, "TopBarHp", "topbar:hp");
+        var gold = PortraitSceneCache.Find(bar, "TopBarGold", "topbar:gold");
+        var portrait = PortraitSceneCache.Find(bar, "TopBarPortrait", "topbar:portrait");
+        var portraitTip = PortraitSceneCache.Find(bar, "TopBarPortraitTip", "topbar:portraitTip");
+        var potions = PortraitSceneCache.Find(bar, "PotionContainer", "topbar:potions");
+        var room = PortraitSceneCache.Find(bar, "RoomIcon", "topbar:room");
+        var floor = PortraitSceneCache.Find(bar, "FloorIcon", "topbar:floor");
+        var boss = PortraitSceneCache.Find(bar, "BossIcon", "topbar:boss");
+        var map = PortraitSceneCache.Find(bar, "Map", "topbar:map");
+        var deck = PortraitSceneCache.Find(bar, "Deck", "topbar:deck");
+        var pause = PortraitSceneCache.Resolve2(bar);
+        var timer = PortraitSceneCache.Find(bar, "TimerContainer", "topbar:timer");
 
         if (portrait is not null)
             portrait.Visible = false;
@@ -1622,7 +1696,9 @@ internal static class PortraitTopBar
             timer.Visible = false;
 
         var parent = bar.GetParent();
-        var relics = parent is null ? null : PortraitNodes.FindControl(parent, "RelicInventory");
+        var relics = parent is null
+            ? null
+            : PortraitSceneCache.Find(parent, "RelicInventory", "topbar:relics");
         if (relics is not null)
         {
             relics.ZAsRelative = false;
@@ -1830,8 +1906,8 @@ internal static class PortraitTopBar
         // made the banner flicker, so the rewards check lives here, in the
         // scrim's single owner.
         if (visible
-            && PortraitNodes.FindByType(bar.GetTree().Root, "NRewardsScreen")
-                is { Visible: true })
+            && PortraitSceneCache.TopOverlay() is { Visible: true } topOverlay
+            && topOverlay.GetType().Name == "NRewardsScreen")
             visible = false;
 
         var host = bar.GetParent();
@@ -2287,8 +2363,8 @@ internal static class MapScreenReadyPatch
             // screen's pinned proceed arrow outlived it, floating over the
             // map. The map is authoritative that it is on top: neutralize the
             // arrow whenever a rewards screen is still visible underneath.
-            if (PortraitNodes.FindByType(__instance.GetTree().Root, "NRewardsScreen")
-                    is { Visible: true } rewards
+            if (PortraitSceneCache.TopOverlay() is { Visible: true } rewards
+                && rewards.GetType().Name == "NRewardsScreen"
                 && PortraitNodes.FindControl(rewards, "ProceedButton") is { } arrow)
             {
                 arrow.ZAsRelative = true;
