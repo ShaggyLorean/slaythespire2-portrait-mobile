@@ -91,6 +91,33 @@ the phone" (BUGS 016-020). The checks below verify that day's fixes; the older
    creatures animating in combat. Any missing art means the spine .so did not
    ship in the APK (`scripts/build-spine-android.ps1`).
 
+### Thermal round (BUG-029, 2026-08-20)
+
+Fixes stack: 60fps budget + viewport-resolution rendering + cached scene
+queries + ASTC textures. Verify in this order, phone UNPLUGGED (fast charging
+adds its own heat and polluted the first measurements):
+
+1. `[FrameBudget]` trace lines every 20s: fps should sit at 55-60 in combat,
+   `vram` far below the old ~500MB once the ASTC pack is in (expect <200MB).
+2. logcat during boot: zero "not supported by hardware, converting to RGBA8"
+   warnings with the ASTC pack (was hundreds).
+3. Visual pass on menu, character select, combat, map, loot: no texture
+   artifacts (ASTC 4x4 measured 56dB PSNR against the BC7 originals; any
+   visible banding or blockiness is a bug, likely a format edge case).
+4. 10 minutes of combat idle: battery temperature should plateau well below
+   the pre-fix run (was 37.8C and climbing while charging).
+5. Rebuild pack after game updates: `python tools/pck/transcode_textures.py
+   <steam pck> <out.pck>` then push and swap as below; the launcher re-applies
+   its own Android patch when the pck mtime is newer than the marker.
+
+Swap procedure (rollback keeps the original):
+- push to /data/local/tmp/sts2_astc.pck
+- su: cd files/game && mv SlayTheSpire2.pck SlayTheSpire2.pck.orig
+  && cp /data/local/tmp/sts2_astc.pck SlayTheSpire2.pck
+  && chown u0_a474:u0_a474 SlayTheSpire2.pck && chmod 600 SlayTheSpire2.pck
+  && rm -f .android_pck_patch_v26
+- rollback: mv SlayTheSpire2.pck.orig SlayTheSpire2.pck (marker delete again)
+
 ### Device round for 0.4.0 + 0.5.0 (older list, still to run)
 
 Run on the reference device, in this order. Every step lists what must be seen.
