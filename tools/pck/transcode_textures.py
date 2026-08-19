@@ -24,6 +24,8 @@ import tempfile
 import concurrent.futures as futures
 
 import texture2ddecoder
+from PIL import Image as PILImage
+import io as _io
 
 ASTCENC = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -76,24 +78,45 @@ def encode_astc(bgra, width, height, block, workdir):
         return handle.read()[ASTC_FILE_HEADER:]
 
 
+MIN_LOSSLESS_SIDE = 128
+
+
 def transcode_ctex(blob, block, workdir):
     if blob[:4] != b"GST2":
         return None, "not GST2"
     dataformat, = struct.unpack_from("<I", blob, 36)
     w16, h16 = struct.unpack_from("<HH", blob, 40)
     mips, fmt = struct.unpack_from("<II", blob, 44)
-    if dataformat != 0 or fmt not in GODOT_FORMATS:
+
+    if dataformat == 0 and fmt in GODOT_FORMATS:
+        name, block_bytes = GODOT_FORMATS[fmt]
+        blocks_w = (w16 + 3) // 4
+        blocks_h = (h16 + 3) // 4
+        base_size = blocks_w * blocks_h * block_bytes
+        payload = blob[52:]
+        if len(payload) < base_size:
+            return None, "short payload %d < %d" % (len(payload), base_size)
+        bgra = decode_to_rgba(fmt, w16, h16, payload[:base_size])
+    elif dataformat in (1, 2) and fmt in (4, 5):
+        # Lossless PNG/WebP payloads decompress to RGBA8 in VRAM at load
+        # time; they are the dominant memory class in this pack. Each mip
+        # blob is length-prefixed, and only the base level exists here.
+        # Float/SDF formats and small crisp icons stay untouched.
+        if min(w16, h16) < MIN_LOSSLESS_SIDE:
+            return None, "small %dx%d" % (w16, h16)
+        blob_len, = struct.unpack_from("<I", blob, 52)
+        image_bytes = blob[56:56 + blob_len]
+        name = "webp" if dataformat == 2 else "png"
+        try:
+            decoded = PILImage.open(_io.BytesIO(image_bytes)).convert("RGBA")
+        except Exception as ex:
+            return None, "decode failed %s" % ex
+        if decoded.size != (w16, h16):
+            return None, "decoded %s != header %dx%d" % (decoded.size, w16, h16)
+        bgra = decoded.tobytes("raw", "BGRA")
+    else:
         return None, "dataformat=%d fmt=%d" % (dataformat, fmt)
 
-    name, block_bytes = GODOT_FORMATS[fmt]
-    blocks_w = (w16 + 3) // 4
-    blocks_h = (h16 + 3) // 4
-    base_size = blocks_w * blocks_h * block_bytes
-    payload = blob[52:]
-    if len(payload) < base_size:
-        return None, "short payload %d < %d" % (len(payload), base_size)
-
-    bgra = decode_to_rgba(fmt, w16, h16, payload[:base_size])
     astc = encode_astc(bgra, w16, h16, block, workdir)
 
     expected = ((w16 + 3) // 4) * ((h16 + 3) // 4) * 16
@@ -134,10 +157,15 @@ def main():
             flags = struct.unpack("<I", f.read(4))[0]
             entries.append([path, off, size, md5, flags])
 
-    candidates = [
-        e for e in entries
-        if e[0].rstrip(b"\x00").endswith((b".bptc.ctex", b".s3tc.ctex"))
-    ]
+    def is_candidate(path):
+        path = path.rstrip(bytes([0]))
+        if not path.endswith(b".ctex"):
+            return False
+        if path.endswith((b".etc2.ctex", b".astc.ctex")):
+            return False
+        return True
+
+    candidates = [e for e in entries if is_candidate(e[0])]
     if limit:
         candidates = candidates[:limit]
     print("entries=%d transcoding=%d" % (count, len(candidates)))
