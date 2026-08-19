@@ -133,11 +133,28 @@ internal static class PortraitNodes
     internal static void AssertLoop(Node node, Action action)
     {
         var ticks = 0;
+        var reported = false;
         void Run()
         {
             if (!GodotObject.IsInstanceValid(node) || !node.IsInsideTree())
                 return;
-            action();
+            // One throwing tick must not kill the chain: these loops carry
+            // whole screens, and a transient error (a node freed mid-walk)
+            // used to silently end the layout for the rest of the scene.
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                if (!reported)
+                {
+                    reported = true;
+                    PatchHelper.Log(
+                        $"[Portrait] assert loop error on {node.Name}: {ex.GetBaseException().Message}"
+                    );
+                }
+            }
             ticks++;
             After(node, ticks < 14 ? 0.12 : 0.5, Run);
         }
@@ -827,10 +844,27 @@ internal static class PortraitCapstone
     // as always-open. Real screens appear in two distinct places: pause and
     // settings as children of the stack's "Submenus" node, deck view as a
     // direct child of the container itself.
+    // The loot screen lives outside the capstone container, but the fan's
+    // absolute Z drew leftover hand cards straight over it all the same.
+    // It is deliberately NOT part of IsOpen: the rewards layout pass skips
+    // itself while a capstone is open, and folding the rewards screen into
+    // IsOpen made that pass skip itself forever.
+    internal static bool EclipsesCombatHud(Node anchor)
+    {
+        if (anchor is null || !GodotObject.IsInstanceValid(anchor) || !anchor.IsInsideTree())
+            return false;
+
+        if (PortraitNodes.FindByType(anchor.GetTree().Root, "NRewardsScreen") is { Visible: true })
+            return true;
+
+        return IsOpen(anchor);
+    }
+
     internal static bool IsOpen(Node anchor)
     {
         if (anchor is null || !GodotObject.IsInstanceValid(anchor) || !anchor.IsInsideTree())
             return false;
+
         var capstone = PortraitNodes.FindByType(anchor.GetTree().Root, "NCapstoneContainer");
         if (capstone is null)
             return false;
@@ -947,11 +981,15 @@ internal static class PortraitCombat
     private static readonly string[] CapstoneHiddenHud =
     {
         "DrawPile", "DiscardPile", "EndTurnButton", "EnergyCounterContainer",
+        FrameName,
+        // The compact bar's gradient scrim reaches ~800 units deep with an
+        // absolute z of 390; it is what buried the loot banner in darkness.
+        "Sts2PortraitHudBackdrop",
     };
 
     private static void ApplyCapstoneHandVisibility(Node hand, Control holder)
     {
-        var open = PortraitCapstone.IsOpen(hand);
+        var open = PortraitCapstone.EclipsesCombatHud(hand);
 
         if (open && holder.Visible)
         {
@@ -1044,6 +1082,22 @@ internal static class PortraitCombat
                 if (holder is not null)
                 {
                     ApplyCapstoneHandVisibility(hand, holder);
+                    // The rewards screen's own assert loop has proven flaky on
+                    // device; this guard is the one heartbeat that reliably
+                    // survives a whole run scene, so it re-drives the rewards
+                    // pass and the on-demand region dump too.
+                    if (PortraitNodes.FindByType(hand.GetTree().Root, "NRewardsScreen")
+                        is { Visible: true } rewards)
+                    {
+                        try
+                        {
+                            PortraitRewards.ApplyNow(rewards);
+                        }
+                        catch (Exception ex)
+                        {
+                            PatchHelper.Log($"[Portrait] rewards from guard failed: {ex.GetBaseException().Message}");
+                        }
+                    }
                     // The combat intro tween slides the holder after _Ready,
                     // and it drifts on both axes: Y alone left the fan centred
                     // where the landscape scene wanted it, off to the left.
@@ -2606,6 +2660,10 @@ internal static class PortraitModding
         PortraitNodes.AssertLoop(screen, () => Apply(screen));
     }
 
+    // Entry point for the hand guard, which re-drives this pass because the
+    // screen's own loop has died silently on device more than once.
+    internal static void ApplyNow(Control screen) => Apply(screen);
+
     // Landscape puts the mod list and the detail panel side by side, which
     // pushes the detail half off a portrait canvas; stack them instead.
     private static void Apply(Control screen)
@@ -2848,6 +2906,10 @@ internal static class PortraitRewards
         PortraitNodes.AssertLoop(screen, () => Apply(screen));
     }
 
+    // Entry point for the hand guard, which re-drives this pass because the
+    // screen's own loop has died silently on device more than once.
+    internal static void ApplyNow(Control screen) => Apply(screen);
+
     // The loot panel is authored for a landscape center: a 526x640 plate in
     // the middle of a 2596-tall canvas reads as a postage stamp with dead
     // space above and below. Touch rules: the panel grows through FillScale
@@ -2863,10 +2925,17 @@ internal static class PortraitRewards
         // everything at its own layer; the Z-pinned proceed arrow punched
         // through it. Hand the arrow back to normal layering while one is
         // open and skip the layout pass.
-        if (PortraitCapstone.IsOpen(screen))
+        DumpRegionOnRequest(screen);
+        if (PortraitCapstone.IsOpen(screen) || !RewardsIsTopOverlay(screen))
         {
             if (PortraitNodes.FindControl(screen, "ProceedButton") is { } pinned)
+            {
+                // Relative alone is not enough: a relative 460 still wins
+                // inside the same canvas layer, and the card selection
+                // overlay lives in the same layer as the rewards screen.
                 pinned.ZAsRelative = true;
+                pinned.ZIndex = 0;
+            }
             return;
         }
         var safeTop = PortraitDisplay.SafeTop();
@@ -2902,11 +2971,11 @@ internal static class PortraitRewards
 
         if (PortraitNodes.FindControl(screen, "ProceedButton") is { Visible: true } proceed)
         {
+            // No scale from this layer: the press animation writes the
+            // control's own Scale, and the two writers fighting shrank the
+            // arrow under the finger and cancelled the press.
             var baseW = proceed.Size.X > 1f ? proceed.Size.X : 269f;
             var baseH = proceed.Size.Y > 1f ? proceed.Size.Y : 108f;
-            var scale = PortraitHudMetrics.FillScale(baseW, baseH, canvas.X * 0.38f, 190f, 1.7f);
-            proceed.PivotOffset = Vector2.Zero;
-            proceed.Scale = Vector2.One * scale;
             // Anchors under the reward rows themselves (the mask is the real
             // content edge); panel-height guesses drifted into the hand fan
             // on short buckets.
@@ -2915,10 +2984,104 @@ internal static class PortraitRewards
                 anchorBottom = mask.GlobalPosition.Y + mask.Size.Y * mask.GetGlobalTransform().Scale.Y;
             proceed.ZAsRelative = false;
             proceed.ZIndex = 460;
-            proceed.GlobalPosition = new Vector2(
-                canvas.X - PortraitHudMetrics.EdgeMargin - baseW * scale - 24f,
-                Math.Min(anchorBottom + 20f, bandBottom - baseH * scale)
+            var target = new Vector2(
+                canvas.X - PortraitHudMetrics.EdgeMargin - baseW - 24f,
+                Math.Min(anchorBottom + 36f, bandBottom - baseH)
             );
+            // Repositioning every assert tick cancelled presses mid-animation;
+            // only correct real drift.
+            if (proceed.GlobalPosition.DistanceTo(target) > 3f)
+                proceed.GlobalPosition = target;
+        }
+    }
+    // NOT /data/local/tmp: SELinux hides that directory from the .NET side
+    // on this device even though the Java boot path can read it, which made
+    // every managed file gate there silently dead.
+    private static string DumpTrigger
+        => System.IO.Path.Combine(Godot.OS.GetUserDataDir(), "sts2_dump");
+
+    // Field truth on demand: write "x,y,w,h" into the trigger file on the
+    // device and the next pass logs every visible control overlapping that
+    // region, top-down, with z and path. Answers "what is drawing here?"
+    // without another build-deploy-refight cycle.
+    private static void DumpRegionOnRequest(Control screen)
+    {
+        string text;
+        try
+        {
+            if (!System.IO.File.Exists(DumpTrigger))
+                return;
+
+            text = System.IO.File.ReadAllText(DumpTrigger).Trim();
+            System.IO.File.Delete(DumpTrigger);
+        }
+        catch
+        {
+            return;
+        }
+
+        var region = new Rect2(830f, 1500f, 350f, 500f);
+        var parts = text.Split(',');
+        if (parts.Length == 4
+            && float.TryParse(parts[0], out var x)
+            && float.TryParse(parts[1], out var y)
+            && float.TryParse(parts[2], out var w)
+            && float.TryParse(parts[3], out var h))
+            region = new Rect2(x, y, w, h);
+
+        if (screen.GetTree()?.Root is not { } root)
+            return;
+
+        PatchHelper.Log($"[Portrait] region dump {region.Position.X:F0},{region.Position.Y:F0} {region.Size.X:F0}x{region.Size.Y:F0}:");
+        var logged = 0;
+        void Walk(Node node)
+        {
+            if (logged >= 48)
+                return;
+            if (node is Control { Visible: true } control && control.IsInsideTree())
+            {
+                var rect = control.GetGlobalRect();
+                if (rect.Intersects(region))
+                {
+                    PatchHelper.Log(
+                        $"[Portrait]   {control.GetType().Name} '{control.Name}' z={control.ZIndex} rel={control.ZAsRelative} a={control.Modulate.A:F2}/{control.SelfModulate.A:F2} rect={rect.Position.X:F0},{rect.Position.Y:F0} {rect.Size.X:F0}x{rect.Size.Y:F0} path={control.GetPath()}"
+                    );
+                    logged++;
+                }
+            }
+            foreach (var child in node.GetChildren())
+                Walk(child);
+        }
+        Walk(root);
+        PatchHelper.Log($"[Portrait] region dump complete ({logged})");
+    }
+
+    // "Choose a Card" and its cousins are separate overlays pushed above the
+    // rewards screen on the game's own overlay stack, and the Z-pinned proceed
+    // arrow punched through them: two Skips at once. The stack itself is the
+    // source of truth for whether something covers this screen.
+    private static bool RewardsIsTopOverlay(Control screen)
+    {
+        try
+        {
+            var stackType = AccessTools.TypeByName(
+                "MegaCrit.Sts2.Core.Nodes.Screens.Overlays.NOverlayStack"
+            );
+            var instance = stackType
+                ?.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)
+                ?.GetValue(null);
+            if (instance is null)
+                return true;
+
+            var peek = stackType
+                .GetMethod("Peek", BindingFlags.Public | BindingFlags.Instance)
+                ?.Invoke(instance, null);
+            return peek is null || ReferenceEquals(peek, screen);
+        }
+        catch (Exception ex)
+        {
+            PatchHelper.Log($"[Portrait] overlay stack peek failed: {ex.GetBaseException().Message}");
+            return true;
         }
     }
 }
@@ -3087,6 +3250,10 @@ internal static class PortraitGameOver
         screen.SetMeta(LoopMeta, true);
         PortraitNodes.AssertLoop(screen, () => Apply(screen));
     }
+
+    // Entry point for the hand guard, which re-drives this pass because the
+    // screen's own loop has died silently on device more than once.
+    internal static void ApplyNow(Control screen) => Apply(screen);
 
     // Touch rules for the run-end buttons: lift them to the touch minimum
     // and hang them from the bottom of the band, stacked when both show.
