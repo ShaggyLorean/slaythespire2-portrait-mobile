@@ -229,3 +229,32 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Lesson**: never patch a `_Ready` (or any method) that calls protected or internal members of its own class hierarchy. Prefer a public method, a property getter, or a layout pass driven from the parent screen.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-021: Buttons ignored the first tap; holds and hover stuck after lifting
+
+- **Where**: every clickable in the game on device.
+- **Repro**: fresh boot, tap any button once. Nothing happens; the second tap on the same spot works. After any tap, the control keeps its hovered or pressed visuals; long-press bars could stick mid-fill.
+- **Expected**: Android touch semantics: first tap presses, lifting the finger clears all hover state.
+- **Root cause**: the game's clickable controls accept a press only while `IsFocused` (their hover flag) is true, and hover is updated exclusively by mouse motion. Godot's touch emulation delivers a button press with no preceding motion, so the first tap only relocated the invisible emulated cursor; after lifting, the cursor stayed parked on the control and nothing ever sent the exit event.
+- **Fix**: `PortraitTouchInput` bridges the pointer model at the window: on touch press it pushes a mouse motion to the touch point first (hover exists before the press arrives), on release it parks the pointer off-canvas one frame later (hover clears once the release lands). Drags and long presses ride the engine's own emulation between those two moments.
+- **Verified on device**: first tap opens menu rows, card drag plays cards, End Turn long-press fills and fires, nothing sticks after lifting.
+- **Status**: verified
+- **Fixed in**: 0.4.0
+
+## BUG-022: Pause menu unresponsive with every button visible
+
+- **Where**: pause menu in a run, on device only.
+- **Repro**: pause during combat. Six small rows appear (both Disconnect and Save and Quit); none respond to taps.
+- **Root cause**: an old portrait patch targeted `NPauseMenu._Ready` to raise button sizes. On device a patched method runs as a generated copy that cannot call the protected `ConnectSignals`, so `_Ready` died on its first line: no signal connections (dead buttons), no visibility rules (both quit variants shown), and `Initialize` then threw on null fields, which also kept the new layout postfix from running. Same mechanism as BUG-020.
+- **Fix**: the `_Ready` patch is deleted; the portrait pause layout runs from a postfix on the public `Initialize` and re-runs the game's own label autosizing after growing the rows.
+- **Status**: verified
+- **Fixed in**: 0.4.0
+
+## BUG-023: Hand fan pushed outer cards off both screen edges
+
+- **Where**: combat hand with 5+ cards.
+- **Root cause**: two authored-for-landscape assumptions. The fan's holder origin sits left of the portrait canvas centre, and the game's per-hand-size card offsets (up to x610) are holder-local, multiplied by the holder's live scale, so wide hands overshot both edges unevenly.
+- **Fix**: `PlaceHand` centres the holder origin on the canvas and records the holder's effective global scale; the `HandPosHelper.GetPosition` postfix scales card X by exactly the ratio this hand size needs, converted through that live scale. The hand guard now corrects X drift as well, because the combat intro tween slides the holder after `_Ready`.
+- **Verified**: rig at 7 cards (both edges inside, centred), device at 4-5 cards; a device check with 8+ cards is still pending.
+- **Status**: fixed-pending-device
+- **Fixed in**: 0.4.0
