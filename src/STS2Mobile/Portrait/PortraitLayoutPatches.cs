@@ -940,6 +940,15 @@ internal static class PortraitCombat
     // Fullscreen capstone screens (deck view, in-run settings) sit at plain
     // tree z, and the fan's absolute ZIndex would draw the cards over them.
     // Hide the holder while such a screen is open; restore only what we hid.
+    // Everything the portrait layer lifted to an absolute ZIndex ignores the
+    // scene order of fullscreen capstones, so each of these has to be hidden
+    // with the hand and restored afterwards; the piles, energy and End Turn
+    // used to draw straight over the settings screen.
+    private static readonly string[] CapstoneHiddenHud =
+    {
+        "DrawPile", "DiscardPile", "EndTurnButton", "EnergyCounterContainer",
+    };
+
     private static void ApplyCapstoneHandVisibility(Node hand, Control holder)
     {
         var open = PortraitCapstone.IsOpen(hand);
@@ -953,6 +962,27 @@ internal static class PortraitCombat
         {
             holder.RemoveMeta(HandHiddenMeta);
             holder.Visible = true;
+        }
+
+        var root = hand.GetTree()?.Root;
+        if (root is null)
+            return;
+
+        foreach (var name in CapstoneHiddenHud)
+        {
+            if (PortraitNodes.FindControl(root, name) is not { } control)
+                continue;
+
+            if (open && control.Visible)
+            {
+                control.Visible = false;
+                control.SetMeta(HandHiddenMeta, true);
+            }
+            else if (!open && control.HasMeta(HandHiddenMeta))
+            {
+                control.RemoveMeta(HandHiddenMeta);
+                control.Visible = true;
+            }
         }
     }
 
@@ -1241,10 +1271,13 @@ internal static class PortraitSettingsOverlay
     }
 
     private const string ContentOffsetMeta = "sts2_portrait_settings_offset";
+    private const float TabTopGap = 36f;
+    private const float SettingsContentScale = 1.14f;
 
-    // The settings tab row is authored at y=102, inside the cutout zone on
-    // devices with a deep inset. Shift the tab manager and the scroll body
-    // down below the safe top while the screen is open.
+    // The settings screen is authored for landscape: tabs jammed at the top
+    // edge, an 86-unit row pitch, the back tab half outside the canvas and a
+    // dead lower half. This lays the whole screen out for a phone while it is
+    // open and puts everything back on close.
     private static void OffsetContentBelowSafeTop(NSettingsScreen screen, bool open)
     {
         var tabs = PortraitNodes.FindControl(screen, "SettingsTabManager");
@@ -1254,9 +1287,12 @@ internal static class PortraitSettingsOverlay
 
         if (open)
         {
+            GrowRows(screen);
+            PlaceBackButton(screen);
+
             if (screen.HasMeta(ContentOffsetMeta))
                 return;
-            var wanted = PortraitDisplay.SafeTop() + 8f;
+            var wanted = PortraitDisplay.SafeTop() + TabTopGap;
             var delta = wanted - tabs.Position.Y;
             if (delta <= 0f)
                 return;
@@ -1275,6 +1311,37 @@ internal static class PortraitSettingsOverlay
             if (scroll is not null)
                 scroll.Position -= new Vector2(0f, delta);
         }
+
+        if (PortraitNodes.FindControl(screen, "Clipper") is { } clipper)
+            clipper.Scale = Vector2.One;
+    }
+
+    // Rows keep their landscape pitch of ~86 units, just under thumb size.
+    // Growing each row's CustomMinimumSize split the rows visually (their
+    // backgrounds and content anchor differently inside the row), so the
+    // whole content block is scaled instead: the Clipper is a plain Control,
+    // which keeps a scale, and every row grows with its internals intact.
+    private static void GrowRows(NSettingsScreen screen)
+    {
+        if (PortraitNodes.FindControl(screen, "Clipper") is not { } clipper)
+            return;
+
+        clipper.PivotOffset = new Vector2(clipper.Size.X * 0.5f, 0f);
+        clipper.Scale = Vector2.One * SettingsContentScale;
+    }
+
+    private static void PlaceBackButton(NSettingsScreen screen)
+    {
+        if (PortraitNodes.FindControl(screen, "BackButton") is not { } back)
+            return;
+
+        var canvas = PortraitDisplay.CanvasSize;
+        PortraitNodes.ClearAnchors(back);
+        var height = back.Size.Y > 1f ? back.Size.Y : 110f;
+        back.Position += new Vector2(
+            PortraitHudMetrics.EdgeMargin,
+            PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - height
+        ) - back.GlobalPosition;
     }
 }
 
