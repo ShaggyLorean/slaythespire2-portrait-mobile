@@ -982,9 +982,6 @@ internal static class PortraitCombat
     {
         "DrawPile", "DiscardPile", "EndTurnButton", "EnergyCounterContainer",
         FrameName,
-        // The compact bar's gradient scrim reaches ~800 units deep with an
-        // absolute z of 390; it is what buried the loot banner in darkness.
-        "Sts2PortraitHudBackdrop",
     };
 
     private static void ApplyCapstoneHandVisibility(Node hand, Control holder)
@@ -1828,6 +1825,15 @@ internal static class PortraitTopBar
     // below them.
     private static void SetBackdropVisible(NTopBar bar, Vector2 canvas, float safeTop, bool visible)
     {
+        // The scrim is ~800 units deep at absolute z 390 and buried the loot
+        // banner. Two writers toggling it (the reflow showing, a guard hiding)
+        // made the banner flicker, so the rewards check lives here, in the
+        // scrim's single owner.
+        if (visible
+            && PortraitNodes.FindByType(bar.GetTree().Root, "NRewardsScreen")
+                is { Visible: true })
+            visible = false;
+
         var host = bar.GetParent();
         if (host is null)
             return;
