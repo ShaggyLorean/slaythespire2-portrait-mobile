@@ -74,6 +74,42 @@ internal static class PortraitNodes
         control.AnchorBottom = 0f;
     }
 
+    // A thin rounded panel keeps peeking in from the left edge of every scene
+    // on device and nobody knows which node it is. Log every visible control
+    // that pokes into the left strip so the next trace names the culprit.
+    internal static void LogEdgePeekers(Node sceneRoot, Vector2 canvas)
+    {
+        var found = 0;
+        void Walk(Node node)
+        {
+            if (found >= 8)
+                return;
+
+            if (node is Control control && control.Visible && control.IsInsideTree())
+            {
+                var rect = control.GetGlobalRect();
+                if (rect.Position.X < 4f
+                    && rect.End.X > 2f
+                    && rect.End.X < 60f
+                    && rect.Size.Y > 80f
+                    && rect.Size.Y < canvas.Y * 0.6f)
+                {
+                    PatchHelper.Log(
+                        $"[Portrait] edge peek: {control.GetType().Name} '{control.Name}' rect={rect.Position.X:F0},{rect.Position.Y:F0} {rect.Size.X:F0}x{rect.Size.Y:F0} path={control.GetPath()}"
+                    );
+                    found++;
+                }
+            }
+
+            foreach (var child in node.GetChildren())
+                Walk(child);
+        }
+
+        Walk(sceneRoot);
+        if (found == 0)
+            PatchHelper.Log("[Portrait] edge peek: none found");
+    }
+
     internal static void After(Node node, double delay, Action action)
     {
         node.GetTree().CreateTimer(delay).Timeout += () =>
@@ -427,7 +463,14 @@ internal static class MainMenuReadyPatch
     }
 
     private static void Postfix(NMainMenu __instance)
-        => PortraitNodes.AssertLoop(__instance, () =>
+    {
+        PortraitNodes.After(__instance, 2.0, () =>
+        {
+            var canvas = PortraitDisplay.CanvasSize;
+            if (PortraitDisplay.IsPortrait(canvas))
+                PortraitNodes.LogEdgePeekers(__instance.GetTree().Root, canvas);
+        });
+        PortraitNodes.AssertLoop(__instance, () =>
         {
             PortraitMainMenu.Apply(__instance);
             // The run-scene watermark sweep rides the top-bar reflow, which
@@ -437,6 +480,7 @@ internal static class MainMenuReadyPatch
             if (PortraitDisplay.IsPortrait(canvas))
                 PortraitTopBar.HideBuildWatermark(__instance.GetTree().Root, canvas);
         });
+    }
 }
 
 
@@ -644,6 +688,98 @@ internal static class MainMenuReticlePatch
     }
 }
 
+
+// The pause menu keeps the authored desktop block: narrow rows in the middle
+// of the screen, well under thumb size on the phone. Rows are grown to touch
+// size, the block is centred, and the game's own label autosizing is re-run so
+// the text fills the bigger rows. The scene also defaults every button to
+// visible, so when the game's client/host rule does not run, both quit
+// variants show at once; singleplayer keeps Save and Quit.
+internal static class PortraitPauseMenu
+{
+    private const float ButtonWidth = 720f;
+    private const float ButtonHeight = 128f;
+    private const float RowSeparation = 26f;
+    private const float TitleGap = 56f;
+
+    internal static void Apply(Control menu)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+
+        var container = PortraitNodes.FindControl(menu, "ButtonContainer");
+        if (container is null)
+            return;
+
+        var saveAndQuit = PortraitNodes.FindControl(container, "SaveAndQuit");
+        var disconnect = PortraitNodes.FindControl(container, "Disconnect");
+        if (saveAndQuit is { Visible: true } && disconnect is { Visible: true })
+            disconnect.Visible = false;
+
+        if (container is BoxContainer box)
+            box.AddThemeConstantOverride("separation", (int)RowSeparation);
+
+        var rows = 0;
+        foreach (var child in container.GetChildren())
+        {
+            if (child is not Control { Visible: true } row)
+                continue;
+
+            row.CustomMinimumSize = new Vector2(ButtonWidth, ButtonHeight);
+            rows++;
+        }
+
+        if (rows == 0)
+            return;
+
+        var height = rows * ButtonHeight + (rows - 1) * RowSeparation;
+        PortraitNodes.ClearAnchors(container);
+        container.Size = new Vector2(ButtonWidth, height);
+        var top = (canvas.Y - height) * 0.5f;
+        container.Position += new Vector2((canvas.X - ButtonWidth) * 0.5f, top)
+            - container.GlobalPosition;
+
+        var title = PortraitNodes.FindControl(menu, "PausedText");
+        if (title is not null)
+        {
+            PortraitNodes.ClearAnchors(title);
+            var titleWidth = title.Size.X > 1f ? title.Size.X : 440f;
+            var titleHeight = title.Size.Y > 1f ? title.Size.Y : 64f;
+            title.Position += new Vector2(
+                canvas.X * 0.5f - titleWidth * 0.5f,
+                top - TitleGap - titleHeight
+            ) - title.GlobalPosition;
+        }
+
+        RefreshLabels(menu);
+    }
+
+    // Labels size their font to the rect they had when the text was set, so
+    // after the rows grow the game's own refresh has to run again for the
+    // text to fill the bigger buttons.
+    private static void RefreshLabels(Control menu)
+    {
+        try
+        {
+            AccessTools.Method(menu.GetType(), "RefreshLabels")?.Invoke(menu, null);
+        }
+        catch (Exception ex)
+        {
+            PatchHelper.Log($"[Portrait] Pause label refresh failed: {ex.GetBaseException().Message}");
+        }
+    }
+}
+
+// Initialize is the safe hook here: it is public, runs every time the pause
+// menu comes up, and its body touches nothing a patched copy cannot reach.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.PauseMenu.NPauseMenu), "Initialize")]
+internal static class PauseMenuPatch
+{
+    private static void Postfix(Control __instance)
+        => PortraitNodes.AssertLoop(__instance, () => PortraitPauseMenu.Apply(__instance));
+}
+
 [HarmonyPatch(typeof(NMainMenuBg), "OnWindowChange")]
 internal static class MainMenuWindowChangePatch
 {
@@ -706,7 +842,9 @@ internal static class PortraitCombat
     // Cover 1920x1080 combat art on the tall 1180x2596 portrait canvas,
     // with enough overscan to crop the authored sky and floor edge bands.
     private const float BackgroundScale = 2.62f;
-    private const float FanCompression = 1.00f;
+    // Cards keep roughly this much art on each side of their center at hand
+    // scale; the fan budget keeps the outermost card's edge inside the canvas.
+    private const float FanCardKeepIn = 165f;
     private const float HandBaseline = 0.925f;
 
     internal static void ScaleBackground(object instance)
@@ -749,7 +887,17 @@ internal static class PortraitCombat
         return Mathf.Lerp(1.08f, 0.76f, Mathf.Clamp((visibleCards - 5f) / 5f, 0f, 1f));
     }
 
-    internal static float CompressFan(float value) => value * FanCompression;
+    // The authored fan is symmetric around zero, so scaling X by the ratio of
+    // the available half-width to the widest authored X pulls the whole hand
+    // inside the screen while keeping the spacing even.
+    internal static float CompressFan(float x, float widestX, Vector2 canvas)
+    {
+        var budget = canvas.X * 0.5f - FanCardKeepIn;
+        if (widestX <= budget || widestX <= 0f)
+            return x;
+
+        return x * (budget / widestX);
+    }
 
     // Card art reaches roughly this far below the fan's baseline at hand
     // scale; the baseline must keep that plus the safe-area inset on screen.
@@ -941,10 +1089,19 @@ internal static class CombatBackgroundReadyPatch
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Helpers.HandPosHelper), "GetPosition")]
 internal static class HandFanPatch
 {
-    private static void Postfix(ref Vector2 __result)
+    // Widest authored X per hand size, straight from the game's position
+    // table. The postfix knows the hand size, so the fan is scaled exactly as
+    // far as this hand needs instead of by a blanket factor.
+    private static readonly float[] MaxFanX = { 0f, 100f, 180f, 240f, 340f, 460f, 534f, 565f, 600f, 610f };
+
+    private static void Postfix(int handSize, ref Vector2 __result)
     {
-        if (PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
-            __result.X = PortraitCombat.CompressFan(__result.X);
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+
+        var widest = MaxFanX[Math.Clamp(handSize - 1, 0, MaxFanX.Length - 1)];
+        __result.X = PortraitCombat.CompressFan(__result.X, widest, canvas);
     }
 }
 

@@ -16,6 +16,7 @@ internal static class PortraitPatches
         typeof(MainMenuReadyPatch),
         typeof(MainMenuWindowChangePatch),
         typeof(MainMenuReticlePatch),
+        typeof(PauseMenuPatch),
         typeof(CharacterSelectInitializePatch),
         typeof(CharacterSelectOpenedPatch),
         typeof(CombatBackgroundWindowPatch),
@@ -61,6 +62,7 @@ internal static class PortraitPatches
     internal static void Apply(Harmony harmony)
     {
         PortraitDisplay.Apply();
+        PortraitTouchInput.Install();
 
         // A patch class written but never listed here silently does nothing;
         // that mistake has happened more than once, so make it loud. The
