@@ -863,7 +863,7 @@ internal static class PortraitCombat
     private const float BackgroundScale = 2.62f;
     // Half a card of art in holder-local units, plus the margin the fan keeps
     // from the screen edges; both feed the fan budget.
-    private const float FanCardHalf = 130f;
+    private const float FanCardHalf = 148f;
     private const float FanEdgePad = 26f;
 
     // Effective global scale of the hand holder, recorded by PlaceHand. Card
