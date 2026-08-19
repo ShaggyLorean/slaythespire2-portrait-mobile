@@ -2282,6 +2282,32 @@ internal static class MapScreenReadyPatch
             var canvas = PortraitDisplay.CanvasSize;
             if (!PortraitDisplay.IsPortrait(canvas))
                 return;
+
+            // The combat hand dies with the combat room, and the rewards
+            // screen's pinned proceed arrow outlived it, floating over the
+            // map. The map is authoritative that it is on top: neutralize the
+            // arrow whenever a rewards screen is still visible underneath.
+            if (PortraitNodes.FindByType(__instance.GetTree().Root, "NRewardsScreen")
+                    is { Visible: true } rewards
+                && PortraitNodes.FindControl(rewards, "ProceedButton") is { } arrow)
+            {
+                arrow.ZAsRelative = true;
+                arrow.ZIndex = 0;
+            }
+
+            // The legend floated mid-screen over live map nodes; the lower
+            // band of the portrait map is empty, so it belongs there.
+            if (PortraitNodes.FindControl(__instance, "MapLegend") is { } legend)
+            {
+                var legendHeight = legend.Size.Y > 1f ? legend.Size.Y : 454f;
+                var legendTarget = new Vector2(
+                    canvas.X - (legend.Size.X > 1f ? legend.Size.X : 340f) - PortraitHudMetrics.EdgeMargin,
+                    PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - legendHeight - 130f
+                );
+                if (legend.GlobalPosition.DistanceTo(legendTarget) > 3f)
+                    legend.GlobalPosition = legendTarget;
+            }
+
             var safeBottom = PortraitDisplay.SafeBottom();
             var toolX = PortraitHudMetrics.EdgeMargin;
             foreach (var name in new[] { "DrawButton", "EraseButton", "ClearButton" })
