@@ -41,6 +41,7 @@ internal static class PlatformPatches
 
     internal static void Apply(Harmony harmony)
     {
+        PatchHelper.Log("[trace] platform patch: NGame.InitializePlatform");
         PatchHelper.Patch(
             harmony,
             typeof(NGame),
@@ -48,6 +49,7 @@ internal static class PlatformPatches
             prefix: PatchHelper.Method(typeof(PlatformPatches), nameof(InitializePlatformPrefix))
         );
 
+        PatchHelper.Log("[trace] platform patch: OsDebugInfo.LogSystemInfo");
         PatchHelper.Patch(
             harmony,
             typeof(OsDebugInfo),
@@ -55,6 +57,7 @@ internal static class PlatformPatches
             prefix: PatchHelper.Method(typeof(PlatformPatches), nameof(SkipPrefix))
         );
 
+        PatchHelper.Log("[trace] platform patch: PrefsSave.UploadData");
         PatchHelper.PatchGetter(
             harmony,
             typeof(PrefsSave),
@@ -64,6 +67,7 @@ internal static class PlatformPatches
 
         // NullPlatformUtilStrategy's constructor calls CreateDirectory(".") which
         // fails on Android because "." is not a valid absolute Godot path.
+        PatchHelper.Log("[trace] platform patch: GodotFileIo.CreateDirectory");
         PatchHelper.Patch(
             harmony,
             typeof(GodotFileIo),
@@ -71,24 +75,19 @@ internal static class PlatformPatches
             prefix: PatchHelper.Method(typeof(PlatformPatches), nameof(CreateDirectoryPrefix))
         );
 
+        PatchHelper.Log("[trace] platform patch: platformUtil");
         ApplyPlatformUtilPatches(harmony);
 
         // Skip Sentry crash reporting. Not useful for our mobile port and the
         // Sentry GDExtension is not bundled in the Android build.
-        PatchHelper.Patch(
-            harmony,
-            typeof(SentryService),
-            "Initialize",
-            prefix: PatchHelper.Method(typeof(PlatformPatches), nameof(SkipPrefix))
-        );
+        // Sentry is not shipped on Android (its native side aborts the process
+        // during boot), so the type may not resolve. Look it up by name and
+        // skip quietly when the assembly is absent; a static typeof() here
+        // would force the load and crash before this method even runs.
+        PatchHelper.Log("[trace] platform patch: Sentry (optional)");
+        PatchSentryIfPresent(harmony);
 
-        PatchHelper.Patch(
-            harmony,
-            typeof(SentryService),
-            "AfterGameInit",
-            prefix: PatchHelper.Method(typeof(PlatformPatches), nameof(SkipPrefix))
-        );
-
+        PatchHelper.Log("[trace] platform patch: SteamStatsManager.Initialize");
         PatchHelper.Patch(
             harmony,
             typeof(SteamStatsManager),
@@ -98,7 +97,46 @@ internal static class PlatformPatches
 
         // Android locale tags can include Unicode/private-use extensions that
         // some .NET runtimes fail to parse directly.
+        PatchHelper.Log("[trace] platform patch: locale");
         ApplyNullPlatformLanguagePatch(harmony);
+        PatchHelper.Log("[trace] platform patches complete");
+    }
+
+
+    private static void PatchSentryIfPresent(Harmony harmony)
+    {
+        try
+        {
+            // Device A/B switch: `adb shell touch /data/local/tmp/sts2_skip_sentry`
+            // keeps this process from ever resolving the Sentry type, which is
+            // what pulls Sentry.dll (and its native side) into the game leg.
+            if (System.IO.File.Exists("/data/local/tmp/sts2_skip_sentry"))
+            {
+                PatchHelper.Log("[trace] Sentry patches skipped by device flag");
+                return;
+            }
+
+            var sentryService = AccessTools.TypeByName("MegaCrit.Sts2.Core.Debug.SentryService");
+            if (sentryService is null)
+            {
+                PatchHelper.Log("Sentry service type absent; skipping Sentry patches");
+                return;
+            }
+
+            foreach (var name in new[] { "Initialize", "AfterGameInit" })
+            {
+                PatchHelper.Patch(
+                    harmony,
+                    sentryService,
+                    name,
+                    prefix: PatchHelper.Method(typeof(PlatformPatches), nameof(SkipPrefix))
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            PatchHelper.Log($"Sentry patches skipped: {ex.GetBaseException().Message}");
+        }
     }
 
     private static void ApplyNullPlatformLanguagePatch(Harmony harmony)

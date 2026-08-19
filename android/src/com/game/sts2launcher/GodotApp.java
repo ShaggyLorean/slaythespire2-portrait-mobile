@@ -477,9 +477,37 @@ public class GodotApp extends GodotActivity {
 		}
 
 		try {
+			// Dev iteration hook: with /data/local/tmp/sts2_keep_pushed_dll present,
+			// a hand-pushed STS2Mobile.dll survives the asset copy so the managed
+			// layer can be swapped over adb in seconds instead of rebuilding the
+			// whole APK. Never taken on a normal device (the file does not exist).
+			// Anything dropped into /data/local/tmp/sts2_override/ replaces the
+			// packaged assembly for this boot, so managed layers (ours, Harmony,
+			// anything else) can be swapped over adb in seconds instead of
+			// rebuilding the APK. The directory never exists on a real install.
+			File overrideDir = new File("/data/local/tmp/sts2_override");
+			Set<String> overridden = new HashSet<>();
+			if (overrideDir.isDirectory()) {
+				String[] names = overrideDir.list();
+				if (names != null) {
+					for (String name : names) {
+						try {
+							copyFile(new File(overrideDir, name), new File(destDir, name));
+							overridden.add(name);
+						} catch (IOException e) {
+							Log.w(TAG, "Dev override copy failed for " + name, e);
+						}
+					}
+				}
+				Log.w(TAG, "Dev override active for: " + overridden);
+			}
+
 			if (!packagedBclNames.isEmpty()) {
 				int count = 0;
 				for (String name : packagedBclNames) {
+					if (overridden.contains(name)) {
+						continue;
+					}
 					try (InputStream in = getAssets().open("dotnet_bcl/" + name);
 							OutputStream out = new FileOutputStream(new File(destDir, name))) {
 						byte[] buf = new byte[8192];

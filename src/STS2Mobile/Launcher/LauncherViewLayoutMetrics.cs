@@ -8,8 +8,8 @@ internal static class LauncherViewLayoutMetrics
     internal const float PrimaryColumnStretchRatio = 1f;
     internal const int LogTitleFontSize = 14;
     internal const int PrimaryColumnMinWidth = 200;
-    internal const int PrimaryColumnSeparation = 10;
-    internal const int RootColumnSeparation = 16;
+    internal const int PrimaryColumnSeparation = 14;
+    internal const int RootColumnSeparation = 28;
     internal const string ThemeFontColor = "font_color";
     internal const string ThemeSeparation = "separation";
 

@@ -98,8 +98,11 @@ $managedDependencies = @(
     "0Harmony.dll",
     "GodotSharp.dll",
     "sts2.dll",
-    "Steamworks.NET.dll",
-    "Sentry.dll"
+    "Steamworks.NET.dll"
+    # Sentry.dll is deliberately NOT shipped: loading it on Android spins up
+    # native crash-reporter threads that abort the process on a destroyed
+    # mutex a few hundred ms into boot (device log: FORTIFY pthread_mutex_lock).
+    # The patch layer skips Sentry when the assembly is absent.
 )
 
 foreach ($dependency in $managedDependencies) {
@@ -241,8 +244,8 @@ $resolvedKeystore = (Resolve-Path $KeystorePath).Path
 $targetAbis = Resolve-AndroidApkTargetAbis -Abi $Abi
 $gradleAbiList = $targetAbis -join ","
 
-Write-Host "Stopping existing Gradle daemons..."
-& $GradlePath "--stop" | Out-Null
+# The daemon is what makes repeat builds fast; killing it every run cost
+# roughly a minute per iteration. Keep it alive.
 
 Write-Host "Building Android APK..."
 & $GradlePath `

@@ -115,7 +115,20 @@ public static class ModEntry
     private static void ApplyInternal()
     {
         BootstrapTrace.Log("ApplyInternal entered");
+
+        // Device bisect switches (no rebuild needed once this ships):
+        //   adb shell touch /data/local/tmp/sts2_no_patches   -> boot the game
+        //     completely unpatched, to tell "our layer" from "the game/runtime"
+        //   adb shell touch /data/local/tmp/sts2_core_only    -> core group only
+        if (System.IO.File.Exists("/data/local/tmp/sts2_no_patches"))
+        {
+            BootstrapTrace.Log("ApplyInternal skipped by device flag sts2_no_patches");
+            PatchHelper.Log("[bisect] all startup patches skipped by device flag");
+            return;
+        }
+
         InstallManagedExceptionHandlers();
+        NeutralizeSentryEarly();
         if (!TryBeginApply())
         {
             BootstrapTrace.Log("ApplyInternal duplicate invocation skipped");
@@ -130,6 +143,66 @@ public static class ModEntry
         finally
         {
             CompleteApply();
+        }
+    }
+
+
+    // Sentry must never run on Android: its SDK init spins up native worker
+    // threads that abort the process ("FORTIFY: pthread_mutex_lock called on
+    // a destroyed mutex") within ~80 ms of NGame._EnterTree calling it.
+    //
+    // Harmony is useless here - device runs proved that merely patching
+    // SentryService.Initialize, or even transpiling the NGame._EnterTree call
+    // site, drags the Sentry assembly through the JIT and kills the process
+    // exactly the same way. So use the game's own guard instead:
+    // SentryService.Initialize() reads "sentry/config/dsn" from project
+    // settings and returns early when it is empty, long before SentrySdk.Init.
+    // Clearing that setting at bootstrap keeps every line of Sentry code cold.
+    private static void NeutralizeSentryEarly()
+    {
+        try
+        {
+            const string dsnSetting = "sentry/config/dsn";
+            var previous = Godot.ProjectSettings.GetSetting(dsnSetting, "").AsString();
+            Godot.ProjectSettings.SetSetting(dsnSetting, "");
+            BootstrapTrace.Log(
+                $"Sentry guard: dsn cleared (was {(string.IsNullOrEmpty(previous) ? "empty" : "set")})"
+            );
+            ProbeRuntimeCodegen();
+        }
+        catch (Exception ex)
+        {
+            BootstrapTrace.Log($"Sentry guard failed: {ex.GetBaseException().Message}");
+        }
+    }
+
+
+    // Harmony needs runtime codegen. If the app ships an AOT/interpreter-only
+    // runtime, every patch dies with NotImplementedException deep inside
+    // MonoMod, which is exactly what the device trace shows. This probe says
+    // in one line whether dynamic methods work at all here.
+    private static void ProbeRuntimeCodegen()
+    {
+        try
+        {
+            var dynamic = new System.Reflection.Emit.DynamicMethod(
+                "sts2_codegen_probe",
+                typeof(int),
+                Type.EmptyTypes
+            );
+            var il = dynamic.GetILGenerator();
+            il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4, 1729);
+            il.Emit(System.Reflection.Emit.OpCodes.Ret);
+            var result = (int)dynamic.Invoke(null, null);
+            BootstrapTrace.Log(
+                $"Codegen probe: dynamic method returned {result}; "
+                + $"IsDynamicCodeSupported={System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported}, "
+                + $"IsDynamicCodeCompiled={System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeCompiled}"
+            );
+        }
+        catch (Exception ex)
+        {
+            BootstrapTrace.Log($"Codegen probe FAILED: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

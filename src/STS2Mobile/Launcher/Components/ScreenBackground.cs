@@ -19,7 +19,7 @@ internal sealed class ScreenBackground : Control
         var height = Math.Max(1f, Size.Y);
         var baseColor = new ColorRect
         {
-            Color = new Color("07111f"),
+            Color = new Color("181b21"),
             MouseFilter = MouseFilterEnum.Ignore,
             Position = Vector2.Zero,
             Size = new Vector2(width, height),
@@ -34,11 +34,11 @@ internal sealed class ScreenBackground : Control
         var glowCenter = new Vector2(width * 0.68f, height * 0.69f);
         AddPolygon(
             Circle(glowCenter, width * 0.56f, 40),
-            new Color(0.31f, 0.12f, 0.14f, 0.10f)
+            new Color(0.70f, 0.29f, 0.26f, 0.12f)
         );
         AddPolygon(
             Circle(glowCenter, width * 0.38f, 40),
-            new Color(0.85f, 0.43f, 0.12f, 0.055f)
+            new Color(0.94f, 0.72f, 0.25f, 0.09f)
         );
 
         AddPolygon(
@@ -56,7 +56,7 @@ internal sealed class ScreenBackground : Control
                 new(width, height),
                 new(0f, height),
             },
-            new Color(0.035f, 0.058f, 0.085f, 0.92f)
+            new Color(0.129f, 0.141f, 0.168f, 1f)
         );
 
         AddPolygon(
@@ -73,7 +73,7 @@ internal sealed class ScreenBackground : Control
                 new(width, height),
                 new(0f, height),
             },
-            new Color(0.018f, 0.027f, 0.042f, 0.98f)
+            new Color(0.106f, 0.118f, 0.141f, 1f)
         );
 
         // A restrained Spire silhouette gives the empty lower half a focal
@@ -92,8 +92,8 @@ internal sealed class ScreenBackground : Control
             new Vector2(width * 0.80f, height * 0.70f),
             new Vector2(width * 0.80f, height),
         };
-        AddPolygon(tower, new Color(0.012f, 0.018f, 0.028f, 1f));
-        AddLine(new[] { tower[5], tower[8] }, new Color(LauncherComponentTheme.Gold, 0.28f), 2f);
+        AddPolygon(tower, new Color(0.078f, 0.086f, 0.106f, 1f));
+        AddLine(new[] { tower[5], tower[8] }, new Color(LauncherComponentTheme.Gold, 0.55f), 2f);
 
         foreach (var marker in new[]
         {
@@ -111,11 +111,11 @@ internal sealed class ScreenBackground : Control
                     Math.Max(2.5f, width * 0.004f),
                     12
                 ),
-                new Color(LauncherComponentTheme.SpireCyan, 0.52f)
+                new Color(LauncherComponentTheme.SpireCyan, 0.75f)
             );
         }
 
-        var mist = new Color(0.42f, 0.62f, 0.67f, 0.10f);
+        var mist = new Color(0.58f, 0.68f, 0.78f, 0.16f);
         AddLine(
             new[]
             {

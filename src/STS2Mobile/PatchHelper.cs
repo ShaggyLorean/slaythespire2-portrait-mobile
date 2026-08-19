@@ -79,6 +79,8 @@ internal static class PatchHelper
         LogEmitted?.Invoke(msg);
     }
 
+    private static bool _loggedFirstPatchFailureDetail;
+
     private static void PatchSafely(string label, Func<bool> patch)
     {
         try
@@ -89,6 +91,13 @@ internal static class PatchHelper
         catch (Exception ex)
         {
             Log($"FAILED {label}: {ex.Message}");
+            if (!_loggedFirstPatchFailureDetail)
+            {
+                // One full stack trace is worth a hundred one-line failures:
+                // it names the layer that cannot patch on this platform.
+                _loggedFirstPatchFailureDetail = true;
+                Log($"FIRST FAILURE DETAIL: {ex}");
+            }
         }
     }
 

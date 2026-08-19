@@ -4,8 +4,8 @@ namespace STS2Mobile.Launcher.Components;
 
 internal static class LauncherComponentTheme
 {
-    internal const int ButtonDefaultFontSize = 16;
-    internal const int ButtonDefaultHeight = 56;
+    internal const int ButtonDefaultFontSize = 19;
+    internal const int ButtonDefaultHeight = 68;
     internal const int ButtonRadius = 0;
     internal const int DialogButtonFontSize = 14;
     internal const int DialogButtonHeight = 44;
@@ -17,8 +17,8 @@ internal static class LauncherComponentTheme
     internal const int DialogPanelMargin = 24;
     internal const int DialogPanelRadius = 0;
     internal const int LineEditFontSize = 14;
-    internal const int LineEditHeight = 56;
-    internal const int LogFontSize = 11;
+    internal const int LineEditHeight = 64;
+    internal const int LogFontSize = 12;
     internal const int LogHeight = 56;
     internal const int LogMarginHorizontal = 8;
     internal const int LogMarginVertical = 4;
@@ -38,27 +38,27 @@ internal static class LauncherComponentTheme
     internal const string StatePressed = "pressed";
     internal const string ThemeSeparation = "separation";
 
-    internal static readonly Color ButtonDisabled = new("20242b");
-    internal static readonly Color ButtonHover = new("16242f");
-    internal static readonly Color ButtonNormal = new("101c25");
-    internal static readonly Color ButtonPressed = new("6c2228");
+    internal static readonly Color ButtonDisabled = new("2b2f38");
+    internal static readonly Color ButtonHover = new("343a45");
+    internal static readonly Color ButtonNormal = new("242932");
+    internal static readonly Color ButtonPressed = new("8f3138");
     internal static readonly Color DialogOverlay = new(0, 0, 0, 0.6f);
-    internal static readonly Color DialogPanelBackground = new("111a28");
-    internal static readonly Color LogBackground = new("070b12");
-    internal static readonly Color LogText = new("b8b0a1");
-    internal static readonly Color PanelBackground = new("0b131a");
-    internal static readonly Color ScreenBackground = new("0b131a");
-    internal static readonly Color Gold = new("e4b85a");
-    internal static readonly Color GoldDim = new("806632");
-    internal static readonly Color Ivory = new("efe6d2");
-    internal static readonly Color MutedIvory = new("b9ae9b");
-    internal static readonly Color SpireCyan = new("55c7d7");
-    internal static readonly Color SpireCrimson = new("8e2f33");
-    internal static readonly Color Parchment = new("d9c28d");
-    internal static readonly Color ParchmentShade = new("b49a66");
+    internal static readonly Color DialogPanelBackground = new("242932");
+    internal static readonly Color LogBackground = new("1b1f26");
+    internal static readonly Color LogText = new("9aa3b0");
+    internal static readonly Color PanelBackground = new("181b21");
+    internal static readonly Color ScreenBackground = new("181b21");
+    internal static readonly Color Gold = new("f0b73f");
+    internal static readonly Color GoldDim = new("6d5a30");
+    internal static readonly Color Ivory = new("f4f2ee");
+    internal static readonly Color MutedIvory = new("a7aeba");
+    internal static readonly Color SpireCyan = new("54c8d8");
+    internal static readonly Color SpireCrimson = new("b23b41");
+    internal static readonly Color Parchment = new("e8d7a8");
+    internal static readonly Color ParchmentShade = new("c2ad7c");
     internal static readonly Color ParchmentInk = new("1b1207");
-    internal static readonly Color InkRule = new("05090d");
-    internal static readonly Color SlabRule = new("2e4150");
+    internal static readonly Color InkRule = new("11141a");
+    internal static readonly Color SlabRule = new("39404c");
 
     internal static readonly Font DisplayFont = CreateSystemFont(
         "NotoSerif-Bold",
