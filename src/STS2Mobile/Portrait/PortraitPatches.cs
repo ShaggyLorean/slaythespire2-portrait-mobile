@@ -16,7 +16,7 @@ internal static class PortraitPatches
         typeof(MainMenuReadyPatch),
         typeof(MainMenuWindowChangePatch),
         typeof(MainMenuReticlePatch),
-        typeof(CharacterSelectReadyPatch),
+        typeof(CharacterSelectInitializePatch),
         typeof(CharacterSelectOpenedPatch),
         typeof(CombatBackgroundWindowPatch),
         typeof(CombatBackgroundReadyPatch),

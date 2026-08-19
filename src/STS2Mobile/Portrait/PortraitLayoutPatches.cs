@@ -209,6 +209,12 @@ internal static class PortraitMainMenu
     private const float MenuScaleMax = 3.2f;
     private const float MenuRowSeparation = 10f;
 
+    // Rows are resized in place, so the authored height has to be remembered:
+    // reading Size again after a pass would compound the growth every time the
+    // layout is re-applied.
+    private static readonly StringName AuthoredSizeMeta = "sts2portrait_authored_size";
+    private static readonly StringName AuthoredFontMeta = "sts2portrait_authored_font";
+
     // Where the logo stops being art and the screen becomes free space. The
     // button block is centred in what is left, so it neither collides with the
     // logo nor leaves the bottom third of the screen visibly empty.
@@ -261,6 +267,74 @@ internal static class PortraitMainMenu
         logo.Modulate = new Color(logo.Modulate.R, logo.Modulate.G, logo.Modulate.B, 1f);
     }
 
+    // The button tweens its label's scale on hover and back to one on release,
+    // so anything written to that property is wiped the first time a finger
+    // touches the row. Growing the font instead survives, and the game's own
+    // 1.05 hover pop keeps working on top of it.
+    private static void GrowFont(Label label, float scale)
+    {
+        const string fontSizeConstant = "font_size";
+        var authored = label.GetMeta(AuthoredFontMeta, Variant.From(0)).AsInt32();
+        if (authored <= 0)
+        {
+            authored = label.GetThemeFontSize(fontSizeConstant);
+            if (authored <= 0)
+                return;
+
+            label.SetMeta(AuthoredFontMeta, authored);
+        }
+
+        var target = Mathf.RoundToInt(authored * scale);
+        if (label.HasThemeFontSizeOverride(fontSizeConstant)
+            && label.GetThemeFontSize(fontSizeConstant) == target)
+            return;
+
+        label.AddThemeFontSizeOverride(fontSizeConstant, target);
+    }
+
+    private static void SetIfChanged(Control control, Vector2 size)
+    {
+        if (control.CustomMinimumSize.DistanceTo(size) <= 0.5f)
+            return;
+
+        control.CustomMinimumSize = size;
+    }
+
+    private static Vector2 AuthoredSize(Control row)
+    {
+        var authored = row.GetMeta(AuthoredSizeMeta, Variant.From(Vector2.Zero)).AsVector2();
+        if (authored.Y > 1f)
+            return authored;
+
+        authored = row.Size.Y > 1f ? row.Size : new Vector2(200f, MenuRowFallback);
+        row.SetMeta(AuthoredSizeMeta, authored);
+        return authored;
+    }
+
+    // Rows are measured from the first visible entry rather than assumed, so a
+    // future menu item with a different height still gets a thumb-sized row.
+    // The measurement uses the remembered authored height: reading the live
+    // size would shrink the scale to 1 on the second pass, because the row has
+    // already been grown by the first.
+    private static float MenuScale(Control buttons)
+    {
+        var row = MenuRowFallback;
+        foreach (var child in buttons.GetChildren())
+        {
+            if (child is not Control { Visible: true } control)
+                continue;
+
+            var authored = AuthoredSize(control);
+            if (authored.Y <= 1f)
+                continue;
+
+            row = authored.Y;
+            break;
+        }
+
+        return Mathf.Clamp(MenuRowTarget / row, MenuScaleMin, MenuScaleMax);
+    }
+
     private static void ApplyButtons(NMainMenu menu, Vector2 canvas, Vector2 center)
     {
         var buttons = menu.GetNodeOrNull<Control>("MainMenuTextButtons")
@@ -268,52 +342,79 @@ internal static class PortraitMainMenu
         if (buttons is null)
             return;
 
-        if (buttons is BoxContainer box)
-            box.AddThemeConstantOverride("separation", (int)MenuRowSeparation);
-
-        PortraitNodes.ClearAnchors(buttons);
         var scale = MenuScale(buttons);
         LastMenuScale = scale;
-        var width = buttons.Size.X > 1f ? buttons.Size.X : 300f;
 
-        // Pivot stays at the top-left corner so position and visible top are
-        // the same number. Scaling around the centre made the placement depend
-        // on a container height the layout keeps changing underneath us.
+        if (buttons is BoxContainer box)
+            box.AddThemeConstantOverride("separation", (int)(MenuRowSeparation * scale));
+
+        // Grow the rows themselves instead of scaling the container. A scaled
+        // container still reports its authored size, and the game hit-tests
+        // buttons against that rect, so a visually large menu was only
+        // clickable in a small patch at its top-left corner.
+        var rowWidth = 0f;
+        var rowTotal = 0f;
+        var rows = 0;
+        foreach (var child in buttons.GetChildren())
+        {
+            if (child is not Control { Visible: true } row)
+                continue;
+
+            var authored = AuthoredSize(row);
+            // Re-applied every frame by the layout guard: assigning the same
+            // values again re-sorts the container, which makes the button lose
+            // the press it was in the middle of. Only write real changes.
+            SetIfChanged(row, authored * scale);
+            rowWidth = Mathf.Max(rowWidth, authored.X * scale);
+            rowTotal += authored.Y * scale;
+            rows++;
+
+            if (row.GetChildCount() > 0 && row.GetChild(0) is Label label)
+                GrowFont(label, scale);
+        }
+
+        PortraitNodes.ClearAnchors(buttons);
         buttons.PivotOffset = Vector2.Zero;
-        buttons.Scale = Vector2.One * scale;
+        buttons.Scale = Vector2.One;
+        var blockHeight = rows > 0
+            ? rowTotal + MenuRowSeparation * scale * (rows - 1)
+            : buttons.Size.Y;
+        var blockWidth = rowWidth > 1f ? rowWidth : buttons.Size.X;
+        SetIfChanged(buttons, new Vector2(blockWidth, blockHeight));
 
-        // The container keeps a fixed height and centres its visible rows in
-        // it, so the block is placed by that full height; measuring only the
-        // visible rows put the menu a third of a screen too low.
-        var scaledHeight = (buttons.Size.Y > 1f ? buttons.Size.Y : 450f) * scale;
         var bandTop = canvas.Y * LogoBandBottomRatio;
         var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom());
-        var free = Mathf.Max(0f, bandBottom - bandTop - scaledHeight);
+        var free = Mathf.Max(0f, bandBottom - bandTop - blockHeight);
         var top = bandTop + free * MenuBlockBandBias;
 
         // Position is parent relative and this container does not sit at the
         // scene origin, so drive the global corner instead of assuming it.
-        var target = new Vector2(center.X - width * scale * 0.5f, top);
-        buttons.Position += target - buttons.GlobalPosition;
+        var target = new Vector2(center.X - blockWidth * 0.5f, top);
+        if (buttons.GlobalPosition.DistanceTo(target) > 0.5f)
+        {
+            buttons.Position += target - buttons.GlobalPosition;
+            LogRowGeometry(buttons, scale);
+        }
     }
 
-    // Rows are measured from the first visible entry rather than assumed, so a
-    // future menu item with a different height still gets a thumb-sized row.
-    private static float MenuScale(Control buttons)
+    // Layout maths for this menu has been wrong twice in ways a screenshot
+    // cannot distinguish, so the applied geometry is reported once per pass.
+    private static void LogRowGeometry(Control buttons, float scale)
     {
-        var row = MenuRowFallback;
         foreach (var child in buttons.GetChildren())
         {
-            if (child is Control { Visible: true } control && control.Size.Y > 1f)
-            {
-                row = control.Size.Y;
-                break;
-            }
+            if (child is not Control { Visible: true } row)
+                continue;
+
+            var label = row.GetChildCount() > 0 ? row.GetChild(0) as Control : null;
+            PatchHelper.Log(
+                $"[Portrait] menu row {row.Name}: scale={scale:F2} rect={row.GlobalPosition.X:F0},{row.GlobalPosition.Y:F0} {row.Size.X:F0}x{row.Size.Y:F0}"
+                + (label is null
+                    ? " label=none"
+                    : $" label={label.GlobalPosition.X:F0},{label.GlobalPosition.Y:F0} {label.Size.X:F0}x{label.Size.Y:F0} s={label.Scale.X:F2}")
+            );
         }
-
-        return Mathf.Clamp(MenuRowTarget / row, MenuScaleMin, MenuScaleMax);
     }
-
 }
 
 [HarmonyPatch(typeof(NMainMenu), "_Ready")]
@@ -347,10 +448,20 @@ internal static class PortraitCharacterSelect
 {
     private const float ArtWidth = 2560f;
     private const float ArtHeight = 1200f;
-    private const float ArtCoverRatio = 0.74f;
-    private const float ArtMaxScale = 2.2f;
-    private const float InfoPanelBottomGap = 40f;
-    private const float RowGap = 28f;
+
+    // How much of the screen the character art takes. Enough to read as the
+    // subject of the screen, not so much that the head is cropped away.
+    private const float ArtCoverRatio = 0.70f;
+
+    // The Spine character is drawn near the top of its authored frame, so a
+    // frame pinned at y=0 clips the helmet. Push the frame down by the cutout
+    // band and let it overshoot the bottom instead.
+    private const float ArtTopOffset = 150f;
+    private const float ArtMaxScale = 1.8f;
+
+    private const float InfoPanelBottomGap = 48f;
+    private const float ArtToRowGap = 70f;
+    private const float RowToNavGap = 44f;
     private const float CharacterRowScale = 1.3f;
     private const float NavButtonWidth = 200f;
     private const float NavButtonHeight = 110f;
@@ -362,14 +473,15 @@ internal static class PortraitCharacterSelect
             return;
 
         var artBottom = ApplyArt(screen, canvas);
-        var rowBottom = ApplyCharacterRow(screen, canvas);
+        var rowBottom = ApplyCharacterRow(screen, canvas, artBottom);
         ApplyNavButtons(screen, canvas, rowBottom);
         ApplyInfoPanel(screen, canvas, artBottom);
     }
 
     // The art node is authored for a 2560x1200 landscape frame, so in portrait
-    // it only ever covered a middle strip. Scaling it to the canvas width and
-    // pinning it to the top removes the band the menu was showing through.
+    // it only ever covered a middle strip and the main menu showed through
+    // above it, logo included. Pin it to the top and let it own the upper
+    // two thirds.
     private static float ApplyArt(Control screen, Vector2 canvas)
     {
         var target = canvas.Y * ArtCoverRatio;
@@ -383,40 +495,49 @@ internal static class PortraitCharacterSelect
             PortraitNodes.ClearAnchors(art);
             art.PivotOffset = new Vector2(ArtWidth, ArtHeight) * 0.5f;
             art.Scale = Vector2.One * scale;
-            var artCenter = new Vector2(canvas.X * 0.5f, ArtHeight * scale * 0.5f);
+            var artCenter = new Vector2(canvas.X * 0.5f, ArtTopOffset + ArtHeight * scale * 0.5f);
             art.Position += artCenter - (art.GlobalPosition + new Vector2(ArtWidth, ArtHeight) * 0.5f);
         }
 
-        return ArtHeight * scale;
+        return ArtTopOffset + ArtHeight * scale;
     }
 
-    private static float ApplyCharacterRow(Control screen, Vector2 canvas)
+    // The character row used to sit on the very bottom edge, which is both the
+    // hardest place to reach and where the gesture bar lives. It rides under
+    // the art instead, with the whole control block kept off the bottom.
+    private static float ApplyCharacterRow(Control screen, Vector2 canvas, float artBottom)
     {
         var row = PortraitNodes.FindControl(screen, "ButtonContainer");
         if (row is null)
-            return canvas.Y;
+            return artBottom;
 
         PortraitNodes.ClearAnchors(row);
         var width = row.Size.X > 1f ? row.Size.X : 564f;
         var height = row.Size.Y > 1f ? row.Size.Y : 154f;
-        row.PivotOffset = new Vector2(width, height) * 0.5f;
+        row.PivotOffset = Vector2.Zero;
         row.Scale = Vector2.One * CharacterRowScale;
 
+        var scaledWidth = width * CharacterRowScale;
         var scaledHeight = height * CharacterRowScale;
-        var bottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom());
-        var top = bottom - scaledHeight;
-        var center = new Vector2(canvas.X * 0.5f, top + scaledHeight * 0.5f);
-        row.Position += center - (row.GlobalPosition + new Vector2(width, height) * 0.5f);
+        var contentBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom());
+        var navBlock = RowToNavGap + NavButtonHeight;
+        var top = Mathf.Min(
+            artBottom + ArtToRowGap,
+            contentBottom - navBlock - scaledHeight
+        );
+
+        var target = new Vector2(canvas.X * 0.5f - scaledWidth * 0.5f, top);
+        row.Position += target - row.GlobalPosition;
         row.ZAsRelative = false;
         row.ZIndex = 60;
-        return top;
+        return top + scaledHeight;
     }
 
     // Both nav buttons were authored outside the portrait canvas: back sat at
     // x=-220 and was cut in half by the screen edge.
-    private static void ApplyNavButtons(Control screen, Vector2 canvas, float rowTop)
+    private static void ApplyNavButtons(Control screen, Vector2 canvas, float rowBottom)
     {
-        var y = rowTop - RowGap - NavButtonHeight;
+        var y = rowBottom + RowToNavGap;
         foreach (var (name, onRight) in new[] { ("BackButton", false), ("ConfirmButton", true) })
         {
             if (PortraitNodes.FindControl(screen, name) is not { } button)
@@ -441,15 +562,15 @@ internal static class PortraitCharacterSelect
 
         PortraitNodes.ClearAnchors(panel);
         var height = panel.Size.Y > 1f ? panel.Size.Y : 434f;
-        var y = Mathf.Min(artBottom - height - InfoPanelBottomGap, canvas.Y * 0.60f);
+        var y = artBottom - height - InfoPanelBottomGap;
         panel.Position += new Vector2(PortraitHudMetrics.EdgeMargin, y) - panel.GlobalPosition;
         panel.ZAsRelative = false;
         panel.ZIndex = 50;
     }
 }
 
-[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect.NCharacterSelectScreen), "_Ready")]
-internal static class CharacterSelectReadyPatch
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect.NCharacterSelectScreen), "InitializeSingleplayer")]
+internal static class CharacterSelectInitializePatch
 {
     private static void Postfix(Control __instance)
         => PortraitNodes.AssertLoop(__instance, () => PortraitCharacterSelect.Apply(__instance));
@@ -494,8 +615,10 @@ internal static class MainMenuReticlePatch
             if (label is null || left is null || right is null)
                 return;
 
-            var labelWidth = label.Size.X * scale;
-            var labelHeight = label.Size.Y * scale;
+            // The label is grown through its font size now, so its own rect is
+            // already the visible one; only the reticle art still needs scaling.
+            var labelWidth = label.Size.X;
+            var labelHeight = label.Size.Y;
             var centerY = label.GlobalPosition.Y + labelHeight * 0.5f;
 
             Place(left, scale, label.GlobalPosition.X - ReticleGap * scale, centerY, onRight: false);
