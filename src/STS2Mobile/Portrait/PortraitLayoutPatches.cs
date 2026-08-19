@@ -198,7 +198,32 @@ internal static class PortraitMainMenu
 {
     private const float BackgroundHeight = 1200f;
     private const float BackgroundWidth = 2560f;
-    private const float ButtonScale = 1.65f;
+
+    // The authored rows are 50 units tall, which lands around 6mm on the phone:
+    // readable, but well under a comfortable thumb target. A primary menu is
+    // where a touch layout should be most generous, so aim above the ergonomic
+    // minimum rather than at it.
+    private const float MenuRowTarget = PortraitHudMetrics.MinTouchSide * 1.4f;
+    private const float MenuRowFallback = 50f;
+    private const float MenuScaleMin = 1.65f;
+    private const float MenuScaleMax = 3.2f;
+    private const float MenuRowSeparation = 10f;
+
+    // Where the logo stops being art and the screen becomes free space. The
+    // button block is centred in what is left, so it neither collides with the
+    // logo nor leaves the bottom third of the screen visibly empty.
+    private const float LogoBandBottomRatio = 0.36f;
+
+    // Sit the block slightly above the middle of the free band: dead centre
+    // reads as a gap under the logo and a gap over the skyline at once.
+    private const float MenuBlockBandBias = 0.36f;
+    private const float LogoTopRatio = 0.18f;
+    private const float LogoScale = 0.42f;
+    private const float LogoCenterOffset = 460f;
+
+    // The focus reticles are positioned by the game from unscaled label
+    // metrics, so they need to know how far the menu was scaled up.
+    internal static float LastMenuScale { get; private set; } = 1f;
 
     internal static void Apply(NMainMenu menu)
     {
@@ -207,37 +232,88 @@ internal static class PortraitMainMenu
             return;
 
         var center = canvas * 0.5f;
+        var parentScale = ApplyBackground(menu, canvas, center);
+        ApplyLogo(menu, canvas, center, parentScale);
+        ApplyButtons(menu, canvas, center);
+    }
+
+    private static float ApplyBackground(NMainMenu menu, Vector2 canvas, Vector2 center)
+    {
         var background = menu.GetNodeOrNull<Control>("MainMenuBg/BgContainer");
-        var parentScale = 1f;
-        if (background is not null)
-        {
-            parentScale = Mathf.Max(canvas.X / BackgroundWidth, canvas.Y / BackgroundHeight) * 1.04f;
-            background.PivotOffset = new Vector2(BackgroundWidth, BackgroundHeight) * 0.5f;
-            background.Scale = Vector2.One * parentScale;
-            background.Position = center - new Vector2(BackgroundWidth, BackgroundHeight) * 0.5f;
-        }
+        if (background is null)
+            return 1f;
 
-        var logo = menu.FindChild("Logo", recursive: true, owned: false) as Node2D;
-        if (logo is not null)
-        {
-            logo.Scale = Vector2.One * (0.42f / parentScale);
-            logo.GlobalPosition = new Vector2(center.X - 460f, canvas.Y * 0.18f);
-            logo.Visible = true;
-            logo.Modulate = new Color(logo.Modulate.R, logo.Modulate.G, logo.Modulate.B, 1f);
-        }
+        var scale = Mathf.Max(canvas.X / BackgroundWidth, canvas.Y / BackgroundHeight) * 1.04f;
+        background.PivotOffset = new Vector2(BackgroundWidth, BackgroundHeight) * 0.5f;
+        background.Scale = Vector2.One * scale;
+        background.Position = center - new Vector2(BackgroundWidth, BackgroundHeight) * 0.5f;
+        return scale;
+    }
 
+    private static void ApplyLogo(NMainMenu menu, Vector2 canvas, Vector2 center, float parentScale)
+    {
+        if (menu.FindChild("Logo", recursive: true, owned: false) is not Node2D logo)
+            return;
+
+        logo.Scale = Vector2.One * (LogoScale / parentScale);
+        logo.GlobalPosition = new Vector2(center.X - LogoCenterOffset, canvas.Y * LogoTopRatio);
+        logo.Visible = true;
+        logo.Modulate = new Color(logo.Modulate.R, logo.Modulate.G, logo.Modulate.B, 1f);
+    }
+
+    private static void ApplyButtons(NMainMenu menu, Vector2 canvas, Vector2 center)
+    {
         var buttons = menu.GetNodeOrNull<Control>("MainMenuTextButtons")
             ?? menu.GetNodeOrNull<Control>("%MainMenuTextButtons");
-        if (buttons is not null)
-        {
-            PortraitNodes.ClearAnchors(buttons);
-            var width = buttons.Size.X > 1f ? buttons.Size.X : 300f;
-            var height = buttons.Size.Y > 1f ? buttons.Size.Y : 220f;
-            buttons.PivotOffset = new Vector2(width, height) * 0.5f;
-            buttons.Scale = Vector2.One * ButtonScale;
-            buttons.Position = new Vector2(center.X - width * 0.5f, canvas.Y * 0.54f);
-        }
+        if (buttons is null)
+            return;
+
+        if (buttons is BoxContainer box)
+            box.AddThemeConstantOverride("separation", (int)MenuRowSeparation);
+
+        PortraitNodes.ClearAnchors(buttons);
+        var scale = MenuScale(buttons);
+        LastMenuScale = scale;
+        var width = buttons.Size.X > 1f ? buttons.Size.X : 300f;
+
+        // Pivot stays at the top-left corner so position and visible top are
+        // the same number. Scaling around the centre made the placement depend
+        // on a container height the layout keeps changing underneath us.
+        buttons.PivotOffset = Vector2.Zero;
+        buttons.Scale = Vector2.One * scale;
+
+        // The container keeps a fixed height and centres its visible rows in
+        // it, so the block is placed by that full height; measuring only the
+        // visible rows put the menu a third of a screen too low.
+        var scaledHeight = (buttons.Size.Y > 1f ? buttons.Size.Y : 450f) * scale;
+        var bandTop = canvas.Y * LogoBandBottomRatio;
+        var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom());
+        var free = Mathf.Max(0f, bandBottom - bandTop - scaledHeight);
+        var top = bandTop + free * MenuBlockBandBias;
+
+        // Position is parent relative and this container does not sit at the
+        // scene origin, so drive the global corner instead of assuming it.
+        var target = new Vector2(center.X - width * scale * 0.5f, top);
+        buttons.Position += target - buttons.GlobalPosition;
     }
+
+    // Rows are measured from the first visible entry rather than assumed, so a
+    // future menu item with a different height still gets a thumb-sized row.
+    private static float MenuScale(Control buttons)
+    {
+        var row = MenuRowFallback;
+        foreach (var child in buttons.GetChildren())
+        {
+            if (child is Control { Visible: true } control && control.Size.Y > 1f)
+            {
+                row = control.Size.Y;
+                break;
+            }
+        }
+
+        return Mathf.Clamp(MenuRowTarget / row, MenuScaleMin, MenuScaleMax);
+    }
+
 }
 
 [HarmonyPatch(typeof(NMainMenu), "_Ready")]
@@ -260,6 +336,189 @@ internal static class MainMenuReadyPatch
             if (PortraitDisplay.IsPortrait(canvas))
                 PortraitTopBar.HideBuildWatermark(__instance.GetTree().Root, canvas);
         });
+}
+
+
+// Character select in portrait left a dead band at the top where the menu logo
+// showed through, kept the back button partly off the left edge, and gave the
+// character row less height than a thumb needs. The art fills the screen from
+// the top instead, and the controls sit inside the canvas at touch size.
+internal static class PortraitCharacterSelect
+{
+    private const float ArtWidth = 2560f;
+    private const float ArtHeight = 1200f;
+    private const float ArtCoverRatio = 0.74f;
+    private const float ArtMaxScale = 2.2f;
+    private const float InfoPanelBottomGap = 40f;
+    private const float RowGap = 28f;
+    private const float CharacterRowScale = 1.3f;
+    private const float NavButtonWidth = 200f;
+    private const float NavButtonHeight = 110f;
+
+    internal static void Apply(Control screen)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+
+        var artBottom = ApplyArt(screen, canvas);
+        var rowBottom = ApplyCharacterRow(screen, canvas);
+        ApplyNavButtons(screen, canvas, rowBottom);
+        ApplyInfoPanel(screen, canvas, artBottom);
+    }
+
+    // The art node is authored for a 2560x1200 landscape frame, so in portrait
+    // it only ever covered a middle strip. Scaling it to the canvas width and
+    // pinning it to the top removes the band the menu was showing through.
+    private static float ApplyArt(Control screen, Vector2 canvas)
+    {
+        var target = canvas.Y * ArtCoverRatio;
+        var scale = Mathf.Min(Mathf.Max(target / ArtHeight, canvas.X / ArtWidth), ArtMaxScale);
+
+        foreach (var name in new[] { "AnimatedBg", "StaticBg" })
+        {
+            if (PortraitNodes.FindControl(screen, name) is not { } art)
+                continue;
+
+            PortraitNodes.ClearAnchors(art);
+            art.PivotOffset = new Vector2(ArtWidth, ArtHeight) * 0.5f;
+            art.Scale = Vector2.One * scale;
+            var artCenter = new Vector2(canvas.X * 0.5f, ArtHeight * scale * 0.5f);
+            art.Position += artCenter - (art.GlobalPosition + new Vector2(ArtWidth, ArtHeight) * 0.5f);
+        }
+
+        return ArtHeight * scale;
+    }
+
+    private static float ApplyCharacterRow(Control screen, Vector2 canvas)
+    {
+        var row = PortraitNodes.FindControl(screen, "ButtonContainer");
+        if (row is null)
+            return canvas.Y;
+
+        PortraitNodes.ClearAnchors(row);
+        var width = row.Size.X > 1f ? row.Size.X : 564f;
+        var height = row.Size.Y > 1f ? row.Size.Y : 154f;
+        row.PivotOffset = new Vector2(width, height) * 0.5f;
+        row.Scale = Vector2.One * CharacterRowScale;
+
+        var scaledHeight = height * CharacterRowScale;
+        var bottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom());
+        var top = bottom - scaledHeight;
+        var center = new Vector2(canvas.X * 0.5f, top + scaledHeight * 0.5f);
+        row.Position += center - (row.GlobalPosition + new Vector2(width, height) * 0.5f);
+        row.ZAsRelative = false;
+        row.ZIndex = 60;
+        return top;
+    }
+
+    // Both nav buttons were authored outside the portrait canvas: back sat at
+    // x=-220 and was cut in half by the screen edge.
+    private static void ApplyNavButtons(Control screen, Vector2 canvas, float rowTop)
+    {
+        var y = rowTop - RowGap - NavButtonHeight;
+        foreach (var (name, onRight) in new[] { ("BackButton", false), ("ConfirmButton", true) })
+        {
+            if (PortraitNodes.FindControl(screen, name) is not { } button)
+                continue;
+
+            PortraitNodes.ClearAnchors(button);
+            var width = button.Size.X > 1f ? button.Size.X : NavButtonWidth;
+            var x = onRight
+                ? canvas.X - width - PortraitHudMetrics.EdgeMargin
+                : PortraitHudMetrics.EdgeMargin;
+            button.Position += new Vector2(x, y) - button.GlobalPosition;
+            button.ZAsRelative = false;
+            button.ZIndex = 70;
+        }
+    }
+
+    private static void ApplyInfoPanel(Control screen, Vector2 canvas, float artBottom)
+    {
+        var panel = PortraitNodes.FindControl(screen, "InfoPanel");
+        if (panel is null)
+            return;
+
+        PortraitNodes.ClearAnchors(panel);
+        var height = panel.Size.Y > 1f ? panel.Size.Y : 434f;
+        var y = Mathf.Min(artBottom - height - InfoPanelBottomGap, canvas.Y * 0.60f);
+        panel.Position += new Vector2(PortraitHudMetrics.EdgeMargin, y) - panel.GlobalPosition;
+        panel.ZAsRelative = false;
+        panel.ZIndex = 50;
+    }
+}
+
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect.NCharacterSelectScreen), "_Ready")]
+internal static class CharacterSelectReadyPatch
+{
+    private static void Postfix(Control __instance)
+        => PortraitNodes.AssertLoop(__instance, () => PortraitCharacterSelect.Apply(__instance));
+}
+
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect.NCharacterSelectScreen), "OnSubmenuOpened")]
+internal static class CharacterSelectOpenedPatch
+{
+    private static void Postfix(Control __instance)
+        => PortraitNodes.AssertLoop(__instance, () => PortraitCharacterSelect.Apply(__instance));
+}
+
+
+// The gold focus reticles are placed from the label's global position, which
+// follows our scaled menu, but padded with the label's unscaled width. On a
+// touch-sized menu that puts the right one inside the text and leaves both at
+// a fraction of the button's height. Re-place and re-size them after the game
+// has started its own tween, and drop that tween so it cannot pull them back.
+[HarmonyPatch(typeof(NMainMenu), "MainMenuButtonFocused")]
+internal static class MainMenuReticlePatch
+{
+    private const float ReticleGap = 34f;
+
+    private static void Postfix(NMainMenu __instance, object button)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+
+        try
+        {
+            var scale = PortraitMainMenu.LastMenuScale;
+            if (scale <= 1.01f)
+                return;
+
+            if (AccessTools.Field(typeof(NMainMenu), "_reticleTween")?.GetValue(__instance) is Tween tween)
+                tween.Kill();
+
+            var label = AccessTools.Field(button.GetType(), "label")?.GetValue(button) as Control;
+            var left = AccessTools.Field(typeof(NMainMenu), "_buttonReticleLeft")?.GetValue(__instance) as Control;
+            var right = AccessTools.Field(typeof(NMainMenu), "_buttonReticleRight")?.GetValue(__instance) as Control;
+            if (label is null || left is null || right is null)
+                return;
+
+            var labelWidth = label.Size.X * scale;
+            var labelHeight = label.Size.Y * scale;
+            var centerY = label.GlobalPosition.Y + labelHeight * 0.5f;
+
+            Place(left, scale, label.GlobalPosition.X - ReticleGap * scale, centerY, onRight: false);
+            Place(right, scale, label.GlobalPosition.X + labelWidth + ReticleGap * scale, centerY, onRight: true);
+        }
+        catch (Exception ex)
+        {
+            PatchHelper.Log($"[Portrait] Menu reticle placement failed: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private static void Place(Control reticle, float scale, float edgeX, float centerY, bool onRight)
+    {
+        reticle.PivotOffset = Vector2.Zero;
+        reticle.Scale = Vector2.One * scale;
+        var width = reticle.Size.X * scale;
+        var height = reticle.Size.Y * scale;
+        reticle.GlobalPosition = new Vector2(
+            onRight ? edgeX : edgeX - width,
+            centerY - height * 0.5f
+        );
+        reticle.Modulate = new Color(reticle.Modulate, 1f);
+    }
 }
 
 [HarmonyPatch(typeof(NMainMenuBg), "OnWindowChange")]
@@ -474,17 +733,23 @@ internal static class PortraitCombat
         button.ZIndex = 420;
     }
 
+    // The piles used to hug the bottom corners, which is exactly where the
+    // outer cards of the hand fan end up, so both counters sat on top of a
+    // card. They now ride the empty band above the energy and end turn row.
+    private const float PileRowRatio = 0.685f;
+
     internal static void PlacePile(Control pile, Vector2 canvas, bool onRight)
     {
         const float scale = 1.42f;
-        const float margin = 24f;
         PortraitNodes.ClearAnchors(pile);
         pile.PivotOffset = Vector2.Zero;
         pile.Scale = Vector2.One * scale;
         var width = pile.Size.X > 1f ? pile.Size.X : 86f;
         var height = pile.Size.Y > 1f ? pile.Size.Y : 86f;
-        var x = onRight ? canvas.X - width * scale - margin : margin;
-        var y = canvas.Y - height * scale - PortraitDisplay.SafeBottom() - 12f;
+        var x = onRight
+            ? canvas.X - width * scale - PortraitHudMetrics.EdgeMargin
+            : PortraitHudMetrics.EdgeMargin;
+        var y = canvas.Y * PileRowRatio - height * scale * 0.5f;
         pile.Position += new Vector2(x, y) - pile.GlobalPosition;
         pile.ZAsRelative = false;
         pile.ZIndex = 520;
