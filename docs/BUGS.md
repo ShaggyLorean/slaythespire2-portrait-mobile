@@ -291,3 +291,12 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Fix**: managed triggers moved into the app's own user data directory (OS.GetUserDataDir()). The Java-side override directory stays where it was, since Java demonstrably reads it.
 - **Lesson**: any future managed-side device switch goes under user://, never /data/local/tmp.
 - **Status**: verified (region dump consumed and logged from user://)
+
+## BUG-029: Phone runs hot; textures decompressed to RGBA8 on device
+
+- **Where**: whole game leg on device.
+- **Repro**: play for a few minutes; the device heats up fast. Trace shows ~500MB VRAM; logcat spams "Image format DXT5/DXT1 not supported by hardware, converting to RGBA8".
+- **Root cause**: three stacked costs. (1) The game ships uncapped and the panel runs 90-120Hz. (2) Rendering happened at the native 1440x3168 through canvas_items scaling. (3) The PCK carries only desktop texture formats (683 bptc, 539 s3tc, zero ETC2/ASTC), so every compressed texture is decompressed to RGBA8 at load: 4x the VRAM and the memory bandwidth bill that turns into heat. A fourth, self-inflicted cost: the portrait layout guards walked all ~3700 nodes through the C# interop several times a second (130-145ms frame spikes).
+- **Fix**: 60fps budget re-asserted at runtime (user://sts2_fps_cap overrides); viewport scaling renders at the 1180x2596 canvas (user://sts2_render_mode "native" reverts); scene queries answered by NOverlayStack.Peek plus a WeakReference node cache (idle combat fps 47 -> 56, spikes halved); and tools/pck/transcode_textures.py rewrites every bptc/s3tc ctex payload to ASTC 4x4 (natively supported by the device GPU) and repacks the PCK.
+- **Note**: measurements taken while the phone was fast-charging, which adds its own heat; validate unplugged.
+- **Status**: fixed-pending-device (ASTC pack built; device swap and visual pass pending)
