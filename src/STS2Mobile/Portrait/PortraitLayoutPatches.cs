@@ -752,6 +752,19 @@ internal static class PortraitPauseMenu
             ) - title.GlobalPosition;
         }
 
+        // The stack's back tab is authored half outside the canvas; park it
+        // fully on screen at the bottom left, where the run screens keep it.
+        var back = PortraitNodes.FindControl(menu, "BackButton");
+        if (back is not null)
+        {
+            PortraitNodes.ClearAnchors(back);
+            var backHeight = back.Size.Y > 1f ? back.Size.Y : 110f;
+            back.Position += new Vector2(
+                PortraitHudMetrics.EdgeMargin,
+                PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - backHeight
+            ) - back.GlobalPosition;
+        }
+
         RefreshLabels(menu);
     }
 
@@ -842,9 +855,15 @@ internal static class PortraitCombat
     // Cover 1920x1080 combat art on the tall 1180x2596 portrait canvas,
     // with enough overscan to crop the authored sky and floor edge bands.
     private const float BackgroundScale = 2.62f;
-    // Cards keep roughly this much art on each side of their center at hand
-    // scale; the fan budget keeps the outermost card's edge inside the canvas.
-    private const float FanCardKeepIn = 165f;
+    // Half a card of art in holder-local units, plus the margin the fan keeps
+    // from the screen edges; both feed the fan budget.
+    private const float FanCardHalf = 130f;
+    private const float FanEdgePad = 26f;
+
+    // Effective global scale of the hand holder, recorded by PlaceHand. Card
+    // positions from the game's table are holder-local, so the budget has to
+    // be converted through the live scale instead of guessing it.
+    internal static float FanEffectiveScale { get; private set; } = 1f;
     private const float HandBaseline = 0.925f;
 
     internal static void ScaleBackground(object instance)
@@ -892,7 +911,8 @@ internal static class PortraitCombat
     // inside the screen while keeping the spacing even.
     internal static float CompressFan(float x, float widestX, Vector2 canvas)
     {
-        var budget = canvas.X * 0.5f - FanCardKeepIn;
+        var scale = FanEffectiveScale > 0.05f ? FanEffectiveScale : 1f;
+        var budget = (canvas.X * 0.5f - FanEdgePad) / scale - FanCardHalf;
         if (widestX <= budget || widestX <= 0f)
             return x;
 
@@ -937,8 +957,15 @@ internal static class PortraitCombat
         // Anchor in GLOBAL space like every other placement helper: the
         // holder's parent is not at the canvas origin on every combat entry
         // path (console/room teleports differ from map clicks), so a raw
-        // local Position put the fan mid-screen there.
-        holder.Position += new Vector2(0f, HandBaselineY(canvas) - holder.GlobalPosition.Y);
+        // local Position put the fan mid-screen there. The X centering is
+        // load-bearing too: the authored landscape scene leaves the fan's
+        // origin left of the canvas centre, which pushed the outer cards off
+        // one edge more than the other.
+        holder.Position += new Vector2(
+            canvas.X * 0.5f - holder.GlobalPosition.X,
+            HandBaselineY(canvas) - holder.GlobalPosition.Y
+        );
+        FanEffectiveScale = holder.GetGlobalTransform().Scale.X;
         holder.ZAsRelative = false;
         // Above the combat frame's bands (100) but below every game screen and
         // overlay: forcing the old 320 here drew the fan over the in-combat

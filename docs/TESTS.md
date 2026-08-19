@@ -59,7 +59,39 @@ Per the plan, PC checks must use real device metrics, not arbitrary window sizes
 
 **Device-round APK:** `StS2Portrait-v0.4.0-dev7-arm64-v8a.apk`, versionCode `40016`, package `com.sts2portrait.mobile.local` (installs alongside the release/dev app), local test keystore, sha256 `4a0a32c8580f1bf2b93d91bcca4d68dd7f6e403360fbbe1ac078642231dfbad7`. Carries every loop-round fix: capstone detection, BUG-015 input shield, touch-scale waves (rewards/treasure/rest/death/proceed), ancient bubble composition, event focus crop, compendium canvas fit, potion popup placement, watermark identity hide. A same-day full-walk regression (17 captures + upgrade select, zero timeouts) preceded this build. Fresh package = no downloaded game inside; use Steam Online download or Offline import on device before the game-side steps. Adds the user-reported hover-tip collision fix and the potion popup lane. Adds the modding screen stack instant-apply, confirm clamp, touch map tools, the always-open console window, the tilted ribbon, overnight fixes (deep scrim + prose z, loot Skip anchoring, hover-tip lane, hand-laid compendium shelf, deck-view sort row fit, capstone-aware proceed z, pause touch lift) verified across three canvas buckets. Superseded: dev1-dev9 (40010-40018).
 
-### Device round for 0.4.0 + 0.5.0 (pending)
+### Device round for 0.4.0-dev18+ (2026-08-19, game now boots on device)
+
+The 2026-08-19 session took the game from "crashes at start" to "playable on
+the phone" (BUGS 016-020). The checks below verify that day's fixes; the older
+0.4.0 list follows and still applies afterwards.
+
+1. **First-tap presses**: cold boot into the game menu. Tap Multiplayer once,
+   somewhere no finger has touched since boot. Expected: it opens on the FIRST
+   tap. Before the pointer bridge, the first tap on any control only moved the
+   invisible cursor there and did nothing.
+2. **No stuck hover/pressed visuals**: tap and release every main menu row,
+   then lift the finger and wait. Expected: no row stays gold, enlarged or
+   with the wing reticles after the finger is up. Trace shows
+   `[Touch] Pointer bridge installed`.
+3. **Long press**: hold End Turn in combat. Expected: the long-press bar fills
+   while held, cancels cleanly when the finger slides off, and never sticks
+   mid-fill after release.
+4. **Card drag**: drag a card from the hand onto an enemy. Expected: normal
+   targeting and play; releasing outside the arena returns the card.
+5. **Hand fan fit**: reach 7+ cards (Overgrowth early fights or add via dev
+   console on PC). Expected: every card fully inside the canvas on both edges,
+   fan centred on the screen.
+6. **Pause menu**: gear icon in combat. Expected: thumb-sized rows centred on
+   the screen, one quit variant only (Save and Quit in singleplayer), back tab
+   fully on screen at the bottom left, labels filling the rows.
+7. **Edge peek log**: after the main menu settles, pull the trace and paste
+   the `[Portrait] edge peek:` lines here; that names the sliver poking in
+   from the left edge on every scene.
+8. **Spine visuals** (BUG-018): logo on the menu, character art on select,
+   creatures animating in combat. Any missing art means the spine .so did not
+   ship in the APK (`scripts/build-spine-android.ps1`).
+
+### Device round for 0.4.0 + 0.5.0 (older list, still to run)
 
 Run on the reference device, in this order. Every step lists what must be seen.
 
