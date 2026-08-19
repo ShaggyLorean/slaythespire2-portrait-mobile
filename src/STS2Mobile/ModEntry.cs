@@ -127,6 +127,7 @@ public static class ModEntry
             return;
         }
 
+
         InstallManagedExceptionHandlers();
         NeutralizeSentryEarly();
         if (!TryBeginApply())

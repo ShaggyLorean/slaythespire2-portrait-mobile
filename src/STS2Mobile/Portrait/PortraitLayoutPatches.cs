@@ -2795,32 +2795,40 @@ internal static class NeowBackgroundPatch
     }
 }
 
+// Patching this button's _Ready used to do the sizing, but a patched method
+// runs as a generated copy that cannot reach the protected members the
+// original called, so ConnectSignals threw MethodAccessException, the button
+// never finished setting up and the combat room found a null background. The
+// position getter is a safe hook: it runs whenever the button is placed.
 [HarmonyPatch(typeof(NProceedButton), "ShowPos", MethodType.Getter)]
 internal static class ProceedButtonPatch
 {
+    private const float MaxWidthRatio = 0.36f;
+    private const float MaxHeight = 170f;
+    private const float MaxScale = 1.5f;
+    private const float EdgeGap = 20f;
+
     private static void Postfix(object __instance, ref Vector2 __result)
     {
         var canvas = PortraitDisplay.CanvasSize;
         if (!PortraitDisplay.IsPortrait(canvas))
             return;
-        var button = (Control)__instance;
-        var width = (button.Size.X > 1f ? button.Size.X : 300f) * Math.Max(button.Scale.X, 1f);
-        __result.X = Math.Min(__result.X, canvas.X - width - 20f);
-    }
-}
 
-[HarmonyPatch(typeof(NProceedButton), "_Ready")]
-internal static class ProceedButtonReadyPatch
-{
-    private static void Postfix(object __instance)
-    {
-        var canvas = PortraitDisplay.CanvasSize;
-        if (!PortraitDisplay.IsPortrait(canvas))
-            return;
         var button = (Control)__instance;
+        ApplyScale(button, canvas);
+
+        var width = (button.Size.X > 1f ? button.Size.X : 300f) * Math.Max(button.Scale.X, 1f);
+        __result.X = Math.Min(__result.X, canvas.X - width - EdgeGap);
+    }
+
+    private static void ApplyScale(Control button, Vector2 canvas)
+    {
         var baseW = button.Size.X > 1f ? button.Size.X : 269f;
         var baseH = button.Size.Y > 1f ? button.Size.Y : 108f;
-        var scale = PortraitHudMetrics.FillScale(baseW, baseH, canvas.X * 0.36f, 170f, 1.5f);
+        var scale = PortraitHudMetrics.FillScale(baseW, baseH, canvas.X * MaxWidthRatio, MaxHeight, MaxScale);
+        if (Math.Abs(button.Scale.X - scale) <= 0.01f)
+            return;
+
         button.PivotOffset = Vector2.Zero;
         button.Scale = Vector2.One * scale;
     }

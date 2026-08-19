@@ -217,3 +217,15 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Actual**: silence.
 - **Root cause**: same shape as BUG-018. `res://addons/fmod/fmod.gdextension` declares `android.release.arm64`, but the desktop build carries no Android FMOD libraries, so the extension does not load. Unlike Spine, the FMOD runtime cannot be rebuilt from public sources: it needs the FMOD Engine SDK for Android under Firelight's licence.
 - **Status**: open
+
+## BUG-020: Combat never started, the arena stayed black
+
+- **Where**: game leg on device, entering any combat room.
+- **Repro**: start a run and walk into the first fight. The HUD appears but the arena is black: no background, no player, no enemies, no cards, energy stuck at 0/3.
+- **Expected**: the fight loads.
+- **Actual**: `NCombatRoom.SetUpBackground` threw NullReferenceException because the room's own `BgContainer` was never assigned.
+- **Root cause**: a Harmony-patched method runs as a generated copy, and on device that copy cannot reach the protected members the original called. `NProceedButton._Ready` was patched for portrait sizing, so its call to `NClickableControl.ConnectSignals` failed with `MethodAccessException`, `_Ready` died halfway, `NCombatRoom._Ready` then threw on the half-built button and stopped before assigning `BgContainer`. Pinning MonoMod's DMD generator to `dynamicmethod` (which does skip visibility) is not an option: on this runtime it fails to produce working patches at all and the process dies in a detour finalizer.
+- **Fix**: the proceed button is sized from its `ShowPos` getter instead, and `_Ready` is left unpatched.
+- **Lesson**: never patch a `_Ready` (or any method) that calls protected or internal members of its own class hierarchy. Prefer a public method, a property getter, or a layout pass driven from the parent screen.
+- **Status**: verified
+- **Fixed in**: 0.4.0
