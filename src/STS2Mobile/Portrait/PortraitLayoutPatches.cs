@@ -143,6 +143,68 @@ internal static class PortraitNodes
     // A thin rounded panel keeps peeking in from the left edge of every scene
     // on device and nobody knows which node it is. Log every visible control
     // that pokes into the left strip so the next trace names the culprit.
+    // NOT /data/local/tmp: SELinux hides that directory from the .NET side
+    // on this device even though the Java boot path can read it, which made
+    // every managed file gate there silently dead.
+    internal static string DumpTrigger
+        => System.IO.Path.Combine(Godot.OS.GetUserDataDir(), "sts2_dump");
+
+    // Field truth on demand: write "x,y,w,h" into the trigger file on the
+    // device and the next pass logs every visible control overlapping that
+    // region, top-down, with z and path. Answers "what is drawing here?"
+    // without another build-deploy-refight cycle.
+    internal static void DumpRegionOnRequest(Control screen)
+    {
+        string text;
+        try
+        {
+            if (!System.IO.File.Exists(DumpTrigger))
+                return;
+
+            text = System.IO.File.ReadAllText(DumpTrigger).Trim();
+            System.IO.File.Delete(DumpTrigger);
+        }
+        catch
+        {
+            return;
+        }
+
+        var region = new Rect2(830f, 1500f, 350f, 500f);
+        var parts = text.Split(',');
+        if (parts.Length == 4
+            && float.TryParse(parts[0], out var x)
+            && float.TryParse(parts[1], out var y)
+            && float.TryParse(parts[2], out var w)
+            && float.TryParse(parts[3], out var h))
+            region = new Rect2(x, y, w, h);
+
+        if (screen.GetTree()?.Root is not { } root)
+            return;
+
+        PatchHelper.Log($"[Portrait] region dump {region.Position.X:F0},{region.Position.Y:F0} {region.Size.X:F0}x{region.Size.Y:F0}:");
+        var logged = 0;
+        void Walk(Node node)
+        {
+            if (logged >= 48)
+                return;
+            if (node is Control { Visible: true } control && control.IsInsideTree())
+            {
+                var rect = control.GetGlobalRect();
+                if (rect.Intersects(region))
+                {
+                    PatchHelper.Log(
+                        $"[Portrait]   {control.GetType().Name} '{control.Name}' z={control.ZIndex} rel={control.ZAsRelative} a={control.Modulate.A:F2}/{control.SelfModulate.A:F2} rect={rect.Position.X:F0},{rect.Position.Y:F0} {rect.Size.X:F0}x{rect.Size.Y:F0} path={control.GetPath()}"
+                    );
+                    logged++;
+                }
+            }
+            foreach (var child in node.GetChildren())
+                Walk(child);
+        }
+        Walk(root);
+        PatchHelper.Log($"[Portrait] region dump complete ({logged})");
+    }
+
     internal static void LogEdgePeekers(Node sceneRoot, Vector2 canvas)
     {
         var found = 0;
@@ -2359,16 +2421,26 @@ internal static class MapScreenReadyPatch
             if (!PortraitDisplay.IsPortrait(canvas))
                 return;
 
-            // The combat hand dies with the combat room, and the rewards
-            // screen's pinned proceed arrow outlived it, floating over the
-            // map. The map is authoritative that it is on top: neutralize the
-            // arrow whenever a rewards screen is still visible underneath.
-            if (PortraitSceneCache.TopOverlay() is { Visible: true } rewards
-                && rewards.GetType().Name == "NRewardsScreen"
-                && PortraitNodes.FindControl(rewards, "ProceedButton") is { } arrow)
+            // The map instance stays in the tree, hidden, between visits and
+            // this loop keeps ticking on it. Everything below assumes the map
+            // is the screen actually being shown; without this gate the
+            // rewards cleanup once fired during a card pick and hid the live
+            // rewards screen under it.
+            if (!__instance.Visible || !__instance.IsVisibleInTree())
+                return;
+
+            PortraitNodes.DumpRegionOnRequest(__instance);
+
+            // A rewards screen never legitimately shows over the map. One
+            // that is still visible here is the finished screen the overlay
+            // stack forgot to hide, floating its Proceed arrow over the map;
+            // hiding only the arrow is not enough because the overlay
+            // container draws after the map in tree order.
+            if (PortraitSceneCache.FindByType(__instance.GetTree().Root, "NRewardsScreen")
+                    is { Visible: true } rewards)
             {
-                arrow.ZAsRelative = true;
-                arrow.ZIndex = 0;
+                rewards.Visible = false;
+                PatchHelper.Log("[Portrait] stale rewards screen hidden on map");
             }
 
             // The legend floated mid-screen over live map nodes; the lower
@@ -3033,7 +3105,7 @@ internal static class PortraitRewards
         // everything at its own layer; the Z-pinned proceed arrow punched
         // through it. Hand the arrow back to normal layering while one is
         // open and skip the layout pass.
-        DumpRegionOnRequest(screen);
+        PortraitNodes.DumpRegionOnRequest(screen);
         if (PortraitCapstone.IsOpen(screen) || !RewardsIsTopOverlay(screen))
         {
             if (PortraitNodes.FindControl(screen, "ProceedButton") is { } pinned)
@@ -3108,68 +3180,6 @@ internal static class PortraitRewards
                 proceed.GlobalPosition = target;
         }
     }
-    // NOT /data/local/tmp: SELinux hides that directory from the .NET side
-    // on this device even though the Java boot path can read it, which made
-    // every managed file gate there silently dead.
-    private static string DumpTrigger
-        => System.IO.Path.Combine(Godot.OS.GetUserDataDir(), "sts2_dump");
-
-    // Field truth on demand: write "x,y,w,h" into the trigger file on the
-    // device and the next pass logs every visible control overlapping that
-    // region, top-down, with z and path. Answers "what is drawing here?"
-    // without another build-deploy-refight cycle.
-    private static void DumpRegionOnRequest(Control screen)
-    {
-        string text;
-        try
-        {
-            if (!System.IO.File.Exists(DumpTrigger))
-                return;
-
-            text = System.IO.File.ReadAllText(DumpTrigger).Trim();
-            System.IO.File.Delete(DumpTrigger);
-        }
-        catch
-        {
-            return;
-        }
-
-        var region = new Rect2(830f, 1500f, 350f, 500f);
-        var parts = text.Split(',');
-        if (parts.Length == 4
-            && float.TryParse(parts[0], out var x)
-            && float.TryParse(parts[1], out var y)
-            && float.TryParse(parts[2], out var w)
-            && float.TryParse(parts[3], out var h))
-            region = new Rect2(x, y, w, h);
-
-        if (screen.GetTree()?.Root is not { } root)
-            return;
-
-        PatchHelper.Log($"[Portrait] region dump {region.Position.X:F0},{region.Position.Y:F0} {region.Size.X:F0}x{region.Size.Y:F0}:");
-        var logged = 0;
-        void Walk(Node node)
-        {
-            if (logged >= 48)
-                return;
-            if (node is Control { Visible: true } control && control.IsInsideTree())
-            {
-                var rect = control.GetGlobalRect();
-                if (rect.Intersects(region))
-                {
-                    PatchHelper.Log(
-                        $"[Portrait]   {control.GetType().Name} '{control.Name}' z={control.ZIndex} rel={control.ZAsRelative} a={control.Modulate.A:F2}/{control.SelfModulate.A:F2} rect={rect.Position.X:F0},{rect.Position.Y:F0} {rect.Size.X:F0}x{rect.Size.Y:F0} path={control.GetPath()}"
-                    );
-                    logged++;
-                }
-            }
-            foreach (var child in node.GetChildren())
-                Walk(child);
-        }
-        Walk(root);
-        PatchHelper.Log($"[Portrait] region dump complete ({logged})");
-    }
-
     // "Choose a Card" and its cousins are separate overlays pushed above the
     // rewards screen on the game's own overlay stack, and the Z-pinned proceed
     // arrow punched through them: two Skips at once. The stack itself is the
