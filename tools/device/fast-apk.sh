@@ -4,8 +4,8 @@
 # installs. ~40 s instead of ~5 min. Use build-android-local.ps1 when the
 # managed layer, engine or assets actually changed.
 set -uo pipefail
-REPO="/d/Projects/slaythespire2-portrait-mobile"
-ADB="/c/Users/whisper/AppData/Local/Android/Sdk/platform-tools/adb.exe"
+REPO="/mnt/NEVERDELETETHIS/Projects/slaythespire2-portrait-mobile"
+ADB="adb"
 SERIAL="${STS2_DEVICE:-192.168.1.128:39741}"
 GRADLE="$REPO/tmp/toolchain/gradle-8.11.1/bin/gradle.bat"
 VER="${1:-0.4.0-devfast}"

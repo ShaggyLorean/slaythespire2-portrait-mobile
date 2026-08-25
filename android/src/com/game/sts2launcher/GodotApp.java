@@ -104,6 +104,10 @@ public class GodotApp extends GodotActivity {
 		"GodotSharp.dll"
 	};
 	private static final String GAME_REQUIRED_ASSEMBLY = "sts2.dll";
+	private boolean fmodAndroidInitialized;
+	private static final String GRAPHICS_DEVICE_FILE = "graphics_device.txt";
+	private static final String RENDERER_MODE_FILE = "renderer_mode";
+	private static final String LAST_RENDERER_ATTEMPT_FILE = "last_renderer_attempt.txt";
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -134,6 +138,7 @@ public class GodotApp extends GodotActivity {
 				return;
 			}
 		}
+		initializeFmodAndroid();
 		super.onCreate(savedInstanceState);
 		configureEdgeToEdgeWindow();
 
@@ -237,6 +242,20 @@ public class GodotApp extends GodotActivity {
 			}
 		});
 		Log.i(TAG, "Android uncaught exception handler installed");
+	}
+
+	private String readInternalTextFile(String name) {
+		File file = new File(getFilesDir(), name);
+		if (!file.isFile()) {
+			return "";
+		}
+		try {
+			byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
+			return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+		} catch (Exception e) {
+			Log.w(TAG, "Failed to read internal file " + name, e);
+			return "";
+		}
 	}
 
 	private void writeInternalTextFile(String name, String text) {
@@ -760,18 +779,19 @@ public class GodotApp extends GodotActivity {
 		File pckFile = new File(gameDir, PCK_FILE);
 		if (isGamePckReady() && consumeGameLaunchRequest()) {
 			boolean safeLaunch = consumeSafeGameLaunchRequest();
-			boolean useDefaultRenderer = safeLaunch || previousStartupPhaseWas("game startup completed");
 			patchGamePckForAndroid(pckFile);
-			if (!useDefaultRenderer) {
-				commands.add("--rendering-driver");
-				commands.add("opengl3");
-				commands.add("--rendering-method");
-				commands.add("gl_compatibility");
-			} else {
-				Log.i(TAG, safeLaunch
-					? "Using default renderer for manual safe launch"
-					: "Using default renderer because previous game startup completed but did not produce a usable screen");
-			}
+			// Ported from upstream: renderer choice is a per-device policy
+			// (saved preference + GPU evidence + safe launch) instead of a
+			// hardcoded OpenGL force. PowerVR devices pin OpenGL because
+			// Vulkan touch input is unreliable there.
+			AndroidRendererPolicy.Plan rendererPlan = AndroidRendererPolicy.resolve(
+				readInternalTextFile(RENDERER_MODE_FILE),
+				safeLaunch,
+				readInternalTextFile(GRAPHICS_DEVICE_FILE)
+			);
+			rendererPlan.appendCommandLine(commands);
+			recordRendererAttempt(rendererPlan, safeLaunch);
+			Log.i(TAG, "Android renderer policy: " + rendererPlan.description());
 			commands.add("--verbose");
 			Log.i(TAG, "Enabled verbose Godot logging for downloaded game");
 			if (isX86Runtime()) {
@@ -781,9 +801,6 @@ public class GodotApp extends GodotActivity {
 			}
 			commands.add("--main-pack");
 			commands.add(pckFile.getAbsolutePath());
-			if (!useDefaultRenderer) {
-				Log.i(TAG, "Forcing OpenGL compatibility renderer for downloaded game");
-			}
 			Log.i(TAG, "Loading PCK from: " + pckFile.getAbsolutePath());
 		} else {
 			// Start in the launcher unless a one-shot game launch was requested; use bootstrap PCK so Godot can initialize for the
@@ -1130,7 +1147,58 @@ public class GodotApp extends GodotActivity {
 			multicastLock.release();
 			Log.i(TAG, "WiFi MulticastLock released");
 		}
+		closeFmodAndroid();
 		super.onDestroy();
+	}
+
+	// Ported from upstream: the game's FMOD integration needs the org.fmod
+	// Java side alive before the engine starts. Everything is reflective and
+	// failure-tolerant, so a build without libfmod.so keeps booting silently
+	// instead of crashing; audio activates the moment the licensed FMOD
+	// Engine library lands in jniLibs.
+	private void initializeFmodAndroid() {
+		try {
+			Class<?> audioDeviceClass = Class.forName("org.fmod.AudioDevice");
+			audioDeviceClass.getMethod("setContext", Context.class).invoke(null, getApplicationContext());
+			Class<?> fmodClass = Class.forName("org.fmod.FMOD");
+			fmodClass.getMethod("init", Context.class).invoke(null, this);
+			fmodAndroidInitialized = true;
+			Log.i(TAG, "FMOD Android Java bridge initialized");
+		} catch (Throwable e) {
+			fmodAndroidInitialized = false;
+			Log.w(TAG, "FMOD Android Java bridge unavailable; game will run without audio", e);
+		}
+	}
+
+	private void recordRendererAttempt(AndroidRendererPolicy.Plan rendererPlan, boolean safeLaunch) {
+		String text =
+			"StS2 Android renderer attempt\n"
+				+ "UTC millis: " + System.currentTimeMillis() + "\n"
+				+ "Package: " + getPackageName() + "\n"
+				+ "Saved preference: " + rendererPlan.preference() + "\n"
+				+ "Effective mode: " + rendererPlan.effectiveMode() + "\n"
+				+ "Safe Start requested: " + safeLaunch + "\n"
+				+ "PowerVR compatibility active: " + rendererPlan.powerVrCompatibility() + "\n"
+				+ "Policy: " + rendererPlan.description() + "\n";
+		writeInternalTextFile(LAST_RENDERER_ATTEMPT_FILE, text);
+	}
+
+	private void closeFmodAndroid() {
+		if (!fmodAndroidInitialized) {
+			return;
+		}
+
+		try {
+			Class<?> fmodClass = Class.forName("org.fmod.FMOD");
+			fmodClass.getMethod("close").invoke(null);
+			Class<?> audioDeviceClass = Class.forName("org.fmod.AudioDevice");
+			audioDeviceClass.getMethod("setContext", Context.class).invoke(null, new Object[] { null });
+			Log.i(TAG, "FMOD Android Java bridge closed");
+		} catch (Throwable e) {
+			Log.w(TAG, "FMOD Android Java bridge close failed", e);
+		} finally {
+			fmodAndroidInitialized = false;
+		}
 	}
 
 	public static GodotApp getInstance() {

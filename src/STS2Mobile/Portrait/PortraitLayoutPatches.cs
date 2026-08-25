@@ -185,9 +185,14 @@ internal static class PortraitNodes
         var logged = 0;
         void Walk(Node node)
         {
-            if (logged >= 48)
+            if (logged >= 90)
                 return;
-            if (node is Control { Visible: true } control && control.IsInsideTree())
+            // Visible alone lies: a node under a hidden parent still reports
+            // Visible=true, which buried the real answer in dozens of controls
+            // from screens that were not on screen at all.
+            if (node is Control { Visible: true } control
+                && control.IsInsideTree()
+                && control.IsVisibleInTree())
             {
                 var rect = control.GetGlobalRect();
                 if (rect.Intersects(region))
@@ -198,6 +203,26 @@ internal static class PortraitNodes
                     logged++;
                 }
             }
+            // Controls are not the whole story: a Node2D (a Spine sprite, a
+            // hand-drawn panel, anything the game draws outside the Control
+            // tree) has no rect to intersect, so report it by origin whenever
+            // that origin sits inside the region or just off its left edge.
+            // This is what names the panels that peek in from a screen edge.
+            if (node is Node2D node2d && node2d.IsVisibleInTree())
+            {
+                var origin = node2d.GetGlobalTransform().Origin;
+                if (origin.X > region.Position.X - 900f
+                    && origin.X < region.End.X + 200f
+                    && origin.Y > region.Position.Y - 500f
+                    && origin.Y < region.End.Y + 500f)
+                {
+                    PatchHelper.Log(
+                        $"[Portrait]   2D {node2d.GetType().Name} '{node2d.Name}' z={node2d.ZIndex} origin={origin.X:F0},{origin.Y:F0} path={node2d.GetPath()}"
+                    );
+                    logged++;
+                }
+            }
+
             foreach (var child in node.GetChildren())
                 Walk(child);
         }
@@ -429,10 +454,13 @@ internal static class PortraitMainMenu
         if (!PortraitDisplay.IsPortrait(canvas))
             return;
 
+        PortraitNodes.DumpRegionOnRequest(menu);
+
         var center = canvas * 0.5f;
         var parentScale = ApplyBackground(menu, canvas, center);
         ApplyLogo(menu, canvas, center, parentScale);
         ApplyButtons(menu, canvas, center);
+        ApplyCornerButtons(menu, canvas);
     }
 
     private static float ApplyBackground(NMainMenu menu, Vector2 canvas, Vector2 center)
@@ -490,6 +518,47 @@ internal static class PortraitMainMenu
             return;
 
         control.CustomMinimumSize = size;
+    }
+
+    // The profile and patch-notes buttons are authored 16 units from the top
+    // of a landscape frame, which on this phone is inside the cutout band, at
+    // 64 units tall, well under a thumb target, and hard against the screen
+    // edges. Drop them below the safe inset, grow them, and inset them.
+    private const float CornerButtonMaxScale = 1.9f;
+    private const float CornerButtonTopGap = 18f;
+
+    private static void ApplyCornerButtons(NMainMenu menu, Vector2 canvas)
+    {
+        var top = PortraitDisplay.SafeTop() + CornerButtonTopGap;
+        PlaceCornerButton(PortraitNodes.FindControl(menu, "ChangeProfileButton"), canvas, top, onRight: false);
+        PlaceCornerButton(PortraitNodes.FindControl(menu, "PatchNotesButton"), canvas, top, onRight: true);
+    }
+
+    private static void PlaceCornerButton(Control button, Vector2 canvas, float top, bool onRight)
+    {
+        if (button is null)
+            return;
+
+        // Scale is safe to write here: these buttons carry no press animation
+        // of their own, and Size is left alone so repeat passes cannot compound.
+        var width = button.Size.X > 1f ? button.Size.X : 64f;
+        var height = button.Size.Y > 1f ? button.Size.Y : 64f;
+        var scale = PortraitHudMetrics.TouchScale(width, height, CornerButtonMaxScale);
+        if (Mathf.Abs(button.Scale.X - scale) > 0.01f)
+        {
+            button.PivotOffset = Vector2.Zero;
+            button.Scale = Vector2.One * scale;
+        }
+
+        PortraitNodes.ClearAnchors(button);
+        var target = new Vector2(
+            onRight
+                ? canvas.X - width * scale - PortraitHudMetrics.EdgeMargin
+                : PortraitHudMetrics.EdgeMargin,
+            top
+        );
+        if (button.GlobalPosition.DistanceTo(target) > 1.5f)
+            button.GlobalPosition = target;
     }
 
     private static Vector2 AuthoredSize(Control row)
@@ -1858,6 +1927,14 @@ internal static class PortraitTopBar
             HideBuildWatermark(bar.GetTree().Root, canvas);
             PatchHelper.Log($"[Portrait] Top bar reflow {signature}");
         }
+
+        // The reflow ticks on every run screen, so this is the widest reach the
+        // on-demand region dump can get: it answers "what is drawing here?" on
+        // whatever screen is live when the trigger file appears.
+        if (bar is Control barControl)
+        {
+            PortraitNodes.DumpRegionOnRequest(barControl);
+        }
     }
 
     // Visible=false loses against the game's own top-bar show tweens; a
@@ -2026,9 +2103,161 @@ internal static class PortraitTopBar
     }
 }
 
+
+// The profile screen is authored as a 1328-wide landscape row of three cards
+// with their delete buttons anchored separately at the bottom, so on a phone
+// the row runs off both edges and the delete buttons no longer sit under the
+// card they belong to. Fit the row to the canvas, then place each delete
+// button under its own card by reading the card's real rect.
+internal static class PortraitProfileScreen
+{
+    private const float RowWidth = 1328f;
+    private const float DeleteGap = 40f;
+    private const float DeleteMaxScale = 1.5f;
+    private const float MessageGap = 44f;
+    private const float BackButtonReserve = 150f;
+
+    internal static void Apply(Control screen)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+
+        var row = PortraitNodes.FindControl(screen, "HBoxContainer");
+        if (row is null)
+            return;
+
+        var authoredWidth = row.Size.X > 1f ? row.Size.X : RowWidth;
+        var authoredHeight = row.Size.Y > 1f ? row.Size.Y : 560f;
+        var available = canvas.X - 2f * PortraitHudMetrics.EdgeMargin;
+        var scale = Mathf.Min(1f, available / authoredWidth);
+
+        row.PivotOffset = Vector2.Zero;
+        if (Mathf.Abs(row.Scale.X - scale) > 0.01f)
+            row.Scale = Vector2.One * scale;
+
+        var message = PortraitNodes.FindControl(screen, "ChooseProfileMessage");
+        var messageHeight = FitMessage(message, canvas);
+
+        // Centre the whole block in the free band instead of pinning it near
+        // the top: the authored screen leaves the bottom two thirds of a phone
+        // empty, which reads as a broken layout rather than a deliberate one.
+        var bandTop = PortraitDisplay.SafeTop() + 40f;
+        var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom())
+            - BackButtonReserve;
+        var deleteHeight = DeleteGap + PortraitHudMetrics.MinTouchSide;
+        var blockHeight = messageHeight + MessageGap + authoredHeight * scale + deleteHeight;
+        var blockTop = Mathf.Max(bandTop, bandTop + (bandBottom - bandTop - blockHeight) * 0.5f);
+
+        if (message is not null)
+        {
+            var messageWidth = message.Size.X > 1f ? message.Size.X : 1054f;
+            var messageScale = message.Scale.X > 0.05f ? message.Scale.X : 1f;
+            PlaceGlobal(
+                message,
+                new Vector2(
+                    PortraitHudMetrics.CenterX(canvas.X, messageWidth * messageScale),
+                    blockTop
+                )
+            );
+        }
+
+        var rowTop = blockTop + messageHeight + MessageGap;
+        PortraitNodes.ClearAnchors(row);
+        PlaceGlobal(
+            row,
+            new Vector2(PortraitHudMetrics.CenterX(canvas.X, authoredWidth * scale), rowTop)
+        );
+
+        PlaceDeleteButtons(screen);
+        PlaceBackButton(screen, canvas);
+    }
+
+    private static float FitMessage(Control message, Vector2 canvas)
+    {
+        if (message is null)
+            return 0f;
+
+        PortraitNodes.ClearAnchors(message);
+        var width = message.Size.X > 1f ? message.Size.X : 1054f;
+        var height = message.Size.Y > 1f ? message.Size.Y : 97f;
+        var fit = Mathf.Min(1f, (canvas.X - 2f * PortraitHudMetrics.EdgeMargin) / width);
+        message.PivotOffset = Vector2.Zero;
+        if (Mathf.Abs(message.Scale.X - fit) > 0.01f)
+            message.Scale = Vector2.One * fit;
+
+        return height * fit;
+    }
+
+    // Each delete button is placed from its own card's transform rather than
+    // from the authored landscape offsets, which no longer line up once the
+    // row has been fitted to the canvas.
+    private static void PlaceDeleteButtons(Control screen)
+    {
+        for (var index = 1; index <= 3; index++)
+        {
+            var card = PortraitNodes.FindControl(screen, $"ProfileButton{index}");
+            var button = PortraitNodes.FindControl(screen, $"DeleteProfileButton{index}");
+            if (card is null || button is null)
+                continue;
+
+            var width = button.Size.X > 1f ? button.Size.X : 80f;
+            var height = button.Size.Y > 1f ? button.Size.Y : 80f;
+            var scale = PortraitHudMetrics.TouchScale(width, height, DeleteMaxScale);
+            button.PivotOffset = Vector2.Zero;
+            if (Mathf.Abs(button.Scale.X - scale) > 0.01f)
+                button.Scale = Vector2.One * scale;
+
+            PortraitNodes.ClearAnchors(button);
+            // Transform the card's own bottom-centre point: this survives the
+            // row's scale without any arithmetic about which size is scaled.
+            var bottomCentre = card.GetGlobalTransform() * new Vector2(card.Size.X * 0.5f, card.Size.Y);
+            PlaceGlobal(
+                button,
+                new Vector2(bottomCentre.X - width * scale * 0.5f, bottomCentre.Y + DeleteGap)
+            );
+        }
+    }
+
+    private static void PlaceBackButton(Control screen, Vector2 canvas)
+    {
+        if (PortraitNodes.FindControl(screen, "BackButton") is not { } back)
+            return;
+
+        PortraitNodes.ClearAnchors(back);
+        var height = back.Size.Y > 1f ? back.Size.Y : 110f;
+        PlaceGlobal(
+            back,
+            new Vector2(
+                PortraitHudMetrics.EdgeMargin,
+                PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - height
+            )
+        );
+    }
+
+    private static void PlaceGlobal(Control control, Vector2 target)
+    {
+        if (control.GlobalPosition.DistanceTo(target) > 1.5f)
+            control.GlobalPosition = target;
+    }
+}
+
+// OnSubmenuOpened is the safe hook: public, runs on every open, and its body
+// touches nothing a patched copy cannot reach. Patching this screen's _Ready
+// would leave its own node references null on device (see BUG-020/BUG-022).
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.ProfileScreen.NProfileScreen), "OnSubmenuOpened")]
+internal static class ProfileScreenPatch
+{
+    private static void Postfix(Control __instance)
+        => PortraitNodes.AssertLoop(__instance, () => PortraitProfileScreen.Apply(__instance));
+}
+
 [HarmonyPatch(typeof(NContinueRunInfo), "AnimShow")]
 internal static class ContinueRunInfoPatch
 {
+    // Roughly a fingertip plus a little air, in canvas units.
+    private const float FingerClearance = 56f;
+
     private static void Postfix(NContinueRunInfo __instance)
     {
         foreach (var delay in new[] { 0.05, 0.4 })
@@ -2059,11 +2288,20 @@ internal static class ContinueRunInfoPatch
 
         panel.ZAsRelative = false;
         panel.ZIndex = 900;
+
+        // Anchored to the button it belongs to, not to a fixed band of the
+        // screen. Pinning it at 27% of the canvas threw the tooltip up onto
+        // the logo the moment the second pass ran, which reads as a glitch;
+        // it only ever needs to clear the finger holding the button.
+        var anchorTop = canvas.Y * 0.27f;
+        if (panel.GetParent() is Control owner && owner.Size.Y > 1f)
+            anchorTop = owner.GlobalPosition.Y - height * globalScale - FingerClearance;
+
         var target = new Vector2(
             (canvas.X - width * globalScale) * 0.5f,
             Mathf.Clamp(
-                canvas.Y * 0.27f,
-                PortraitDisplay.SafeTop() + 80f,
+                anchorTop,
+                PortraitDisplay.SafeTop() + 24f,
                 canvas.Y - height * globalScale - 180f
             )
         );

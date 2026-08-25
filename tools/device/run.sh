@@ -3,10 +3,10 @@
 # decisive shows up in the log, then print the verdict. Filtered logcat keeps
 # the pull under a second instead of dumping the whole ring buffer.
 set -uo pipefail
-ADB="/c/Users/whisper/AppData/Local/Android/Sdk/platform-tools/adb.exe"
+ADB="adb"
 SERIAL="${STS2_DEVICE:-192.168.1.128:39741}"
 PKG="com.sts2portrait.mobile.local"
-REPO="/d/Projects/slaythespire2-portrait-mobile"
+REPO="/mnt/NEVERDELETETHIS/Projects/slaythespire2-portrait-mobile"
 
 "$ADB" -s "$SERIAL" shell am force-stop "$PKG"
 "$ADB" -s "$SERIAL" logcat -c

@@ -14,5 +14,6 @@ internal static class LauncherStorageNames
     internal const string PublishDirectory = "publish";
     internal const string ShaderWarmupVersion = "shader_warmup_version";
     internal const string StartupMarker = "last_game_start_incomplete";
+    internal const string GraphicsDevice = "graphics_device.txt";
     internal const string StartupSceneSnapshot = "last_game_start_scene_tree.txt";
 }

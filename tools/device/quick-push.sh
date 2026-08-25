@@ -6,15 +6,14 @@
 # Java, manifest, native or asset changes still need scripts/build-android-local.ps1.
 set -uo pipefail
 
-REPO="/d/Projects/slaythespire2-portrait-mobile"
-ADB="/c/Users/whisper/AppData/Local/Android/Sdk/platform-tools/adb.exe"
+REPO="/mnt/NEVERDELETETHIS/Projects/slaythespire2-portrait-mobile"
+ADB="adb"
 SERIAL="${STS2_DEVICE:-192.168.1.128:39741}"
-export MSYS_NO_PATHCONV=1
 
 echo "[1/3] building managed layer"
 BUILD_LOG="$REPO/tmp/device/build.log"
 mkdir -p "$REPO/tmp/device"
-dotnet build "$(cygpath -w "$REPO/src/STS2Mobile/STS2Mobile.csproj")" -c Release > "$BUILD_LOG" 2>&1
+dotnet build "$REPO/src/STS2Mobile/STS2Mobile.csproj" -c Release > "$BUILD_LOG" 2>&1
 if [ $? -ne 0 ]; then
   grep -E "error" "$BUILD_LOG" | head -5
   echo "build failed, not deploying"
@@ -32,7 +31,7 @@ fi
 
 echo "[2/3] pushing to override dir"
 "$ADB" -s "$SERIAL" shell "mkdir -p /data/local/tmp/sts2_override" >/dev/null 2>&1
-"$ADB" -s "$SERIAL" push "$(cygpath -w "$DLL")" /data/local/tmp/sts2_override/STS2Mobile.dll
+"$ADB" -s "$SERIAL" push "$DLL" /data/local/tmp/sts2_override/STS2Mobile.dll
 "$ADB" -s "$SERIAL" shell "chmod 644 /data/local/tmp/sts2_override/STS2Mobile.dll"
 
 echo "[3/3] booting game leg"
