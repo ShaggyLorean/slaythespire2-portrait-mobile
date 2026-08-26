@@ -476,7 +476,9 @@ internal static class PortraitMainMenu
 
     // Sit the block slightly above the middle of the free band: dead centre
     // reads as a gap under the logo and a gap over the skyline at once.
-    private const float MenuBlockBandBias = 0.36f;
+    // Raised from 0.36 when the multiplayer row left the menu: four rows at
+    // the old bias floated high and left a dead band above the bottom edge.
+    private const float MenuBlockBandBias = 0.62f;
     private const float LogoTopRatio = 0.18f;
     private const float LogoScale = 0.42f;
     private const float LogoCenterOffset = 460f;
@@ -2029,12 +2031,12 @@ internal static class PortraitTopBar
             RestoreIntoSlot(room);
             // The potion slots are the one top-bar control the player taps
             // mid-run; parked in row 1 at native size they were ~14dp and
-            // unusable. They keep their combat-style pin outside the row and
-            // take the right end of the relic band instead, thumb-sized.
-            const float potionScale = 1.5f;
-            var potionWidth = (potions is not null && potions.Size.X > 1f ? potions.Size.X : 200f)
-                * potionScale;
-            Place(potions, new Vector2(canvas.X - 38f - potionWidth, row2 + 10f), potionScale);
+            // unusable. The capsule hangs at the left edge under the fire
+            // relic, thumb-sized, in the dark band every non-combat screen
+            // leaves empty there. (The slot strip inside is a plain Control,
+            // not a BoxContainer, so the capsule stays horizontal by design.)
+            const float potionScale = 1.8f;
+            Place(potions, new Vector2(38f, row2 + 118f), potionScale);
             if (right is not null)
             {
                 const float rightScale = 1.05f;
