@@ -3269,7 +3269,15 @@ internal static class PortraitRestSite
     }
 }
 
-[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.NDeckViewScreen), "_Ready")]
+// _Ready is unpatchable here: its body reads the protected base field _cards
+// (BUG-031). AfterCapstoneOpened is the safe hook: public virtual on the base,
+// not overridden by the deck screen, body touches only its own private field,
+// and the capstone container calls it right after the screen opens. Bonus:
+// every NCardsViewScreen subclass with a sort row gets the same fit.
+[HarmonyPatch(
+    typeof(MegaCrit.Sts2.Core.Nodes.Screens.NCardsViewScreen),
+    "AfterCapstoneOpened"
+)]
 internal static class DeckViewSortRowPatch
 {
     // The sort row is a 1150-wide hbox centered inside a 545-wide holder;
@@ -3295,6 +3303,14 @@ internal static class DeckViewSortRowPatch
                 PortraitHudMetrics.CenterX(canvas.X, rowWidth * fit),
                 row.GlobalPosition.Y
             );
+            // The View Upgrades tickbox is ~12dp tall as authored and the
+            // touch sweep skips it (not a full-width row). Grow it from its
+            // bottom-left corner into the empty band it sits in.
+            if (PortraitNodes.FindControl(screen, "Upgrades") is { Visible: true } upgrades)
+            {
+                upgrades.PivotOffset = new Vector2(0f, upgrades.Size.Y);
+                upgrades.Scale = Vector2.One * 2.2f;
+            }
         });
     }
 }
@@ -3777,7 +3793,11 @@ internal static class AncientEventReadyPatch
     }
 }
 
-[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Events.NAncientEventLayout), "SetDialogueLineAndAnimate")]
+// SetDialogueLineAndAnimate is unpatchable: its body reads the protected base
+// field _optionsContainer (BUG-031). The tap-to-advance handler is the safe
+// hook with the same timing, and its body only touches this class's own
+// members; the initial line 0 is covered by the _Ready assert loop anyway.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Events.NAncientEventLayout), "OnDialogueHitboxClicked")]
 internal static class AncientEventDialoguePatch
 {
     private static void Postfix(object __instance) =>
