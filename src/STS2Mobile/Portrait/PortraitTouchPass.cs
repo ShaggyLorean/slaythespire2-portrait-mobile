@@ -140,6 +140,7 @@ internal static class PortraitTouchPass
         }
 
         Walk(root);
+        RaiseBodyTextFloor(root);
 
         if (lowestBlock is not null && lowestBottom > contentBottom)
             LiftOutOfGestureStrip(lowestBlock, lowestBottom - contentBottom);
@@ -195,7 +196,151 @@ internal static class PortraitTouchPass
 
         control.CustomMinimumSize = new Vector2(control.CustomMinimumSize.X, wantedHeight);
         control.SetMeta(GrownMeta, true);
+        GrowText(control, wantedHeight / authored);
         return true;
+    }
+
+    private static readonly StringName FontSizeName = "font_size";
+    // Rich text draws each style run with its own themed size: raising only
+    // normal_font_size left BBCode-bold headings tiny under their own grown
+    // descriptions, flipping the hierarchy. The whole family moves together.
+    private static readonly StringName[] RichFontSizeNames =
+    {
+        new StringName("normal_font_size"),
+        new StringName("bold_font_size"),
+        new StringName("italics_font_size"),
+        new StringName("bold_italics_font_size"),
+    };
+    private static readonly StringName AuthoredFontMeta = "sts2_touch_authored_font";
+
+    // A row grown without its text is worse than a small row: a huge plate
+    // with a tiny caption in the corner reads as broken. Whatever factor the
+    // row grew by, its labels grow with it, through font-size overrides so the
+    // game's own hover animations (which write label Scale) stay untouched.
+    // The authored size is remembered in metadata so repeat sweeps cannot
+    // compound the growth.
+    private static void GrowText(Node root, float factor)
+    {
+        if (factor <= 1.01f)
+            return;
+
+        void Walk(Node node)
+        {
+            switch (node)
+            {
+                case Label label:
+                    ApplyFontOverride(label, FontSizeName, factor);
+                    break;
+                case RichTextLabel rich:
+                    foreach (var sizeName in RichFontSizeNames)
+                        ApplyFontOverride(rich, sizeName, factor);
+                    break;
+            }
+
+            foreach (var child in node.GetChildren())
+                Walk(child);
+        }
+
+        Walk(root);
+    }
+
+    // Long-form text has its own floor. 46 canvas units is 14dp on the
+    // reference device - the size below which story text stops being
+    // comfortable to read at arm's length. Only wrapped or long text
+    // qualifies: short labels are counters and badges, and inflating those
+    // wrecks the HUD (the first draft of this rule did exactly that to the
+    // potion count).
+    private const float BodyTextFloor = 46f;
+    private const int LongTextThreshold = 60;
+    private static int _textRaised;
+
+    private static void RaiseBodyTextFloor(Node root)
+    {
+        var raised = 0;
+
+        void Walk(Node node)
+        {
+            if (node is Control { Visible: true } control && control.IsVisibleInTree() && !IsManaged(control))
+            {
+                var scaleY = control.GetGlobalTransform().Scale.Y;
+                if (scaleY > 0.05f)
+                {
+                    switch (control)
+                    {
+                        case Label label when label.AutowrapMode != TextServer.AutowrapMode.Off
+                            || (label.Text?.Length ?? 0) >= LongTextThreshold:
+                            raised += RaiseFloor(label, FontSizeName, scaleY) ? 1 : 0;
+                            break;
+                        case RichTextLabel rich when (rich.Text?.Length ?? 0) >= LongTextThreshold:
+                        {
+                            var any = false;
+                            foreach (var sizeName in RichFontSizeNames)
+                                any |= RaiseFloor(rich, sizeName, scaleY);
+                            raised += any ? 1 : 0;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            foreach (var child in node.GetChildren())
+                Walk(child);
+        }
+
+        Walk(root);
+        if (raised > 0 && _textRaised != raised)
+        {
+            _textRaised = raised;
+            PatchHelper.Log($"[Touch] raised body text floor on {raised} label(s)");
+        }
+    }
+
+    private static bool RaiseFloor(Control label, StringName sizeName, float scaleY)
+    {
+        var current = label.GetThemeFontSize(sizeName);
+        if (current <= 0 || current * scaleY >= BodyTextFloor)
+            return false;
+
+        var metaKey = AuthoredFontMeta + "_" + sizeName;
+        if (label.GetMeta(metaKey, Variant.From(0)).AsInt32() <= 0)
+        {
+            label.SetMeta(metaKey, current);
+        }
+
+        var target = Mathf.RoundToInt(BodyTextFloor / scaleY);
+        if (label.HasThemeFontSizeOverride(sizeName) && label.GetThemeFontSize(sizeName) == target)
+            return false;
+
+        label.AddThemeFontSizeOverride(sizeName, target);
+        return true;
+    }
+
+    private static void ApplyFontOverride(Control label, StringName sizeName, float factor)
+    {
+        var metaKey = AuthoredFontMeta + "_" + sizeName;
+        var authored = label.GetMeta(metaKey, Variant.From(0)).AsInt32();
+        if (authored <= 0)
+        {
+            authored = label.GetThemeFontSize(sizeName);
+            if (authored <= 0)
+                return;
+
+            label.SetMeta(metaKey, authored);
+        }
+
+        // Inside a grown row every label reaches at least the body floor:
+        // otherwise the row's short title ends up SMALLER than its long
+        // description (the body floor catches only long text) and the type
+        // hierarchy flips upside down.
+        var scaleY = label.GetGlobalTransform().Scale.Y;
+        var target = Mathf.RoundToInt(authored * factor);
+        if (scaleY > 0.05f)
+            target = Math.Max(target, Mathf.RoundToInt(BodyTextFloor / scaleY));
+
+        if (label.HasThemeFontSizeOverride(sizeName) && label.GetThemeFontSize(sizeName) == target)
+            return;
+
+        label.AddThemeFontSizeOverride(sizeName, target);
     }
 
     // Lift the nearest ancestor that can actually be moved: a container child

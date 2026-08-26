@@ -439,9 +439,8 @@ internal static class PortraitMainMenu
     // readable, but well under a comfortable thumb target. A primary menu is
     // where a touch layout should be most generous, so aim above the ergonomic
     // minimum rather than at it.
-    // Pinned rather than derived: this is the size the main menu was tuned to
-    // by eye, and it should not move when the global floor changes.
-    private const float MenuRowTarget = 140f;
+    // Above the corrected 160-unit floor, tuned by eye from there.
+    private const float MenuRowTarget = 168f;
     private const float MenuRowFallback = 50f;
     private const float MenuScaleMin = 1.65f;
     private const float MenuScaleMax = 3.2f;
@@ -628,6 +627,11 @@ internal static class PortraitMainMenu
             ?? menu.GetNodeOrNull<Control>("%MainMenuTextButtons");
         if (buttons is null)
             return;
+
+        // This pass owns every row in the container; without the claim the
+        // global touch sweep grows the same rows it just sized and the menu
+        // visibly breathes as the two passes alternate.
+        PortraitTouchPass.MarkManaged(buttons);
 
         var scale = MenuScale(buttons);
         LastMenuScale = scale;
@@ -949,7 +953,7 @@ internal static class MainMenuReticlePatch
 internal static class PortraitPauseMenu
 {
     private const float ButtonWidth = 720f;
-    private const float ButtonHeight = 128f;
+    private const float ButtonHeight = 168f;
     private const float RowSeparation = 26f;
     private const float TitleGap = 56f;
 
@@ -962,6 +966,9 @@ internal static class PortraitPauseMenu
         var container = PortraitNodes.FindControl(menu, "ButtonContainer");
         if (container is null)
             return;
+
+        // This pass sizes every row; the global sweep must not re-grow them.
+        PortraitTouchPass.MarkManaged(container);
 
         var saveAndQuit = PortraitNodes.FindControl(container, "SaveAndQuit");
         var disconnect = PortraitNodes.FindControl(container, "Disconnect");
@@ -1608,6 +1615,10 @@ internal static class PortraitSettingsOverlay
         if (PortraitNodes.FindControl(screen, "Clipper") is not { } clipper)
             return;
 
+        // The whole content block is scaled as one unit here; sweep-growing
+        // individual rows inside it would fight that scale every tick.
+        PortraitTouchPass.MarkManaged(clipper);
+
         clipper.PivotOffset = new Vector2(clipper.Size.X * 0.5f, 0f);
         clipper.Scale = Vector2.One * SettingsContentScale;
     }
@@ -2126,10 +2137,21 @@ internal static class PortraitTopBar
         // bucket too: on 984-wide canvases the scaled prose ran past the old
         // fixed depth and its last line sat on bare art. The fade tail keeps
         // map points readable underneath as before, just deeper.
-        backdrop.Size = new Vector2(
-            canvas.X,
-            PortraitHudMetrics.ContentTop(safeTop) + 470f
-        );
+        // The event prose block grows with the readable-text floor, so a
+        // fixed depth cannot hold it: measure the live block and keep the
+        // gradient under its last line. Anything else on screen keeps the
+        // default depth.
+        var depth = PortraitHudMetrics.ContentTop(safeTop) + 470f;
+        if (PortraitSceneCache.FindByType(bar.GetTree().Root, "NEventRoom") is { Visible: true } eventRoom
+            && PortraitNodes.FindControl(eventRoom, "Title")?.GetParent() is Control prose
+            && prose.IsVisibleInTree())
+        {
+            var proseBottom = prose.GetGlobalRect().Position.Y
+                + prose.Size.Y * prose.GetGlobalTransform().Scale.Y;
+            depth = Mathf.Max(depth, proseBottom + 60f);
+        }
+
+        backdrop.Size = new Vector2(canvas.X, depth);
     }
 }
 
@@ -2795,7 +2817,10 @@ internal static class EventRoomPatch
                 options.GlobalPosition = keep;
             }
 
-            const float textScale = 1.1f;
+            // Text size is owned by the global readable-text floor now; the
+            // old 1.1 block scale stacked on top of it and pushed the last
+            // line off the scrim.
+            const float textScale = 1.0f;
             block.PivotOffset = Vector2.Zero;
             block.Scale = Vector2.One * textScale;
             var blockWidth = (block.Size.X > 1f ? block.Size.X : 800f) * textScale;
