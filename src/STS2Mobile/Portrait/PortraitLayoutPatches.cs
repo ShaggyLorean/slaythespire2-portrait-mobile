@@ -1935,6 +1935,12 @@ internal static class CombatUiPatch
         if (endTurn is not null)
             PortraitCombat.PlaceEndTurn(endTurn, canvas);
 
+        // Coop's ping button leaked into singleplayer loot screens, floating
+        // bottom-right with nothing to ping; multiplayer does not exist on
+        // this build (the menu row is gone), so it never earns its pixels.
+        if (PortraitNodes.FindControl(ui, "PingButton") is { Visible: true } ping)
+            ping.Visible = false;
+
         var draw = PortraitNodes.FindControl(ui, "DrawPile");
         var discard = PortraitNodes.FindControl(ui, "DiscardPile");
         var piles = PortraitNodes.FindControl(ui, "CombatPileContainer");

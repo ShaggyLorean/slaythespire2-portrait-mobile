@@ -359,9 +359,9 @@ visual collisions and unplayable states are the biggest bug class.
 - **Proceed arrow overlaps the resting hero**: FIXED and verified. The
   ShowPos postfix now floors the arrow's Y to the bottom content band on
   every screen, under any room's character art.
-- **"Ping" coop button leaks into singleplayer**: seen bottom-right on the
-  post-combat loot screen. Class unknown yet; capture `user://sts2_types`
-  dump next time it is visible, then hide it for singleplayer runs.
+- **"Ping" coop button leaks into singleplayer**: FIXED and verified. It
+  is `NPingButton` under CombatUi; the combat pass hides it (multiplayer
+  does not exist on this build). Loot screen shows zero ping pixels now.
 - **View Upgrades tickbox small on select grids**: NDeckUpgradeSelectScreen
   does not inherit NCardsViewScreen, so the AfterCapstoneOpened growth pass
   does not reach it.

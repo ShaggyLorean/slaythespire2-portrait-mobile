@@ -89,6 +89,41 @@ internal static class PortraitDisplay
                 // File-triggered viewport dump: drop user://sts2_vpdump to
                 // capture what GODOT thinks the frame looks like, separating
                 // an in-engine layout bug from a stale Android composition.
+                // Dev cheat: drop user://sts2_weaken to set every living enemy
+                // to 1 hp. Test runs must not grind real fights; one hit after
+                // this ends the combat through the game's own death pipeline
+                // (LoseHpInternal never fires death events, so the HP write is
+                // safe and the kill still happens the legitimate way).
+                var weakenTrigger = "user://sts2_weaken";
+                if (Godot.FileAccess.FileExists(weakenTrigger))
+                {
+                    DirAccess.RemoveAbsolute(weakenTrigger);
+                    try
+                    {
+                        var cmType = HarmonyLib.AccessTools.TypeByName(
+                            "MegaCrit.Sts2.Core.Combat.CombatManager");
+                        var cm = cmType?.GetProperty("Instance")?.GetValue(null);
+                        var state = HarmonyLib.Traverse.Create(cm).Field("_state").GetValue();
+                        var enemies = HarmonyLib.Traverse.Create(state).Property("Enemies").GetValue()
+                            as System.Collections.IEnumerable;
+                        var weakened = 0;
+                        if (enemies is not null)
+                            foreach (var enemy in enemies)
+                            {
+                                var t = HarmonyLib.Traverse.Create(enemy);
+                                if (t.Property("IsAlive").GetValue() is true)
+                                {
+                                    t.Property("CurrentHp").SetValue(1);
+                                    weakened++;
+                                }
+                            }
+                        PatchHelper.Log($"[Cheat] weakened {weakened} enemies to 1 hp");
+                    }
+                    catch (Exception ex)
+                    {
+                        PatchHelper.Log($"[Cheat] weaken failed: {ex.GetBaseException().Message}");
+                    }
+                }
                 var typesTrigger = "user://sts2_types";
                 if (Godot.FileAccess.FileExists(typesTrigger))
                 {
@@ -101,6 +136,9 @@ internal static class PortraitDisplay
                         if (n is Control { Visible: true } c && c.IsVisibleInTree()
                             && c.Size.X > 300f && c.Size.Y > 300f)
                             sb.Append($"{c.GetType().Name}:{c.Name} | ");
+                        if (n.Name.ToString().Contains("Ping", StringComparison.OrdinalIgnoreCase)
+                            && n is Control pc)
+                            sb.Append($"PING>{pc.GetType().Name}:{pc.Name} vis={pc.IsVisibleInTree()} rect={pc.GetGlobalRect().Position.X:F0},{pc.GetGlobalRect().Position.Y:F0} {pc.Size.X:F0}x{pc.Size.Y:F0} parent={pc.GetParent()?.Name} | ");
                         foreach (var child in n.GetChildren())
                             Walk(child, depth + 1);
                     }
