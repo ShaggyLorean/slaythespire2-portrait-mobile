@@ -59,9 +59,18 @@ internal static class PortraitHudMetrics
     // Extra clearance kept above the OS gesture area, below the safe inset.
     internal const float NavClearance = 24f;
 
-    // Minimum acceptable side of a touch target, canvas units (~10mm on the
-    // reference device: 1180-unit canvas over a ~68mm-wide panel).
-    internal const float MinTouchSide = 96f;
+    // Minimum acceptable side of a touch target, in canvas units.
+    //
+    // The old value of 96 was documented as ~10mm and was not: on the
+    // reference device the 1180-unit canvas maps to a 1440px panel at 640dpi,
+    // so one canvas unit is 1.22px = 0.305dp, and 96 units is 29dp - a bit
+    // over 4mm, well under half of Android's 48dp minimum. That single wrong
+    // constant is why so many screens measured "fine" while being visibly too
+    // small to hit: every check in this layer trusted it.
+    //
+    // 160 units = 48.8dp = ~7.6mm, which is the platform minimum rather than
+    // an ambition. Primary rows should still be given more than this.
+    internal const float MinTouchSide = 160f;
 
     // Side margin content keeps from the canvas edges.
     internal const float EdgeMargin = 30f;

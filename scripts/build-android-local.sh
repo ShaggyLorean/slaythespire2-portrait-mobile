@@ -181,9 +181,10 @@ resolve_java_home() {
     return 1
 }
 
-# The wrapper jar is not checked in (*.jar is gitignored), so ./gradlew cannot
-# bootstrap itself. Prefer a gradle already on PATH; otherwise download exactly
-# the distribution android/gradle/wrapper/gradle-wrapper.properties pins.
+# The wrapper is the only build path that pins a version, so it comes first:
+# a host gradle two majors ahead (9.x drives our AGP 8.6.1 only with deprecation
+# warnings, and 10 will refuse outright) is accepted only when it matches the
+# pinned version exactly.
 resolve_gradle() {
     if [ -n "$ARG_GRADLE" ]; then
         [ -x "$ARG_GRADLE" ] || die "gradle not executable: $ARG_GRADLE"
@@ -191,12 +192,28 @@ resolve_gradle() {
         return 0
     fi
 
-    if command -v gradle >/dev/null 2>&1; then
-        command -v gradle
+    local props="$ANDROID_DIR/gradle/wrapper/gradle-wrapper.properties"
+    local pinned=""
+    if [ -f "$props" ]; then
+        pinned="$(sed -n 's/^distributionUrl=//p' "$props" | sed 's/\\:/:/g' | tr -d '\r' \
+            | sed -n 's/.*gradle-\([0-9][0-9.]*\)-.*\.zip/\1/p')"
+    fi
+
+    if [ -x "$ANDROID_DIR/gradlew" ]; then
+        printf '%s\n' "$ANDROID_DIR/gradlew"
         return 0
     fi
 
-    local props="$ANDROID_DIR/gradle/wrapper/gradle-wrapper.properties"
+    if command -v gradle >/dev/null 2>&1; then
+        local host
+        host="$(gradle --version 2>/dev/null | sed -n 's/^Gradle //p' | head -1 | tr -d '\r')"
+        if [ -z "$pinned" ] || [ "$host" = "$pinned" ]; then
+            command -v gradle
+            return 0
+        fi
+        log "Ignoring gradle $host on PATH: this project pins $pinned" >&2
+    fi
+
     [ -f "$props" ] || die "gradle not found on PATH and no wrapper properties at $props"
 
     local url version dist_root dist_bin zip

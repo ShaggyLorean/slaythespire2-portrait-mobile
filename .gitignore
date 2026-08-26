@@ -26,6 +26,9 @@ tmp-*/
 *.aar
 *.aar.bak*
 *.jar
+# The Gradle wrapper jar is the one jar that must ship: without it a clean
+# clone cannot build at all (./gradlew dies before it can download anything).
+!android/gradle/wrapper/gradle-wrapper.jar
 *.keystore
 
 # Third-party sources & SDKs

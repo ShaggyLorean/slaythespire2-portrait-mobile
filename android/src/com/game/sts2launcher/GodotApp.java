@@ -81,6 +81,7 @@ public class GodotApp extends GodotActivity {
 	private static final String KEY_INSTALLED_VERSION_CODE = "installed_version_code";
 	private static final String KEY_INSTALLED_PACKAGE_NAME = "installed_package_name";
 	private static final String KEY_ASSEMBLY_CACHE_SCHEMA = "assembly_cache_schema";
+	private static final String KEY_INSTALLED_APK_UPDATE_TIME = "installed_apk_update_time";
 	private static final String KEY_LAUNCH_GAME_ON_NEXT_START = "launch_game_on_next_start";
 	private static final String KEY_SAFE_LAUNCH_ON_NEXT_START = "safe_launch_on_next_start";
 	private static final int ASSEMBLY_CACHE_SCHEMA = 9;
@@ -281,15 +282,35 @@ public class GodotApp extends GodotActivity {
 		finish();
 	}
 
+	// The APK's own install timestamp, which changes on every install and
+	// reinstall even when the version code does not. Local sideloads keep one
+	// version code for many builds, so without this the cache key cannot tell
+	// two different APKs apart.
+	private long currentApkUpdateTime() {
+		try {
+			return getPackageManager().getPackageInfo(getPackageName(), 0).lastUpdateTime;
+		} catch (Exception e) {
+			Log.w(TAG, "Could not read APK lastUpdateTime", e);
+			return -1L;
+		}
+	}
+
 	private boolean shouldRefreshAssemblyCache() {
 		SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 		int lastSchema = prefs.getInt(KEY_ASSEMBLY_CACHE_SCHEMA, -1);
 		int lastVersion = prefs.getInt(KEY_INSTALLED_VERSION_CODE, -1);
 		int currentVersion = BuildConfig.VERSION_CODE;
+		long lastApkUpdate = prefs.getLong(KEY_INSTALLED_APK_UPDATE_TIME, -1L);
+		long currentApkUpdate = currentApkUpdateTime();
+
+		if (lastApkUpdate != currentApkUpdate) {
+			Log.i(TAG, "Assembly cache key changed: apkUpdateTime " + lastApkUpdate + " -> " + currentApkUpdate);
+		}
 
 		if (
 			lastSchema == ASSEMBLY_CACHE_SCHEMA &&
 			lastVersion == currentVersion &&
+			lastApkUpdate == currentApkUpdate &&
 			getPackageName().equals(prefs.getString(KEY_INSTALLED_PACKAGE_NAME, ""))
 		) {
 			File destDir = new File(getFilesDir(), ".godot/mono/publish/" + getRuntimeGodotArchDir());
@@ -349,8 +370,13 @@ public class GodotApp extends GodotActivity {
 
 		for (String fileName : required.toArray(new String[0])) {
 			File file = new File(destDir, fileName);
-			if (!file.exists()) {
-				Log.w(TAG, "Missing required cache file: " + file.getAbsolutePath());
+			// exists() alone accepts a zero-byte or half-written file, which is
+			// exactly what a copy interrupted by ENOSPC or a kill leaves behind:
+			// the cache then reports healthy and the runtime dies later, far from
+			// the cause.
+			if (!file.isFile() || file.length() <= 0) {
+				Log.w(TAG, "Missing or empty required cache file: " + file.getAbsolutePath()
+					+ " isFile=" + file.isFile() + " bytes=" + (file.exists() ? file.length() : -1));
 				return false;
 			}
 		}
@@ -394,13 +420,19 @@ public class GodotApp extends GodotActivity {
 		prefs.edit()
 			.putInt(KEY_ASSEMBLY_CACHE_SCHEMA, ASSEMBLY_CACHE_SCHEMA)
 			.putInt(KEY_INSTALLED_VERSION_CODE, currentVersion)
+			.putLong(KEY_INSTALLED_APK_UPDATE_TIME, currentApkUpdateTime())
 			.putString(KEY_INSTALLED_PACKAGE_NAME, getPackageName())
 			.apply();
 	}
 
 	private void resetAssemblyCacheState() {
 		SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-		prefs.edit().remove(KEY_ASSEMBLY_CACHE_SCHEMA).remove(KEY_INSTALLED_VERSION_CODE).remove(KEY_INSTALLED_PACKAGE_NAME).apply();
+		prefs.edit()
+			.remove(KEY_ASSEMBLY_CACHE_SCHEMA)
+			.remove(KEY_INSTALLED_VERSION_CODE)
+			.remove(KEY_INSTALLED_APK_UPDATE_TIME)
+			.remove(KEY_INSTALLED_PACKAGE_NAME)
+			.apply();
 		File destDir = new File(getFilesDir(), ".godot/mono/publish/" + getRuntimeGodotArchDir());
 		clearAssemblyCache(destDir);
 	}
@@ -466,6 +498,13 @@ public class GodotApp extends GodotActivity {
 		Set<String> packagedBclNames = getPackagedBclNames();
 
 		boolean refreshCache = shouldRefreshAssemblyCache();
+		// The dev override directory only exists on a machine that is pushing
+		// assemblies over adb; a cache hit would skip the very copy that applies
+		// them, so its presence always forces the extraction path.
+		if (new File("/data/local/tmp/sts2_override").isDirectory()) {
+			Log.w(TAG, "Dev override directory present; forcing assembly cache refresh");
+			refreshCache = true;
+		}
 		logAssemblyCacheState("before-copy", destDir, srcDir, requiresGameAssemblies, packagedBclNames);
 
 		File patcherMarker = new File(destDir, "STS2Mobile.dll");
@@ -672,7 +711,8 @@ public class GodotApp extends GodotActivity {
 		if (srcDir == null || !srcDir.exists() || !srcDir.isDirectory()) {
 			return false;
 		}
-		return new File(srcDir, GAME_REQUIRED_ASSEMBLY).exists();
+		File gameAssembly = new File(srcDir, GAME_REQUIRED_ASSEMBLY);
+		return gameAssembly.isFile() && gameAssembly.length() > 0;
 	}
 
 	private boolean containsAssemblies(File dir) {
@@ -777,8 +817,16 @@ public class GodotApp extends GodotActivity {
 	public List<String> getCommandLine() {
 		List<String> commands = new ArrayList<>(super.getCommandLine());
 		File pckFile = new File(gameDir, PCK_FILE);
-		if (isGamePckReady() && consumeGameLaunchRequest()) {
-			boolean safeLaunch = consumeSafeGameLaunchRequest();
+		// Both flags are consumed unconditionally: inside the && they survive
+		// whenever the PCK is not ready, and the next boot would then launch
+		// into a game the player never asked for.
+		boolean launchRequested = consumeGameLaunchRequest();
+		boolean safeLaunch = consumeSafeGameLaunchRequest();
+		boolean pckReady = isGamePckReady();
+		if (launchRequested && !pckReady) {
+			Log.w(TAG, "Consumed a game launch request but the PCK is not ready; starting the launcher instead");
+		}
+		if (pckReady && launchRequested) {
 			patchGamePckForAndroid(pckFile);
 			// Ported from upstream: renderer choice is a per-device policy
 			// (saved preference + GPU evidence + safe launch) instead of a
@@ -831,16 +879,22 @@ public class GodotApp extends GodotActivity {
 		}
 	}
 
+	// These flags are one-shot: apply() is asynchronous, so a process that dies
+	// during the handoff can leave a consumed flag on disk and boot straight
+	// back into the game, or into Safe Start, forever. commit() plus a read-back
+	// makes the consumption observable in the log when it does go wrong.
 	private boolean consumeGameLaunchRequest() {
 		SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 		boolean requested = prefs.getBoolean(KEY_LAUNCH_GAME_ON_NEXT_START, false);
 		if (!requested) {
-			Log.i(TAG, "Downloaded game is ready; starting launcher first. Press PLAY to boot the game.");
+			// With no launch pending, any safe-launch flag is orphaned.
+			prefs.edit().remove(KEY_SAFE_LAUNCH_ON_NEXT_START).apply();
 			return false;
 		}
 
-		prefs.edit().remove(KEY_LAUNCH_GAME_ON_NEXT_START).apply();
-		Log.i(TAG, "Consuming one-shot game launch request");
+		boolean committed = prefs.edit().remove(KEY_LAUNCH_GAME_ON_NEXT_START).commit();
+		boolean stillSet = prefs.getBoolean(KEY_LAUNCH_GAME_ON_NEXT_START, false);
+		Log.i(TAG, "Consumed one-shot game launch request: committed=" + committed + " stillSet=" + stillSet);
 		return true;
 	}
 
@@ -851,8 +905,9 @@ public class GodotApp extends GodotActivity {
 			return false;
 		}
 
-		prefs.edit().remove(KEY_SAFE_LAUNCH_ON_NEXT_START).apply();
-		Log.i(TAG, "Consuming one-shot safe launch request");
+		boolean committed = prefs.edit().remove(KEY_SAFE_LAUNCH_ON_NEXT_START).commit();
+		boolean stillSet = prefs.getBoolean(KEY_SAFE_LAUNCH_ON_NEXT_START, false);
+		Log.i(TAG, "Consumed one-shot safe launch request: committed=" + committed + " stillSet=" + stillSet);
 		return true;
 	}
 
@@ -1298,8 +1353,12 @@ public class GodotApp extends GodotActivity {
 
 	public void launchGameOnRestart() {
 		Log.i(TAG, "Scheduling one-shot game launch on restart");
+		// A normal PLAY must also clear any safe-launch flag left behind by an
+		// earlier Safe Start, or the renderer policy keeps applying the safe
+		// override to launches the player never marked safe.
 		boolean saved = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
 			.edit()
+			.remove(KEY_SAFE_LAUNCH_ON_NEXT_START)
 			.putBoolean(KEY_LAUNCH_GAME_ON_NEXT_START, true)
 			.commit();
 		if (!saved) {

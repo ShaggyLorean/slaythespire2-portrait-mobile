@@ -40,6 +40,7 @@ internal static class PortraitTouchInput
         _installed = true;
         PatchHelper.Log("[Touch] Pointer bridge installed");
         PortraitFrameBudget.StartMonitor(tree);
+        PortraitTouchPass.StartMonitor(tree);
     }
 
     private static void OnWindowInput(InputEvent inputEvent)

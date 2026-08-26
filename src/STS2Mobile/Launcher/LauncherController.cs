@@ -36,6 +36,8 @@ internal sealed class LauncherController
     private volatile bool _localLoginHandoffStarted;
     private bool _resumeLaunchAfterPckRestart;
     private bool _updateCheckRunning;
+    private bool _automaticUpdateCheckDone;
+    private bool _updateCheckWasManual;
 
     internal LauncherController(
         LauncherModel model,
@@ -410,6 +412,7 @@ internal sealed class LauncherController
 
     private async void RunUpdateCheck()
     {
+        _updateCheckWasManual = true;
         _updateCheckRunning = true;
         StartUpdateCheckPresentation();
 
@@ -570,17 +573,30 @@ internal sealed class LauncherController
 
     private void CompleteUpdateCheck(bool hasUpdate)
     {
-        if (hasUpdate)
+        if (!hasUpdate)
         {
-            _view.Actions.HideAll();
-            _view.Download.Visible = true;
-            _view.Download.Reset("Update game files");
-            _view.SetStatus("Update available!");
-        }
-        else
-        {
+            // The depot check already logged the verdict; only the button label
+            // is missing.
             _view.Actions.SetUpdateButtonText("Game is up to date");
+            return;
         }
+
+        _view.AppendColoredLog("Game update available on Steam", AppUpdateLogColor);
+
+        // Only a check the player asked for may take over the screen. The
+        // automatic one reports and leaves the launcher exactly as it was, so
+        // pressing PLAY still starts the game they already have.
+        if (!_updateCheckWasManual)
+        {
+            _view.Actions.SetUpdateButtonText("Update available - tap to install");
+            _view.SetStatus("Game update available. More options -> update, or press Play.");
+            return;
+        }
+
+        _view.Actions.HideAll();
+        _view.Download.Visible = true;
+        _view.Download.Reset("Update game files");
+        _view.SetStatus("Update available!");
     }
 
     private void FailUpdateCheck(string message)
@@ -716,6 +732,33 @@ internal sealed class LauncherController
             showCloudSync,
             showUpdate
         );
+
+        if (showUpdate)
+            StartAutomaticUpdateCheck();
+    }
+
+    // An update the player never sees is an update that never happens: the
+    // manual check lives two levels deep under More options, so a ready
+    // launcher checks once by itself and says so in the console. It never
+    // takes the screen over the way the manual check does - the result is a
+    // status line and a button label, and PLAY stays exactly where it was.
+    private async void StartAutomaticUpdateCheck()
+    {
+        if (_automaticUpdateCheckDone || _updateCheckRunning || _model.InGameMode)
+            return;
+
+        _automaticUpdateCheckDone = true;
+        _view.AppendLog("Checking Steam for game updates...");
+
+        try
+        {
+            await CheckForUpdatesAsync();
+        }
+        catch (Exception ex)
+        {
+            PatchHelper.Log($"[Launcher] Automatic update check failed: {ex}");
+            _runOnMainThread(() => _view.AppendLog($"Update check failed: {ex.Message}"));
+        }
     }
 
     private void ShowPreviousLaunchWarningIfNeeded()

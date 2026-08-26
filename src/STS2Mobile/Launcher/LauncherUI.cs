@@ -76,6 +76,7 @@ internal sealed class LauncherUI : Control
 
             PatchHelper.Log($"LauncherUI initialized. Viewport={viewportSize}");
             LauncherGraphicsDeviceEvidence.CaptureAndApplyCompatibility(Godot.OS.GetDataDir());
+            LauncherBootReport.Write(_view.AppendLog, Godot.OS.GetDataDir());
             _controller.Start();
             _launcherReady.TrySetResult(true);
         }

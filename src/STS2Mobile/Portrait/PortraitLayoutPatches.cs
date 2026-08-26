@@ -311,6 +311,30 @@ internal static class PortraitNodes
             ticks++;
             After(node, ticks < 14 ? 0.12 : 0.5, Run);
         }
+
+        // The first pass runs INLINE. Deferring it by even one timer tick means
+        // the frame that gets drawn is the game's landscape layout, and the
+        // screen visibly snaps into place a few frames later; that flash was
+        // present on nearly every patched screen. The self-rearming ticks above
+        // stay exactly as they were and remain the convergence backstop for
+        // anything the game moves after we place it.
+        //
+        // Inline is only legal on the main thread with the node already in the
+        // tree: AddChildSafely defers the add whenever the caller is off-thread
+        // or the parent is mid-ready, and running early would hit the guard
+        // above and end the chain before it ever re-armed.
+        //
+        // RULE for every pass reached this way: mutate only the patched node
+        // and its descendants, never its parent. During NOTIFICATION_READY the
+        // node's own block flag is clear, but its parent's is not.
+        if (OS.GetThreadCallerId() == OS.GetMainThreadId()
+            && GodotObject.IsInstanceValid(node)
+            && node.IsInsideTree())
+        {
+            Run();
+            return;
+        }
+
         After(node, 0.02, Run);
     }
 }
@@ -415,7 +439,9 @@ internal static class PortraitMainMenu
     // readable, but well under a comfortable thumb target. A primary menu is
     // where a touch layout should be most generous, so aim above the ergonomic
     // minimum rather than at it.
-    private const float MenuRowTarget = PortraitHudMetrics.MinTouchSide * 1.4f;
+    // Pinned rather than derived: this is the size the main menu was tuned to
+    // by eye, and it should not move when the global floor changes.
+    private const float MenuRowTarget = 140f;
     private const float MenuRowFallback = 50f;
     private const float MenuScaleMin = 1.65f;
     private const float MenuScaleMax = 3.2f;
@@ -1916,6 +1942,10 @@ internal static class PortraitTopBar
 
             PlaceRelics(relics, canvas, new Vector2(38f, row2 + 10f), 1.12f, canvas.X - 68f);
         }
+
+        // The bar and everything in it is placed by this reflow, so the global
+        // touch sweep must not second-guess its sizes.
+        PortraitTouchPass.MarkManaged(bar as Control);
 
         var signature = $"portrait-zones-6:{canvas.X:F0}:{(combat ? "combat" : "compact")}:{relics?.GetChildCount() ?? 0}";
         if (_lastSignature != signature)
