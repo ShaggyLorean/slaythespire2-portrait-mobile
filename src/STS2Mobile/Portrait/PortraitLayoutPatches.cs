@@ -287,10 +287,27 @@ internal static class PortraitNodes
     {
         var ticks = 0;
         var reported = false;
+        // Re-arming through the node's own tree handle dies the moment the
+        // node is detached; the main loop's tree outlives every screen.
+        void Rearm(double delay)
+        {
+            if (Engine.GetMainLoop() is SceneTree tree)
+                tree.CreateTimer(delay).Timeout += Run;
+        }
         void Run()
         {
-            if (!GodotObject.IsInstanceValid(node) || !node.IsInsideTree())
+            if (!GodotObject.IsInstanceValid(node))
                 return;
+            // Overlay-stack screens are DETACHED, not freed, while something
+            // covers them and during run restore. A tick landing in that
+            // window must idle and re-arm, never end the chain: this exact
+            // early-return killed the rewards pass whenever a run resumed
+            // straight into the loot screen, leaving it native for good.
+            if (!node.IsInsideTree())
+            {
+                Rearm(0.5);
+                return;
+            }
             // One throwing tick must not kill the chain: these loops carry
             // whole screens, and a transient error (a node freed mid-walk)
             // used to silently end the layout for the rest of the scene.
@@ -309,7 +326,7 @@ internal static class PortraitNodes
                 }
             }
             ticks++;
-            After(node, ticks < 14 ? 0.12 : 0.5, Run);
+            Rearm(ticks < 14 ? 0.12 : 0.5);
         }
 
         // The first pass runs INLINE. Deferring it by even one timer tick means
@@ -335,7 +352,7 @@ internal static class PortraitNodes
             return;
         }
 
-        After(node, 0.02, Run);
+        Rearm(0.02);
     }
 }
 
@@ -1304,35 +1321,41 @@ internal static class PortraitCombat
 
     private static void ScheduleHandGuard(Node hand)
     {
-        if (!GodotObject.IsInstanceValid(hand) || !hand.IsInsideTree())
+        // Same detach rule as AssertLoop: the hand leaves the tree during
+        // restore and while capstones cover the room, and the old in-tree
+        // gate before the re-arm ended this "reliable heartbeat" for good
+        // on the first tick that landed in such a window.
+        if (Engine.GetMainLoop() is not SceneTree sceneTree || !GodotObject.IsInstanceValid(hand))
             return;
-        hand.GetTree().CreateTimer(0.5).Timeout += () =>
+        sceneTree.CreateTimer(0.5).Timeout += () =>
         {
-            if (!GodotObject.IsInstanceValid(hand) || !hand.IsInsideTree())
+            if (!GodotObject.IsInstanceValid(hand))
                 return;
             var canvas = PortraitDisplay.CanvasSize;
             if (PortraitDisplay.IsPortrait(canvas))
             {
-                var holder = PortraitNodes.FindControl(hand, "CardHolderContainer");
+                // The rewards screen's own assert loop has proven flaky on
+                // device; this guard re-drives that pass INDEPENDENTLY of the
+                // hand's own state — a run resumed straight into the loot
+                // screen has a rewards overlay but no card holder yet.
+                if (PortraitSceneCache.TopOverlay() is { Visible: true } topOverlay
+                    && topOverlay.GetType().Name == "NRewardsScreen")
+                {
+                    try
+                    {
+                        PortraitRewards.ApplyNow(topOverlay);
+                    }
+                    catch (Exception ex)
+                    {
+                        PatchHelper.Log($"[Portrait] rewards from guard failed: {ex.GetBaseException().Message}");
+                    }
+                }
+                var holder = hand.IsInsideTree()
+                    ? PortraitNodes.FindControl(hand, "CardHolderContainer")
+                    : null;
                 if (holder is not null)
                 {
                     ApplyCapstoneHandVisibility(hand, holder);
-                    // The rewards screen's own assert loop has proven flaky on
-                    // device; this guard is the one heartbeat that reliably
-                    // survives a whole run scene, so it re-drives the rewards
-                    // pass and the on-demand region dump too.
-                    if (PortraitSceneCache.TopOverlay() is { Visible: true } topOverlay
-                        && topOverlay.GetType().Name == "NRewardsScreen")
-                    {
-                        try
-                        {
-                            PortraitRewards.ApplyNow(topOverlay);
-                        }
-                        catch (Exception ex)
-                        {
-                            PatchHelper.Log($"[Portrait] rewards from guard failed: {ex.GetBaseException().Message}");
-                        }
-                    }
                     // The combat intro tween slides the holder after _Ready,
                     // and it drifts on both axes: Y alone left the fan centred
                     // where the landscape scene wanted it, off to the left.
@@ -3567,6 +3590,13 @@ internal static class PortraitRewards
         PortraitNodes.DumpRegionOnRequest(screen);
         if (PortraitCapstone.IsOpen(screen) || !RewardsIsTopOverlay(screen))
         {
+            // Silent success cost a full diagnosis once: one-shot breadcrumbs
+            // per branch so a trace always shows which path this pass took.
+            if (!screen.HasMeta("Sts2PortraitRewardsIdleLogged"))
+            {
+                screen.SetMeta("Sts2PortraitRewardsIdleLogged", true);
+                PatchHelper.Log("[Portrait] rewards pass idle: covered or capstone open");
+            }
             if (PortraitNodes.FindControl(screen, "ProceedButton") is { } pinned)
             {
                 // Relative alone is not enough: a relative 460 still wins
@@ -3576,6 +3606,11 @@ internal static class PortraitRewards
                 pinned.ZIndex = 0;
             }
             return;
+        }
+        if (!screen.HasMeta("Sts2PortraitRewardsActiveLogged"))
+        {
+            screen.SetMeta("Sts2PortraitRewardsActiveLogged", true);
+            PatchHelper.Log("[Portrait] rewards layout active");
         }
         var safeTop = PortraitDisplay.SafeTop();
         var safeBottom = PortraitDisplay.SafeBottom();
