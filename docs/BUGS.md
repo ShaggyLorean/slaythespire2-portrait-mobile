@@ -339,3 +339,14 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Rule**: a device measurement only counts if the trace shows a patch orchestration NEWER than the deploy.
 - **Status**: fixed-pending-device (guard is in the script; needs one device round to see it fire/pass)
 - **Fixed in**: 0.4.0
+
+## BUG-033: Save and Quit froze the menu into a landscape strip with dead input
+
+- **Where**: device only; return-to-menu after Save and Quit (any run screen).
+- **Repro**: Continue into a run, pause, Save and Quit. The menu rendered as a ~2580x1080 letterboxed strip mid-screen, every tap dead, and backgrounding or forcing rotation did not recover it. Fresh boots were fine.
+- **Root cause**: on the return path the NATIVE window content scale drifts to the game's landscape fit while every C# window property still reads back the portrait values, so all same-value rewrites (ApplyDisplaySettings postfix, OnWindowChange prefixes, the aspect heartbeat) were engine-side no-ops: the setter skips the native update when the value matches its cache. Godot rendered the correct portrait frame the whole time; a viewport dump (`user://sts2_vpdump`) captured a full portrait frame in the same second a screencap showed the strip.
+- **Fix**: `PortraitDisplay.ForceRefresh()` writes a deliberately different ContentScaleSize first and then the target, forcing the native path; MainMenu `_Ready` calls it on every menu (re)build. `NMainMenu.OnWindowChange` (which writes KeepWidth 2580x1080 / KeepHeight 1680x1260 itself) is blocked, and on Android the game's window-fit bodies never run even if `Apply()` misses a frame.
+- **Trap recorded in code**: an only-on-change write optimization in `Apply()` letterboxed even fresh boots; the blind per-call rewrite is load-bearing because the C# cache does not reflect native state. Do not "optimize" it again.
+- **Diagnostics kept**: drop `user://sts2_vpdump` to save what Godot renders (`sts2_vpdump.png`) and compare against a screencap; the aspect guard heartbeat logs window scale state.
+- **Status**: verified (S&Q returns to a full-screen portrait menu, taps work, loot reachable via Continue)
+- **Fixed in**: 0.4.0
