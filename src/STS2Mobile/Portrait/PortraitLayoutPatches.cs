@@ -3913,13 +3913,18 @@ internal static class PortraitGameOver
     }
 }
 
-[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NGameOverScreen), "_Ready")]
+// _Ready is unpatchable since the game update: its body builds a RunHistory
+// through an object initializer whose Win setter is now init-only, and Mono
+// cannot resolve the modreq'd accessor while rebuilding the copy ("Method not
+// found: set_Win"). The static Create factory is the safe hook; the assert
+// loop idles until the returned screen actually enters the tree.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen.NGameOverScreen), "Create")]
 internal static class GameOverScreenPatch
 {
-    private static void Postfix(object __instance)
+    private static void Postfix(object __result)
     {
-        var screen = (Control)__instance;
-        PortraitGameOver.EnsureLoop(screen);
+        if (__result is Control screen)
+            PortraitGameOver.EnsureLoop(screen);
     }
 }
 
