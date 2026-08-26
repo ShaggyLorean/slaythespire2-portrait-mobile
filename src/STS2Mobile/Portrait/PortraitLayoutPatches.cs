@@ -2156,12 +2156,14 @@ internal static class PortraitTopBar
             RestoreIntoSlot(room);
             // The potion slots are the one top-bar control the player taps
             // mid-run; parked in row 1 at native size they were ~14dp and
-            // unusable. The capsule hangs at the left edge under the fire
-            // relic, thumb-sized, in the dark band every non-combat screen
-            // leaves empty there. (The slot strip inside is a plain Control,
-            // not a BoxContainer, so the capsule stays horizontal by design.)
-            const float potionScale = 1.8f;
-            Place(potions, new Vector2(38f, row2 + 118f), potionScale);
+            // unusable. Outside combat the capsule must stay UP in the bar
+            // band: a lower-left pin covered event prose and card grids. It
+            // takes the right end of row 2, thumb-sized; the relic shelf is
+            // capped short of it.
+            const float potionScale = 1.5f;
+            var potionWidth = (potions is not null && potions.Size.X > 1f ? potions.Size.X : 200f)
+                * potionScale;
+            Place(potions, new Vector2(canvas.X - 38f - potionWidth, row2 + 10f), potionScale);
             if (right is not null)
             {
                 const float rightScale = 1.05f;
@@ -3167,7 +3169,20 @@ internal static class EventRoomPatch
             block.GlobalPosition = new Vector2((canvas.X - blockWidth) * 0.5f, contentTop);
             // The shared scrim draws at Z 390 over room content (so map
             // points scroll under it); event prose must read ON the scrim,
-            // not under its dark end.
+            // not under its dark end. But a capstone (the upgrade/deck grid
+            // an option opens) lives in normal layering, and the pinned prose
+            // drew straight over its cards; hand the Z back while one is up.
+            // The event layout lives in the room container, never on the
+            // overlay stack, so ANYTHING on that stack (the upgrade grid an
+            // option opens, card picks, rewards) draws above the event and
+            // the pinned prose must yield to it.
+            if (PortraitCapstone.IsOpen(layout)
+                || PortraitSceneCache.TopOverlay() is { Visible: true })
+            {
+                block.ZAsRelative = true;
+                block.ZIndex = 0;
+                return;
+            }
             block.ZAsRelative = false;
             block.ZIndex = 395;
 
@@ -3175,6 +3190,10 @@ internal static class EventRoomPatch
             if (options is not null)
             {
                 const float optionsScale = 1.18f;
+                // Two-line option plates overhang their authored row height
+                // and the rows drew on top of each other; open the list up.
+                if (options is BoxContainer { Vertical: true } optionList)
+                    optionList.AddThemeConstantOverride("separation", 30);
                 options.PivotOffset = Vector2.Zero;
                 options.Scale = Vector2.One * optionsScale;
                 var optionsWidth = (options.Size.X > 1f ? options.Size.X : 800f) * optionsScale;
@@ -3768,8 +3787,7 @@ internal static class PortraitCardPick
             // grid does not, so portrait drops it and gives its band to cards.
             banner.Visible = false;
         }
-        // Clear the potion capsule hanging under the compact bar's left side.
-        y += 84f;
+        y += 28f;
 
         // Three cards side by side max out at ~350 units each on a 1180
         // canvas: unreadable, with a truck-sized hole under them. Mobile

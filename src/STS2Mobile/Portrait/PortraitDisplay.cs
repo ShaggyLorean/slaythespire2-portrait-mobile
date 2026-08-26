@@ -89,6 +89,24 @@ internal static class PortraitDisplay
                 // File-triggered viewport dump: drop user://sts2_vpdump to
                 // capture what GODOT thinks the frame looks like, separating
                 // an in-engine layout bug from a stale Android composition.
+                var typesTrigger = "user://sts2_types";
+                if (Godot.FileAccess.FileExists(typesTrigger))
+                {
+                    DirAccess.RemoveAbsolute(typesTrigger);
+                    var sb = new System.Text.StringBuilder();
+                    void Walk(Node n, int depth)
+                    {
+                        if (depth > 7)
+                            return;
+                        if (n is Control { Visible: true } c && c.IsVisibleInTree()
+                            && c.Size.X > 300f && c.Size.Y > 300f)
+                            sb.Append($"{c.GetType().Name}:{c.Name} | ");
+                        foreach (var child in n.GetChildren())
+                            Walk(child, depth + 1);
+                    }
+                    Walk(window, 0);
+                    PatchHelper.Log("[Portrait] big visibles: " + sb);
+                }
                 var trigger = "user://sts2_vpdump";
                 if (Godot.FileAccess.FileExists(trigger))
                 {
