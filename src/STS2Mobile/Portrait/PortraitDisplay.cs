@@ -76,7 +76,7 @@ internal static class PortraitDisplay
             {
                 var window = tree.Root;
                 var scale = window.ContentScaleSize;
-                if (++ticks % 10 == 0)
+                if (++ticks % 120 == 0)
                     PatchHelper.Log(
                         $"[Portrait] aspect guard: {window.ContentScaleAspect} {scale.X}x{scale.Y} mode={window.ContentScaleMode}"
                     );

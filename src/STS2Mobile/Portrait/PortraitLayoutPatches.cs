@@ -3723,6 +3723,132 @@ internal static class PortraitAncientEvent
     }
 }
 
+// The card pick overlays ("Choose a Card" and the reward trio) are authored
+// for a landscape center: on the phone the whole block filled a thin middle
+// band with the top 40% and bottom 35% of the screen dead, and the Skip plate
+// sat 20dp tall right under the cards. Grow the row to the side margins,
+// hang the block from the content top, and give Skip a thumb plate with real
+// separation from the cards.
+internal static class PortraitCardPick
+{
+    private const string LoopMeta = "Sts2PortraitCardPickLoop";
+
+    internal static void EnsureLoop(Control screen)
+    {
+        if (screen is null || !GodotObject.IsInstanceValid(screen) || screen.HasMeta(LoopMeta))
+            return;
+        screen.SetMeta(LoopMeta, true);
+        PortraitNodes.AssertLoop(screen, () => Apply(screen));
+    }
+
+    private static void Apply(Control screen)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+
+        var row = PortraitNodes.FindControl(screen, "CardRow");
+        if (row is null)
+            return;
+
+        // Work on VISIBLE boxes, not authored sizes: the row's origin is not
+        // its top-left and its Size is a landscape number, and trusting them
+        // scattered cards half off-screen on the first try. GetGlobalRect
+        // reflects the live transform, so scaling converges and placement is
+        // origin-agnostic.
+        var safeTop = PortraitDisplay.SafeTop();
+        var y = (PortraitCombat.CombatHudActive
+            ? PortraitHudMetrics.CombatHudBottom(safeTop) + PortraitHudMetrics.ContentMargin
+            : PortraitHudMetrics.ContentTop(safeTop)) + 16f;
+
+        if (PortraitNodes.FindControl(screen, "Banner") is { Visible: true } banner)
+        {
+            // The banner ignores every reposition (its own tween owns it) and
+            // parks behind the potion capsule. It carries no information the
+            // grid does not, so portrait drops it and gives its band to cards.
+            banner.Visible = false;
+        }
+        // Clear the potion capsule hanging under the compact bar's left side.
+        y += 84f;
+
+        // Three cards side by side max out at ~350 units each on a 1180
+        // canvas: unreadable, with a truck-sized hole under them. Mobile
+        // wants BIG cards, so the holders leave the authored single row and
+        // form a 2+1 grid (pairs per row, last row centered) at 1.5x; the
+        // descriptions grow with them. Holders are positioned directly and
+        // center-pivot scaled; CardRow itself is a zero-sized center anchor
+        // the game owns, and it stays untouched.
+        var holders = new System.Collections.Generic.List<Control>();
+        foreach (var child in row.GetChildren())
+            if (child is Control { Visible: true } holder)
+                holders.Add(holder);
+        if (holders.Count == 0)
+            return;
+        const float cardScale = 1.5f;
+        const float gapX = 44f;
+        const float gapY = 36f;
+        var cardW = (holders[0].Size.X > 1f ? holders[0].Size.X : 350f) * cardScale;
+        var cardH = (holders[0].Size.Y > 1f ? holders[0].Size.Y : 520f) * cardScale;
+        const int perRow = 2;
+        var rowCount = (holders.Count + perRow - 1) / perRow;
+        for (var i = 0; i < holders.Count; i++)
+        {
+            var r = i / perRow;
+            var inRow = Math.Min(perRow, holders.Count - r * perRow);
+            var cIdx = i % perRow;
+            var rowWidth = inRow * cardW + (inRow - 1) * gapX;
+            var x0 = (canvas.X - rowWidth) * 0.5f;
+            var center = new Vector2(
+                x0 + cardW * (cIdx + 0.5f) + gapX * cIdx,
+                y + r * (cardH + gapY) + cardH * 0.5f
+            );
+            var h = holders[i];
+            h.PivotOffset = h.Size * 0.5f;
+            if (Math.Abs(h.Scale.X - cardScale) > 0.01f)
+                h.Scale = Vector2.One * cardScale;
+            // With a centered pivot the visual center sits at position plus
+            // half the UNSCALED size; press tweens move scale, not position,
+            // so only real drift is corrected.
+            var target = center - h.Size * 0.5f;
+            if (h.GlobalPosition.DistanceTo(target) > 2f)
+                h.GlobalPosition = target;
+        }
+        y += rowCount * (cardH + gapY) + 40f;
+
+        if (PortraitNodes.FindControl(screen, "RewardAlternatives") is { Visible: true } alts)
+        {
+            alts.PivotOffset = Vector2.Zero;
+            alts.Scale = Vector2.One * 1.6f;
+            var ar = alts.GetGlobalRect();
+            var target = new Vector2(PortraitHudMetrics.CenterX(canvas.X, ar.Size.X), y);
+            // The open tween animates this container in; only correct real
+            // drift so presses are not cancelled mid-animation.
+            if ((target - ar.Position).Length() > 3f)
+                alts.GlobalPosition += target - ar.Position;
+        }
+    }
+}
+
+[HarmonyPatch(
+    typeof(MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen),
+    "AfterOverlayOpened"
+)]
+internal static class CardRewardScreenPatch
+{
+    private static void Postfix(object __instance)
+        => PortraitCardPick.EnsureLoop((Control)__instance);
+}
+
+[HarmonyPatch(
+    typeof(MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NChooseACardSelectionScreen),
+    "AfterOverlayOpened"
+)]
+internal static class ChooseACardScreenPatch
+{
+    private static void Postfix(object __instance)
+        => PortraitCardPick.EnsureLoop((Control)__instance);
+}
+
 internal static class PortraitRewards
 {
     private const string LoopMeta = "Sts2PortraitRewardsLoop";
