@@ -665,6 +665,15 @@ internal static class PortraitMainMenu
         var rows = 0;
         foreach (var child in buttons.GetChildren())
         {
+            // Multiplayer needs a Steam client runtime the phone does not
+            // have (the launcher's SteamKit login only authenticates depot
+            // downloads, it is no lobby backend), so the row was a guaranteed
+            // dead end on device; the portrait menu drops it.
+            if (child is Control mpRow && mpRow.Name == "MultiplayerButton")
+            {
+                mpRow.Visible = false;
+                continue;
+            }
             if (child is not Control { Visible: true } row)
                 continue;
 
@@ -1335,19 +1344,34 @@ internal static class PortraitCombat
             if (PortraitDisplay.IsPortrait(canvas))
             {
                 // The rewards screen's own assert loop has proven flaky on
-                // device; this guard re-drives that pass INDEPENDENTLY of the
-                // hand's own state — a run resumed straight into the loot
+                // device; this guard re-drives that pass independently of the
+                // hand's own state, since a run resumed straight into the loot
                 // screen has a rewards overlay but no card holder yet.
-                if (PortraitSceneCache.TopOverlay() is { Visible: true } topOverlay
+                if (PortraitSceneCache.TopOverlay() is { } topOverlay
                     && topOverlay.GetType().Name == "NRewardsScreen")
                 {
-                    try
+                    // The map pass hides a live loot screen while the map is
+                    // shown; bring it back the moment the map is gone.
+                    if (!topOverlay.Visible
+                        && topOverlay.HasMeta(PortraitRewards.MapHidMeta)
+                        && Engine.GetMainLoop() is SceneTree guardTree
+                        && PortraitSceneCache.FindByType(guardTree.Root, "NMapScreen")
+                            is not Control { Visible: true })
                     {
-                        PortraitRewards.ApplyNow(topOverlay);
+                        topOverlay.RemoveMeta(PortraitRewards.MapHidMeta);
+                        topOverlay.Visible = true;
+                        PatchHelper.Log("[Portrait] rewards screen restored after map");
                     }
-                    catch (Exception ex)
+                    if (topOverlay.Visible)
                     {
-                        PatchHelper.Log($"[Portrait] rewards from guard failed: {ex.GetBaseException().Message}");
+                        try
+                        {
+                            PortraitRewards.ApplyNow(topOverlay);
+                        }
+                        catch (Exception ex)
+                        {
+                            PatchHelper.Log($"[Portrait] rewards from guard failed: {ex.GetBaseException().Message}");
+                        }
                     }
                 }
                 var holder = hand.IsInsideTree()
@@ -1998,12 +2022,19 @@ internal static class PortraitTopBar
             SetVisible(boss, false);
 
             PlaceRow(left, new Vector2(38f, top + 4f), 0.95f);
-            // Combat pins these two as grandchildren of the row (Place writes
-            // their transforms directly); their margin-container slots do not
-            // re-sort them on the way back to the slim bar, so hand them back
-            // explicitly or they linger at the combat coordinates (BUG-014).
-            RestoreIntoSlot(potions);
+            // Combat pins this one as a grandchild of the row (Place writes
+            // its transform directly); its margin-container slot does not
+            // re-sort it on the way back to the slim bar, so hand it back
+            // explicitly or it lingers at the combat coordinates (BUG-014).
             RestoreIntoSlot(room);
+            // The potion slots are the one top-bar control the player taps
+            // mid-run; parked in row 1 at native size they were ~14dp and
+            // unusable. They keep their combat-style pin outside the row and
+            // take the right end of the relic band instead, thumb-sized.
+            const float potionScale = 1.5f;
+            var potionWidth = (potions is not null && potions.Size.X > 1f ? potions.Size.X : 200f)
+                * potionScale;
+            Place(potions, new Vector2(canvas.X - 38f - potionWidth, row2 + 10f), potionScale);
             if (right is not null)
             {
                 const float rightScale = 1.05f;
@@ -2011,7 +2042,8 @@ internal static class PortraitTopBar
                 PlaceRow(right, new Vector2(canvas.X - 30f - width * rightScale, top), rightScale);
             }
 
-            PlaceRelics(relics, canvas, new Vector2(38f, row2 + 10f), 1.12f, canvas.X - 68f);
+            // The relic shelf stops short of the potion pin at the row's end.
+            PlaceRelics(relics, canvas, new Vector2(38f, row2 + 10f), 1.12f, canvas.X * 0.62f);
         }
 
         // The bar and everything in it is placed by this reflow, so the global
@@ -2888,16 +2920,19 @@ internal static class MapScreenReadyPatch
 
             PortraitNodes.DumpRegionOnRequest(__instance);
 
-            // A rewards screen never legitimately shows over the map. One
-            // that is still visible here is the finished screen the overlay
-            // stack forgot to hide, floating its Proceed arrow over the map;
-            // hiding only the arrow is not enough because the overlay
-            // container draws after the map in tree order.
+            // A rewards screen visible under the map is either the finished
+            // screen the overlay stack forgot to hide (its Proceed arrow
+            // floated over the map), or a LIVE loot screen with the map
+            // toggled on top of it. Hide it while the map shows, but mark it
+            // so the hand guard can restore it when the map closes; hiding
+            // without the mark left an invisible live loot screen behind a
+            // seemingly empty room.
             if (PortraitSceneCache.FindByType(__instance.GetTree().Root, "NRewardsScreen")
                     is { Visible: true } rewards)
             {
+                rewards.SetMeta(PortraitRewards.MapHidMeta, true);
                 rewards.Visible = false;
-                PatchHelper.Log("[Portrait] stale rewards screen hidden on map");
+                PatchHelper.Log("[Portrait] rewards screen hidden while map shows");
             }
 
             // The legend floated mid-screen over live map nodes; the lower
@@ -3565,6 +3600,10 @@ internal static class PortraitRewards
 {
     private const string LoopMeta = "Sts2PortraitRewardsLoop";
 
+    // Set by the map pass when it hides a live loot screen under the map;
+    // the hand guard restores the screen and clears the mark on map close.
+    internal const string MapHidMeta = "Sts2PortraitRewardsMapHid";
+
     internal static void EnsureLoop(Control screen)
     {
         if (screen is null || !GodotObject.IsInstanceValid(screen) || screen.HasMeta(LoopMeta))
@@ -3641,11 +3680,18 @@ internal static class PortraitRewards
             );
             panel.PivotOffset = Vector2.Zero;
             panel.Scale = Vector2.One * scale;
+            // Center the panel-plus-proceed group in the band: hanging from
+            // the band top read fine on short buckets but left a hole under
+            // the Skip arrow once the panel hit its scale cap on this screen.
+            var panelH = baseH * scale;
+            const float proceedBand = 210f;
+            var slack = bandBottom - bandTop - panelH - proceedBand;
+            var panelTop = bandTop + Math.Max(24f, slack * 0.5f);
             panel.GlobalPosition = new Vector2(
                 PortraitHudMetrics.CenterX(canvas.X, baseW * scale),
-                bandTop + 24f
+                panelTop
             );
-            panelBottom = bandTop + 24f + baseH * scale;
+            panelBottom = panelTop + panelH;
         }
 
         if (PortraitNodes.FindControl(screen, "ProceedButton") is { Visible: true } proceed)
