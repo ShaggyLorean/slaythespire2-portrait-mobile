@@ -351,11 +351,14 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Status**: verified (S&Q returns to a full-screen portrait menu, taps work, loot reachable via Continue)
 - **Fixed in**: 0.4.0
 
-## BUG-034: Minor open items from the design tour (2026-08-26)
+## BUG-034: Open items from the design tour (2026-08-26)
 
-- **Proceed arrow overlaps the resting hero**: at the rest site the arrow's
-  0.73-canvas-height band lands on the seated character art. Cosmetic;
-  candidates: per-room nudge or a lower band outside combat rooms.
+Rule (user): cosmetic overlap bugs are FIRST-CLASS, never "minor";
+visual collisions and unplayable states are the biggest bug class.
+
+- **Proceed arrow overlaps the resting hero**: FIXED and verified. The
+  ShowPos postfix now floors the arrow's Y to the bottom content band on
+  every screen, under any room's character art.
 - **"Ping" coop button leaks into singleplayer**: seen bottom-right on the
   post-combat loot screen. Class unknown yet; capture `user://sts2_types`
   dump next time it is visible, then hide it for singleplayer runs.

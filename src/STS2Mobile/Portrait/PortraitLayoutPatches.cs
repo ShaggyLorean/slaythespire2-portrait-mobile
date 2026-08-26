@@ -4176,6 +4176,14 @@ internal static class ProceedButtonPatch
         // units of banner art overhanging the control rect. Two different
         // clamps had the arrow ping-ponging between two X positions.
         __result.X = Math.Min(__result.X, canvas.X - width - PortraitHudMetrics.EdgeMargin - 64f);
+
+        // The game's Y aims at the landscape composition and parked the
+        // arrow ON the resting hero's chest. The arrow always drops to the
+        // bottom content band, under any room's character art.
+        var height = (button.Size.Y > 1f ? button.Size.Y : 108f) * Math.Max(button.Scale.Y, 1f);
+        var floorY = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom())
+            - height - 8f;
+        __result.Y = Math.Max(__result.Y, floorY);
     }
 
     private static void ApplyScale(Control button, Vector2 canvas)
