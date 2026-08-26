@@ -2747,21 +2747,32 @@ internal static class MapScreenReadyPatch
             }
 
             var safeBottom = PortraitDisplay.SafeBottom();
-            var toolX = PortraitHudMetrics.EdgeMargin;
-            foreach (var name in new[] { "DrawButton", "EraseButton", "ClearButton" })
+
+            // The quill and eraser live INSIDE the DrawingTools plate; moving
+            // and scaling them one by one tore them off their own backdrop
+            // (the quill ended up half on bare parchment). The plate moves as
+            // one unit and its children ride along; only Clear, which is a
+            // sibling, is placed after it.
+            // Everything, Clear included, lives inside the plate's own
+            // HBoxContainer; placing any child individually tears the box
+            // apart (the first attempt moved Clear out of formation and the
+            // remaining icons vanished with the re-sort). The plate is the
+            // only node this pass may touch: scale and place it as one unit
+            // and its children lay themselves out.
+            if (PortraitNodes.FindControl(__instance, "DrawingTools") is { } plate)
             {
-                if (PortraitNodes.FindControl(__instance, name) is not { } tool)
-                    continue;
-                var baseW = tool.Size.X > 1f ? tool.Size.X : 60f;
-                var baseH = tool.Size.Y > 1f ? tool.Size.Y : 60f;
-                var scale = PortraitHudMetrics.TouchScale(baseW, baseH, 1.8f);
-                tool.PivotOffset = Vector2.Zero;
-                tool.Scale = Vector2.One * scale;
-                tool.GlobalPosition = new Vector2(
-                    toolX,
-                    PortraitHudMetrics.BottomAnchoredY(canvas.Y, safeBottom, baseH * scale)
+                const float plateScale = 1.8f;
+                var plateW = plate.Size.X > 1f ? plate.Size.X : 208f;
+                var plateH = plate.Size.Y > 1f ? plate.Size.Y : 68f;
+                plate.PivotOffset = Vector2.Zero;
+                if (Mathf.Abs(plate.Scale.X - plateScale) > 0.01f)
+                    plate.Scale = Vector2.One * plateScale;
+                var plateTarget = new Vector2(
+                    PortraitHudMetrics.EdgeMargin,
+                    PortraitHudMetrics.BottomAnchoredY(canvas.Y, safeBottom, plateH * plateScale)
                 );
-                toolX += baseW * scale + 18f;
+                if (plate.GlobalPosition.DistanceTo(plateTarget) > 1.5f)
+                    plate.GlobalPosition = plateTarget;
             }
         });
         PortraitNodes.After(__instance, 0.8, () => PortraitMap.CenterGraph(__instance));
