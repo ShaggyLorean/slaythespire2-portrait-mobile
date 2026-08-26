@@ -17,6 +17,16 @@ WAIT="${STS2_WAIT:-25}"
 "$ADB" -s "$SERIAL" shell "su -c 'sh /data/local/tmp/set-launch-flag.sh'"
 
 "$ADB" -s "$SERIAL" logcat -c
+# A launch that silently fails leaves the previous screen up, and every probe
+# after it reads the OLD build (a 1.8x change once measured as 1.5x because
+# the "new" boot never happened). Count patch orchestrations before and after:
+# no new "Applied" line within the wait means the boot did not take.
+TRACE="/data/data/$PKG/files/sts2_bootstrap_trace.log"
+BEFORE=$("$ADB" -s "$SERIAL" shell "su -c 'grep -c \"Applied .*layout patch classes\" $TRACE'" 2>/dev/null | tr -d '\r')
 "$ADB" -s "$SERIAL" shell am start -n "$PKG/com.game.sts2launcher.LauncherActivity" >/dev/null 2>&1
 sleep "$WAIT"
-"$ADB" -s "$SERIAL" shell "su -c 'tail -25 /data/data/$PKG/files/sts2_bootstrap_trace.log'" 2>&1 | sed 's/\r//'
+AFTER=$("$ADB" -s "$SERIAL" shell "su -c 'grep -c \"Applied .*layout patch classes\" $TRACE'" 2>/dev/null | tr -d '\r')
+if [ -n "$BEFORE" ] && [ -n "$AFTER" ] && [ "$AFTER" -le "$BEFORE" ] 2>/dev/null; then
+  echo "WARNING: no fresh patch orchestration in trace; the game leg did NOT boot (old build still on screen)" >&2
+fi
+"$ADB" -s "$SERIAL" shell "su -c 'tail -25 $TRACE'" 2>&1 | sed 's/\r//'

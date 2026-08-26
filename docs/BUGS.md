@@ -329,3 +329,13 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Rule**: before patching a method on device, check its body for protected/internal member access of ANY kind, methods and fields alike, across the whole class hierarchy.
 - **Status**: fixed-pending-device (pile arrival needs one combat-entry check)
 - **Fixed in**: 0.4.0
+
+## BUG-032: Silent no-boot deploys measured the OLD build
+
+- **Where**: device iteration tooling (quick-push/boot-game).
+- **Repro**: run quick-push while the game leg is mid-session and the launch intent fails or lands on a foregrounded activity. The script reports success, the previous screen stays up, and every screenshot or measurement after it reads the previous build. A 1.8x potion scale change measured as exactly 1.5x this way.
+- **Root cause**: boot-game force-stops and relaunches, but never verified the relaunch produced a fresh patch orchestration; the deploy pipeline treats "adb start returned" as "the new DLL is running".
+- **Fix**: boot-game counts "Applied N/M layout patch classes" lines in the bootstrap trace before and after the launch and prints a loud WARNING when no new orchestration appeared within the wait window.
+- **Rule**: a device measurement only counts if the trace shows a patch orchestration NEWER than the deploy.
+- **Status**: fixed-pending-device (guard is in the script; needs one device round to see it fire/pass)
+- **Fixed in**: 0.4.0
