@@ -33,6 +33,7 @@ internal static class PortraitPatches
         typeof(ContinueRunInfoPatch),
         typeof(ContinueRunInfoSourcePatch),
         typeof(CardPileAnimInPatch),
+        typeof(CardDescriptionCapPatch),
         typeof(EndTurnShowPosPatch),
         typeof(PortraitFtuePatch),
         typeof(TopBarInitializePatch),

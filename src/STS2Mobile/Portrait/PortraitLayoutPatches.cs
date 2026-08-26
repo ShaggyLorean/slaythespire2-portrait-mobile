@@ -2379,6 +2379,46 @@ internal static class EndTurnShowPosPatch
     }
 }
 
+
+// Card description text sizes itself with the game's fit-to-rect autosize,
+// whose ceiling is the label's MaxFontSize. Short descriptions sit AT that
+// ceiling, so raising it is the one uniform lever: short texts grow, long
+// ones stay fit-bound, and nothing can clip because the fit search still
+// runs. This replaces the body-text floor on cards, which clipped long
+// descriptions while leaving short ones tiny - the exact inconsistency it
+// was supposed to prevent.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Cards.NCard), "UpdateVisuals")]
+internal static class CardDescriptionCapPatch
+{
+    private const float CapFactor = 1.3f;
+    private static readonly StringName CapMeta = "sts2_portrait_desc_cap";
+
+    private static void Prefix(Node __instance)
+    {
+        if (!PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
+            return;
+
+        try
+        {
+            if (Traverse.Create(__instance).Field("_descriptionLabel").GetValue() is not Control label
+                || label.HasMeta(CapMeta))
+                return;
+
+            var current = Traverse.Create(label).Property("MaxFontSize").GetValue<int>();
+            if (current > 0)
+            {
+                Traverse.Create(label).Property("MaxFontSize")
+                    .SetValue(Mathf.RoundToInt(current * CapFactor));
+                label.SetMeta(CapMeta, true);
+            }
+        }
+        catch (Exception ex)
+        {
+            PatchHelper.Log($"[Portrait] card description cap failed: {ex.GetBaseException().Message}");
+        }
+    }
+}
+
 [HarmonyPatch(typeof(NContinueRunInfo), "AnimShow")]
 internal static class ContinueRunInfoSourcePatch
 {

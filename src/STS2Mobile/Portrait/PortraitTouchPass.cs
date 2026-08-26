@@ -260,7 +260,8 @@ internal static class PortraitTouchPass
 
         void Walk(Node node)
         {
-            if (node is Control { Visible: true } control && control.IsVisibleInTree() && !IsManaged(control))
+            if (node is Control { Visible: true } control && control.IsVisibleInTree() && !IsManaged(control)
+                && !IsInsideCardFace(control))
             {
                 var scaleY = control.GetGlobalTransform().Scale.Y;
                 if (scaleY > 0.05f)
@@ -293,6 +294,24 @@ internal static class PortraitTouchPass
             _textRaised = raised;
             PatchHelper.Log($"[Touch] raised body text floor on {raised} label(s)");
         }
+    }
+
+    // Card faces size their text with the game's own autosize-to-rect pass;
+    // a floor forced on top of that clips long descriptions while short ones
+    // stay small - the single most visible inconsistency this sweep ever
+    // produced. Anything card-shaped owns its own typography.
+    private static bool IsInsideCardFace(Node node)
+    {
+        for (var current = node; current is not null; current = current.GetParent())
+        {
+            var typeName = current.GetType().Name;
+            if (typeName.StartsWith("NCard", StringComparison.Ordinal)
+                || typeName.StartsWith("NTinyCard", StringComparison.Ordinal)
+                || typeName is "NUpgradePreview" or "NEnchantPreview" or "NTransformPreview")
+                return true;
+        }
+
+        return false;
     }
 
     private static bool RaiseFloor(Control label, StringName sizeName, float scaleY)
