@@ -1422,10 +1422,27 @@ internal static class PortraitCombat
         pile.ZAsRelative = false;
         pile.ZIndex = 520;
 
-        // The pile's arrival position is owned by the AnimIn source hook (its
-        // _showPosition field); only drift beyond the tween's own motion is
-        // corrected here, so the slide-in animation survives.
+        // AnimIn cannot be patched on device: its ORIGINAL body reads the
+        // protected base field _hidePosition, and the patched copy is denied
+        // that access even when the prefix itself is reflection-only (the
+        // sharper form of BUG-020/BUG-022: protected base-class fields break
+        // the copy too, not just methods). Same zero-flash effect from the
+        // outside instead: this pass runs at CombatUi._Ready, before the
+        // entry tween, and rewrites the destination the tween aims at.
         var target = PileTarget(pile, canvas, onRight);
+        try
+        {
+            var parentTransform = (pile.GetParent() as Control)?.GetGlobalTransform()
+                ?? Transform2D.Identity;
+            Traverse.Create(pile).Field("_showPosition")
+                .SetValue(parentTransform.AffineInverse() * target);
+        }
+        catch (Exception ex)
+        {
+            PatchHelper.Log($"[Portrait] pile show position rewrite failed: {ex.GetBaseException().Message}");
+        }
+        // Only drift beyond the tween's own motion is corrected here, so the
+        // slide-in animation survives.
         if (pile.GlobalPosition.DistanceTo(target) > 220f)
             pile.Position += target - pile.GlobalPosition;
     }
@@ -2352,38 +2369,10 @@ internal static class ProfileScreenPatch
 // after the game has placed it (and visibly fighting its entry tween for
 // 60-120ms), these rewrite the values the game's own animations aim at, so
 // the original tween delivers the node to the portrait position in one motion.
-// All three target methods only touch their own fields, which the device's
-// patched-copy rules allow (docs/BUGS.md, BUG-020/BUG-022).
-
-[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Combat.NCombatCardPile), "AnimIn")]
-internal static class CardPileAnimInPatch
-{
-    private static void Prefix(Control __instance)
-    {
-        var canvas = PortraitDisplay.CanvasSize;
-        if (!PortraitDisplay.IsPortrait(canvas))
-            return;
-
-        try
-        {
-            var onRight = __instance.GetType().Name.Contains("Discard");
-            __instance.PivotOffset = Vector2.Zero;
-            __instance.Scale = Vector2.One * PortraitCombat.PileScale;
-            __instance.ZAsRelative = false;
-            __instance.ZIndex = 520;
-
-            var target = PortraitCombat.PileTarget(__instance, canvas, onRight);
-            var parentTransform = (__instance.GetParent() as Control)?.GetGlobalTransform()
-                ?? Transform2D.Identity;
-            var local = parentTransform.AffineInverse() * target;
-            Traverse.Create(__instance).Field("_showPosition").SetValue(local);
-        }
-        catch (Exception ex)
-        {
-            PatchHelper.Log($"[Portrait] pile AnimIn source hook failed: {ex.GetBaseException().Message}");
-        }
-    }
-}
+// The target methods must only touch their own fields: a patched copy is
+// denied protected base-class members too (docs/BUGS.md, BUG-020/BUG-022);
+// that killed an AnimIn hook on NCombatCardPile, whose rewrite now lives in
+// PortraitCombat.PlacePile as plain reflection instead.
 
 [HarmonyPatch(typeof(NEndTurnButton), "ShowPos", MethodType.Getter)]
 internal static class EndTurnShowPosPatch

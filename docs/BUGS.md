@@ -310,3 +310,22 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
   the default is the panel's native resolution. The transcoder and findings
   live in tools/pck/transcode_textures.py for a future pass that first solves
   the silent-invisible class on a single texture.
+
+## BUG-030: Resuming a run into the loot screen kept the native layout
+
+- **Where**: any overlay-stack screen; hit hardest as the rewards screen after Continue restored a run that was saved mid-loot.
+- **Repro**: quit at a loot screen, relaunch, Continue. The rewards panel renders as the small landscape plate, the Skip arrow sits inside it, and the trace shows no portrait activity after "Hand guard installed".
+- **Root cause**: overlay-stack screens are detached from the tree (not freed) while covered and during run restore. `AssertLoop` and the hand guard both re-armed through the node's own tree handle behind an in-tree gate, so a single tick landing in a detach window ended the chain silently and permanently. The `EnsureLoop` meta stays set, so nothing ever re-arms it. The guard's rewards re-drive was also nested inside the card-holder null check, so it could not rescue the pass on a boot that restores straight into loot.
+- **Fix**: both loops re-arm through the main loop's `SceneTree` and idle while the node is out of tree; the chain now only ends when the node is freed. The rewards re-drive moved outside the holder check, and the rewards pass logs a one-shot breadcrumb per branch so a silent success can never hide which path ran.
+- **Status**: verified on device (resume into loot renders portrait layout, trace shows "rewards layout active")
+- **Fixed in**: 0.4.0
+
+## BUG-031: Patched copies are denied protected base-class FIELDS too
+
+- **Where**: device only; `NCombatCardPile.AnimIn` source hook.
+- **Repro**: register a Harmony patch on `AnimIn`. Orchestration logs "Patch skipped: Field `NCombatCardPile:_hidePosition` is inaccessible from method DMD<>...".
+- **Root cause**: sharper form of BUG-020/BUG-022. The generated copy contains the ORIGINAL method body; if that body touches a protected field declared on a BASE class, Mono denies the access even when the prefix itself is reflection-only. Same-class private fields remain fine, which is why the other source hooks survive.
+- **Fix**: the hook is deleted; `PortraitCombat.PlacePile` rewrites the pile's `_showPosition` through reflection from normal code before the entry tween runs, which gives the same zero-flash arrival without patching the restricted method.
+- **Rule**: before patching a method on device, check its body for protected/internal member access of ANY kind, methods and fields alike, across the whole class hierarchy.
+- **Status**: fixed-pending-device (pile arrival needs one combat-entry check)
+- **Fixed in**: 0.4.0
