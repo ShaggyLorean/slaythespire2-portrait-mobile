@@ -2154,25 +2154,23 @@ internal static class PortraitTopBar
             // re-sort it on the way back to the slim bar, so hand it back
             // explicitly or it lingers at the combat coordinates (BUG-014).
             RestoreIntoSlot(room);
-            // The potion slots are the one top-bar control the player taps
-            // mid-run; parked in row 1 at native size they were ~14dp and
-            // unusable. Outside combat the capsule must stay UP in the bar
-            // band: a lower-left pin covered event prose and card grids. It
-            // takes the right end of row 2, thumb-sized; the relic shelf is
-            // capped short of it.
-            const float potionScale = 1.5f;
-            var potionWidth = (potions is not null && potions.Size.X > 1f ? potions.Size.X : 200f)
-                * potionScale;
-            Place(potions, new Vector2(canvas.X - 38f - potionWidth, row2 + 10f), potionScale);
+            // Outside combat the capsule keeps its vanilla station in row 1
+            // next to the gold counter, but grown into the empty stretch
+            // between gold and the right icon cluster: the native slot size
+            // was a fingernail with dead space beside it, and a long-press
+            // tooltip had nowhere sane to anchor.
+            Place(potions, new Vector2(378f, top + 2f), 1.3f);
             if (right is not null)
             {
-                const float rightScale = 1.05f;
+                // Match the potion capsule right below: the naked icon strip
+                // at 1.05x read as a second UI language stacked on a framed
+                // plate, and their right edges did not even line up.
+                const float rightScale = 1.45f;
                 var width = right.Size.X > 1f ? right.Size.X : 340f;
-                PlaceRow(right, new Vector2(canvas.X - 30f - width * rightScale, top), rightScale);
+                PlaceRow(right, new Vector2(canvas.X - 38f - width * rightScale, top), rightScale);
             }
 
-            // The relic shelf stops short of the potion pin at the row's end.
-            PlaceRelics(relics, canvas, new Vector2(38f, row2 + 10f), 1.12f, canvas.X * 0.62f);
+            PlaceRelics(relics, canvas, new Vector2(38f, row2 + 10f), 1.12f, canvas.X - 68f);
         }
 
         // The bar and everything in it is placed by this reflow, so the global
@@ -2363,7 +2361,12 @@ internal static class PortraitTopBar
         // gradient under its last line. Anything else on screen keeps the
         // default depth.
         var depth = PortraitHudMetrics.ContentTop(safeTop) + 470f;
+        // The map draws OVER the event room without hiding it, and the deep
+        // event scrim hung over the map's top third; event depth only applies
+        // while the event is actually the screen being read.
         if (PortraitSceneCache.FindByType(bar.GetTree().Root, "NEventRoom") is { Visible: true } eventRoom
+            && PortraitSceneCache.FindByType(bar.GetTree().Root, "NMapScreen")
+                is not Control { Visible: true }
             && PortraitNodes.FindControl(eventRoom, "Title")?.GetParent() is Control prose
             && prose.IsVisibleInTree())
         {
@@ -3177,7 +3180,9 @@ internal static class EventRoomPatch
             // option opens, card picks, rewards) draws above the event and
             // the pinned prose must yield to it.
             if (PortraitCapstone.IsOpen(layout)
-                || PortraitSceneCache.TopOverlay() is { Visible: true })
+                || PortraitSceneCache.TopOverlay() is { Visible: true }
+                || PortraitSceneCache.FindByType(layout.GetTree().Root, "NMapScreen")
+                    is Control { Visible: true })
             {
                 block.ZAsRelative = true;
                 block.ZIndex = 0;
