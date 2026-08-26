@@ -1013,6 +1013,19 @@ internal static class PortraitPauseMenu
                 continue;
 
             row.CustomMinimumSize = new Vector2(ButtonWidth, ButtonHeight);
+            // The plate art and label do not follow the grown row since a
+            // game update: the label autosized to the full row while the
+            // plate stayed authored-size, so "Compendium" and "Save and
+            // Quit" spilled past their buttons. Pin both to the row rect.
+            FillRowRect(row.GetNodeOrNull<Control>("ButtonImage"));
+            if (row.GetNodeOrNull<Control>("Label") is { } label)
+            {
+                FillRowRect(label);
+                // Fitted to the grown plate the autosizer still stops at the
+                // authored ceiling, leaving small text on a big button; lift
+                // the ceiling once and let RefreshLabels re-fit below it.
+                RaiseFontCeiling(label, 1.4f);
+            }
             rows++;
         }
 
@@ -1052,6 +1065,44 @@ internal static class PortraitPauseMenu
         }
 
         RefreshLabels(menu);
+    }
+
+    private const string FontCapMeta = "Sts2PortraitPauseFontCap";
+
+    private static void RaiseFontCeiling(Control label, float factor)
+    {
+        if (label.HasMeta(FontCapMeta))
+            return;
+        label.SetMeta(FontCapMeta, true);
+        try
+        {
+            var prop = label.GetType().GetProperty("MaxFontSize");
+            if (prop?.GetValue(label) is int cap)
+                prop.SetValue(label, (int)(cap * factor));
+        }
+        catch (Exception ex)
+        {
+            PatchHelper.Log($"[Portrait] pause font ceiling raise failed: {ex.GetBaseException().Message}");
+        }
+    }
+
+    private static void FillRowRect(Control child)
+    {
+        if (child is null)
+            return;
+        child.AnchorLeft = 0f;
+        child.AnchorTop = 0f;
+        child.AnchorRight = 1f;
+        child.AnchorBottom = 1f;
+        child.OffsetLeft = 0f;
+        child.OffsetTop = 0f;
+        child.OffsetRight = 0f;
+        child.OffsetBottom = 0f;
+        if (child is TextureRect art)
+        {
+            art.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+            art.StretchMode = TextureRect.StretchModeEnum.Scale;
+        }
     }
 
     // Labels size their font to the rect they had when the text was set, so

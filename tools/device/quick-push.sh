@@ -35,4 +35,4 @@ echo "[2/3] pushing to override dir"
 "$ADB" -s "$SERIAL" shell "chmod 644 /data/local/tmp/sts2_override/STS2Mobile.dll"
 
 echo "[3/3] booting game leg"
-exec "$REPO/tools/device/boot-game.sh"
+exec bash "$REPO/tools/device/boot-game.sh"
