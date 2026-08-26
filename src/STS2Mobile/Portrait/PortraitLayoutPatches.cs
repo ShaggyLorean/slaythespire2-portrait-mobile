@@ -435,16 +435,43 @@ internal static class ApplyDisplaySettingsPatch
     private static void Postfix() => PortraitDisplay.Apply();
 }
 
+// On Android the original bodies must NEVER run: Apply() can miss a frame
+// (WindowGetSize is transient during scene swaps) and one pass-through was
+// enough to lay the whole menu out as a landscape strip with dead input
+// after Save and Quit. Portrait owns the window unconditionally.
 [HarmonyPatch(typeof(NGame), "OnWindowChange")]
 internal static class GameWindowChangePatch
 {
-    private static bool Prefix() => !PortraitDisplay.Apply();
+    private static bool Prefix()
+    {
+        var applied = PortraitDisplay.Apply();
+        return !OperatingSystem.IsAndroid() && !applied;
+    }
+}
+
+// The menu writes the window's content scale ITSELF (KeepWidth 2580x1080 on
+// wide, KeepHeight 1680x1260 on tall): after Save and Quit that fit won the
+// frame and the whole menu rendered as a landscape strip with dead input,
+// while every later property read showed our values. Portrait owns the
+// window; the menu's own fit never runs.
+[HarmonyPatch(typeof(NMainMenu), "OnWindowChange")]
+internal static class MainMenuAspectWritePatch
+{
+    private static bool Prefix()
+    {
+        var applied = PortraitDisplay.Apply();
+        return !OperatingSystem.IsAndroid() && !applied;
+    }
 }
 
 [HarmonyPatch(typeof(NGlobalUi), "OnWindowChange")]
 internal static class GlobalUiWindowChangePatch
 {
-    private static bool Prefix() => !PortraitDisplay.Apply();
+    private static bool Prefix()
+    {
+        var applied = PortraitDisplay.Apply();
+        return !OperatingSystem.IsAndroid() && !applied;
+    }
 }
 
 internal static class PortraitMainMenu
@@ -747,6 +774,10 @@ internal static class MainMenuReadyPatch
 
     private static void Postfix(NMainMenu __instance)
     {
+        // The Save-and-Quit return path drifts the NATIVE content scale
+        // landscape while the C# cache stays correct; force the native
+        // write here, where every menu (re)build passes through.
+        PortraitDisplay.ForceRefresh();
         PortraitNodes.After(__instance, 2.0, () =>
         {
             var canvas = PortraitDisplay.CanvasSize;

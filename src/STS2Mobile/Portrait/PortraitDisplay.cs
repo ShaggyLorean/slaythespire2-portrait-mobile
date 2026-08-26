@@ -55,6 +55,81 @@ internal static class PortraitDisplay
         return _canvasResolution.Value;
     }
 
+    private static bool _aspectGuardArmed;
+    private static bool _orientationRequested;
+
+    // Save-and-Quit re-applies the game's display settings DEFERRED, landing
+    // after the ApplyDisplaySettings postfix, and a content-scale change does
+    // not fire OnWindowChange, so the menu came back letterboxed into a
+    // landscape strip with no hook left to catch it. A slow heartbeat is the
+    // only reliable owner of the aspect: re-assert whenever the window's
+    // content scale stops looking like our portrait canvas.
+    internal static void StartAspectGuard(SceneTree tree)
+    {
+        if (_aspectGuardArmed || tree?.Root is null)
+            return;
+        _aspectGuardArmed = true;
+        var ticks = 0;
+        void Tick()
+        {
+            try
+            {
+                var window = tree.Root;
+                var scale = window.ContentScaleSize;
+                if (++ticks % 10 == 0)
+                    PatchHelper.Log(
+                        $"[Portrait] aspect guard: {window.ContentScaleAspect} {scale.X}x{scale.Y} mode={window.ContentScaleMode}"
+                    );
+                if (window.ContentScaleAspect != Window.ContentScaleAspectEnum.Expand
+                    || (scale.X > 0 && scale.Y > 0 && scale.X > scale.Y))
+                {
+                    PatchHelper.Log("[Portrait] aspect drifted to landscape; re-applying");
+                    Apply();
+                }
+                // File-triggered viewport dump: drop user://sts2_vpdump to
+                // capture what GODOT thinks the frame looks like, separating
+                // an in-engine layout bug from a stale Android composition.
+                var trigger = "user://sts2_vpdump";
+                if (Godot.FileAccess.FileExists(trigger))
+                {
+                    DirAccess.RemoveAbsolute(trigger);
+                    var img = window.GetTexture().GetImage();
+                    img.SavePng("user://sts2_vpdump.png");
+                    PatchHelper.Log($"[Portrait] vpdump saved {img.GetWidth()}x{img.GetHeight()}");
+                }
+            }
+            catch
+            {
+                // A mid-teardown window is fine; the next tick sees the new one.
+            }
+            tree.CreateTimer(1.0).Timeout += Tick;
+        }
+        Tick();
+    }
+
+    // The engine-side setter skips the native update when the value matches
+    // the C# cache, and after Save-and-Quit the NATIVE content scale drifts
+    // landscape while the cache still holds our values: every same-value
+    // rewrite was a no-op and the menu stayed a frozen strip. Writing a
+    // deliberately different size first forces the native path, then Apply
+    // lands the real target.
+    internal static void ForceRefresh()
+    {
+        if (Engine.GetMainLoop() is not SceneTree tree)
+            return;
+        try
+        {
+            var window = tree.Root;
+            var current = window.ContentScaleSize;
+            window.ContentScaleSize = new Vector2I(current.X, current.Y + 1);
+        }
+        catch
+        {
+            // Window mid-teardown; Apply below will be a no-op too.
+        }
+        Apply();
+    }
+
     internal static bool Apply()
     {
         if (Engine.GetMainLoop() is not SceneTree tree)
@@ -94,6 +169,10 @@ internal static class PortraitDisplay
         // a third on this device. The phone runs hot and GPU-bound at native,
         // so viewport is the Android default; user://sts2_render_mode with
         // the word "native" switches back for comparison.
+        // Write UNCONDITIONALLY every time: an attempted only-on-change
+        // optimization here broke even the boot path, because the C# window
+        // properties can read back "already correct" while the native side
+        // renders the landscape fit; the blind rewrite is load-bearing.
         window.ContentScaleMode = RenderAtCanvasResolution()
             ? Window.ContentScaleModeEnum.Viewport
             : Window.ContentScaleModeEnum.CanvasItems;

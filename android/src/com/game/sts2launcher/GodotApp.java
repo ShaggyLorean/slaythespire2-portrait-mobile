@@ -119,7 +119,13 @@ public class GodotApp extends GodotActivity {
 		configureMonoForEmulator();
 		cleanupStaleHttpResponseFiles();
 
-		SplashScreen.installSplashScreen(this);
+		// The starting window's exit animation has been seen wedged on this
+		// device: its leash stayed in the SurfaceFlinger stack composing a
+		// stale frame over the live game after scene swaps (menu came back
+		// as a frozen landscape strip with dead input). Remove the splash
+		// immediately instead of letting the system animate it away.
+		SplashScreen.installSplashScreen(this)
+			.setOnExitAnimationListener(provider -> provider.remove());
 		EdgeToEdge.enable(this);
 
 		try {
