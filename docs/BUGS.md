@@ -350,3 +350,16 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Diagnostics kept**: drop `user://sts2_vpdump` to save what Godot renders (`sts2_vpdump.png`) and compare against a screencap; the aspect guard heartbeat logs window scale state.
 - **Status**: verified (S&Q returns to a full-screen portrait menu, taps work, loot reachable via Continue)
 - **Fixed in**: 0.4.0
+
+## BUG-034: Minor open items from the design tour (2026-08-26)
+
+- **Proceed arrow overlaps the resting hero**: at the rest site the arrow's
+  0.73-canvas-height band lands on the seated character art. Cosmetic;
+  candidates: per-room nudge or a lower band outside combat rooms.
+- **"Ping" coop button leaks into singleplayer**: seen bottom-right on the
+  post-combat loot screen. Class unknown yet; capture `user://sts2_types`
+  dump next time it is visible, then hide it for singleplayer runs.
+- **View Upgrades tickbox small on select grids**: NDeckUpgradeSelectScreen
+  does not inherit NCardsViewScreen, so the AfterCapstoneOpened growth pass
+  does not reach it.
+- **Status**: open (tracked; none block 0.4)
