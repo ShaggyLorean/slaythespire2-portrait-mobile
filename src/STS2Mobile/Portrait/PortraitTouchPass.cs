@@ -91,6 +91,13 @@ internal static class PortraitTouchPass
         if (root is null || !PortraitDisplay.IsPortrait(canvas))
             return;
 
+        // Pure combat is fully owned by the combat pass (everything there is
+        // MarkManaged) and this full-tree walk showed up as the periodic
+        // 70-120ms frame spike that made card drags hitch. Skip it until an
+        // overlay (loot, card pick, deck) is actually up.
+        if (PortraitCombat.CombatHudActive && PortraitSceneCache.TopOverlay() is null)
+            return;
+
         var target = PortraitHudMetrics.MinTouchSide;
         var contentBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom());
         var visited = 0;

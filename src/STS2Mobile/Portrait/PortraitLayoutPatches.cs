@@ -1758,6 +1758,49 @@ internal static class PortraitSettingsOverlay
 
         clipper.PivotOffset = new Vector2(clipper.Size.X * 0.5f, 0f);
         clipper.Scale = Vector2.One * SettingsContentScale;
+        GrowSmallControls(clipper);
+        SpreadRows(clipper);
+    }
+
+    // The authored 86-unit pitch packs every row into the top half and
+    // leaves the lower half of the screen dead; spreading the list fills
+    // the phone's height (the scroll container absorbs any overflow).
+    private static void SpreadRows(Node node)
+    {
+        if (node is BoxContainer { Vertical: true } list && list.GetChildCount() >= 6)
+        {
+            list.AddThemeConstantOverride("separation", 34);
+            return;
+        }
+        foreach (var child in node.GetChildren())
+            SpreadRows(child);
+    }
+
+    private const string TickGrownMeta = "Sts2PortraitSettingsTickGrown";
+    private const float TickboxScale = 1.55f;
+
+    // The content scale brings rows to thumb pitch but the interactive bits
+    // inside them (tickboxes, the value arrows) are authored ~40 units and
+    // land near 12dp; grow just those in place, centered on themselves.
+    private static void GrowSmallControls(Node node)
+    {
+        if (node is Control c && !c.HasMeta(TickGrownMeta))
+        {
+            // Scaling the tickbox CONTROL did nothing on device: the hover
+            // reticle animation owns that transform and rewrites it every
+            // frame. The inner visuals are unmanaged, so grow those: the
+            // 64x64 tick square and the paginator arrow art.
+            var parentType = c.GetParent()?.GetType().Name ?? "";
+            if (c.Name == "TickboxVisuals"
+                || (c is TextureRect && c.Name == "Image" && parentType.Contains("Arrow")))
+            {
+                c.SetMeta(TickGrownMeta, true);
+                c.PivotOffset = c.Size * 0.5f;
+                c.Scale = Vector2.One * TickboxScale;
+            }
+        }
+        foreach (var child in node.GetChildren())
+            GrowSmallControls(child);
     }
 
     private static void PlaceBackButton(NSettingsScreen screen)
