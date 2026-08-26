@@ -1352,17 +1352,26 @@ internal static class PortraitCombat
     }
 
 
+    internal const float EndTurnScale = 1.18f;
+
+    internal static Vector2 EndTurnTarget(Control button, Vector2 canvas)
+    {
+        var width = button.Size.X > 1f ? button.Size.X : 250f;
+        return new Vector2(canvas.X - width * EndTurnScale - 38f, canvas.Y * 0.73f);
+    }
+
     internal static void PlaceEndTurn(Control button, Vector2 canvas)
     {
-        const float scale = 1.18f;
         PortraitNodes.ClearAnchors(button);
         button.PivotOffset = Vector2.Zero;
-        button.Scale = Vector2.One * scale;
-        var width = button.Size.X > 1f ? button.Size.X : 250f;
-        var target = new Vector2(canvas.X - width * scale - 38f, canvas.Y * 0.73f);
-        button.Position += target - button.GlobalPosition;
+        button.Scale = Vector2.One * EndTurnScale;
         button.ZAsRelative = false;
         button.ZIndex = 420;
+
+        // Position is deliberately NOT written here any more. The button's own
+        // ShowPos getter is patched to return our target, so the game's entry
+        // tween glides it to the right spot; writing the position here as well
+        // made the button snap mid-glide.
     }
 
     // The piles used to hug the bottom corners, which is exactly where the
@@ -1370,21 +1379,32 @@ internal static class PortraitCombat
     // card. They now ride the empty band above the energy and end turn row.
     private const float PileRowRatio = 0.685f;
 
-    internal static void PlacePile(Control pile, Vector2 canvas, bool onRight)
+    internal const float PileScale = 1.42f;
+
+    internal static Vector2 PileTarget(Control pile, Vector2 canvas, bool onRight)
     {
-        const float scale = 1.42f;
-        PortraitNodes.ClearAnchors(pile);
-        pile.PivotOffset = Vector2.Zero;
-        pile.Scale = Vector2.One * scale;
         var width = pile.Size.X > 1f ? pile.Size.X : 86f;
         var height = pile.Size.Y > 1f ? pile.Size.Y : 86f;
         var x = onRight
-            ? canvas.X - width * scale - PortraitHudMetrics.EdgeMargin
+            ? canvas.X - width * PileScale - PortraitHudMetrics.EdgeMargin
             : PortraitHudMetrics.EdgeMargin;
-        var y = canvas.Y * PileRowRatio - height * scale * 0.5f;
-        pile.Position += new Vector2(x, y) - pile.GlobalPosition;
+        return new Vector2(x, canvas.Y * PileRowRatio - height * PileScale * 0.5f);
+    }
+
+    internal static void PlacePile(Control pile, Vector2 canvas, bool onRight)
+    {
+        PortraitNodes.ClearAnchors(pile);
+        pile.PivotOffset = Vector2.Zero;
+        pile.Scale = Vector2.One * PileScale;
         pile.ZAsRelative = false;
         pile.ZIndex = 520;
+
+        // The pile's arrival position is owned by the AnimIn source hook (its
+        // _showPosition field); only drift beyond the tween's own motion is
+        // corrected here, so the slide-in animation survives.
+        var target = PileTarget(pile, canvas, onRight);
+        if (pile.GlobalPosition.DistanceTo(target) > 220f)
+            pile.Position += target - pile.GlobalPosition;
     }
 
     // The run HUD switches between the compact bar and the combat stack based
@@ -2304,6 +2324,100 @@ internal static class ProfileScreenPatch
         => PortraitNodes.AssertLoop(__instance, () => PortraitProfileScreen.Apply(__instance));
 }
 
+
+// SOURCE HOOKS. The zero-flash class of patch: instead of correcting a node
+// after the game has placed it (and visibly fighting its entry tween for
+// 60-120ms), these rewrite the values the game's own animations aim at, so
+// the original tween delivers the node to the portrait position in one motion.
+// All three target methods only touch their own fields, which the device's
+// patched-copy rules allow (docs/BUGS.md, BUG-020/BUG-022).
+
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Combat.NCombatCardPile), "AnimIn")]
+internal static class CardPileAnimInPatch
+{
+    private static void Prefix(Control __instance)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+
+        try
+        {
+            var onRight = __instance.GetType().Name.Contains("Discard");
+            __instance.PivotOffset = Vector2.Zero;
+            __instance.Scale = Vector2.One * PortraitCombat.PileScale;
+            __instance.ZAsRelative = false;
+            __instance.ZIndex = 520;
+
+            var target = PortraitCombat.PileTarget(__instance, canvas, onRight);
+            var parentTransform = (__instance.GetParent() as Control)?.GetGlobalTransform()
+                ?? Transform2D.Identity;
+            var local = parentTransform.AffineInverse() * target;
+            Traverse.Create(__instance).Field("_showPosition").SetValue(local);
+        }
+        catch (Exception ex)
+        {
+            PatchHelper.Log($"[Portrait] pile AnimIn source hook failed: {ex.GetBaseException().Message}");
+        }
+    }
+}
+
+[HarmonyPatch(typeof(NEndTurnButton), "ShowPos", MethodType.Getter)]
+internal static class EndTurnShowPosPatch
+{
+    private static void Postfix(Control __instance, ref Vector2 __result)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+
+        // ShowPos is local to the button's parent; our target is global.
+        var target = PortraitCombat.EndTurnTarget(__instance, canvas);
+        var parentTransform = (__instance.GetParent() as Control)?.GetGlobalTransform()
+            ?? Transform2D.Identity;
+        __result = parentTransform.AffineInverse() * target;
+    }
+}
+
+[HarmonyPatch(typeof(NContinueRunInfo), "AnimShow")]
+internal static class ContinueRunInfoSourcePatch
+{
+    private static void Prefix(Control __instance)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+
+        try
+        {
+            var width = __instance.Size.X > 1f ? __instance.Size.X : 520f;
+            var height = __instance.Size.Y > 1f ? __instance.Size.Y : 260f;
+            var globalScale = __instance.GetGlobalTransform().Scale.X;
+            var anchorTop = canvas.Y * 0.27f;
+            if (__instance.GetParent() is Control owner && owner.Size.Y > 1f)
+                anchorTop = owner.GlobalPosition.Y - height * globalScale - 56f;
+
+            var target = new Vector2(
+                (canvas.X - width * globalScale) * 0.5f,
+                Mathf.Clamp(anchorTop, PortraitDisplay.SafeTop() + 24f, canvas.Y - height * globalScale - 180f)
+            );
+            var parentTransform = (__instance.GetParent() as Control)?.GetGlobalTransform()
+                ?? Transform2D.Identity;
+            var local = parentTransform.AffineInverse() * target;
+
+            // The tween ends at _initPosition + (0,-20); aim it so the end of
+            // the game's own float-up IS the portrait spot.
+            Traverse.Create(__instance).Field("_initPosition").SetValue(local + new Vector2(0f, 20f));
+            __instance.ZAsRelative = false;
+            __instance.ZIndex = 900;
+        }
+        catch (Exception ex)
+        {
+            PatchHelper.Log($"[Portrait] tooltip source hook failed: {ex.GetBaseException().Message}");
+        }
+    }
+}
+
 [HarmonyPatch(typeof(NContinueRunInfo), "AnimShow")]
 internal static class ContinueRunInfoPatch
 {
@@ -2341,10 +2455,10 @@ internal static class ContinueRunInfoPatch
         panel.ZAsRelative = false;
         panel.ZIndex = 900;
 
-        // Anchored to the button it belongs to, not to a fixed band of the
-        // screen. Pinning it at 27% of the canvas threw the tooltip up onto
-        // the logo the moment the second pass ran, which reads as a glitch;
-        // it only ever needs to clear the finger holding the button.
+        // Position is owned by the AnimShow source hook now: it aims the
+        // game's own float-up tween at the portrait spot, so writing the
+        // position here mid-flight would snap the animation. This pass only
+        // corrects real drift well beyond the tween's 20-unit motion.
         var anchorTop = canvas.Y * 0.27f;
         if (panel.GetParent() is Control owner && owner.Size.Y > 1f)
             anchorTop = owner.GlobalPosition.Y - height * globalScale - FingerClearance;
@@ -2357,7 +2471,8 @@ internal static class ContinueRunInfoPatch
                 canvas.Y - height * globalScale - 180f
             )
         );
-        panel.GlobalPosition = target;
+        if (panel.GlobalPosition.DistanceTo(target) > 160f)
+            panel.GlobalPosition = target;
     }
 }
 
