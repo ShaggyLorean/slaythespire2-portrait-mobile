@@ -327,7 +327,7 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Root cause**: sharper form of BUG-020/BUG-022. The generated copy contains the ORIGINAL method body; if that body touches a protected field declared on a BASE class, Mono denies the access even when the prefix itself is reflection-only. Same-class private fields remain fine, which is why the other source hooks survive.
 - **Fix**: the hook is deleted; `PortraitCombat.PlacePile` rewrites the pile's `_showPosition` through reflection from normal code before the entry tween runs, which gives the same zero-flash arrival without patching the restricted method.
 - **Rule**: before patching a method on device, check its body for protected/internal member access of ANY kind, methods and fields alike, across the whole class hierarchy.
-- **Status**: fixed-pending-device (pile arrival needs one combat-entry check)
+- **Status**: verified (fresh combat entry: both piles sat at their portrait corners from the first visible frame)
 - **Fixed in**: 0.4.0
 
 ## BUG-032: Silent no-boot deploys measured the OLD build
@@ -337,7 +337,7 @@ Status meaning: `fixed-pending-device` = code fix landed and passed the PC-side 
 - **Root cause**: boot-game force-stops and relaunches, but never verified the relaunch produced a fresh patch orchestration; the deploy pipeline treats "adb start returned" as "the new DLL is running".
 - **Fix**: boot-game counts "Applied N/M layout patch classes" lines in the bootstrap trace before and after the launch and prints a loud WARNING when no new orchestration appeared within the wait window.
 - **Rule**: a device measurement only counts if the trace shows a patch orchestration NEWER than the deploy.
-- **Status**: fixed-pending-device (guard is in the script; needs one device round to see it fire/pass)
+- **Status**: verified (guard caught two real silent no-boots, then flagged a false alarm that led to the timestamp comparison; stable since)
 - **Fixed in**: 0.4.0
 
 ## BUG-033: Save and Quit froze the menu into a landscape strip with dead input
