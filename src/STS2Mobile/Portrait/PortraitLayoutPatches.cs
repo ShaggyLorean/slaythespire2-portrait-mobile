@@ -1197,6 +1197,12 @@ internal static class PortraitCapstone
         if (PortraitNodes.FindByType(anchor.GetTree().Root, "NRewardsScreen") is { Visible: true })
             return true;
 
+        // Skipping the loot opens the map while the finished combat scene is
+        // still alive underneath; the fan and End Turn drew over the map.
+        if (PortraitSceneCache.FindByType(anchor.GetTree().Root, "NMapScreen")
+                is Control { Visible: true } map && map.IsVisibleInTree())
+            return true;
+
         return IsOpen(anchor);
     }
 
@@ -3947,6 +3953,34 @@ internal static class PortraitCardPick
             if ((target - ar.Position).Length() > 3f)
                 alts.GlobalPosition += target - ar.Position;
         }
+    }
+}
+
+// The grid select overlays (upgrade, transform, enchant, deck picks) inherit
+// NCardGridSelectionScreen, not NCardsViewScreen, so the deck view's tickbox
+// growth never reached their "View Upgrades" box. AfterOverlayOpened has an
+// empty body here: the safe hook.
+[HarmonyPatch(
+    typeof(MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardGridSelectionScreen),
+    "AfterOverlayOpened"
+)]
+internal static class GridSelectTickboxPatch
+{
+    private static void Postfix(object __instance)
+    {
+        var screen = (Control)__instance;
+        PortraitNodes.AssertLoop(screen, () =>
+        {
+            if (!PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
+                return;
+            if (PortraitNodes.FindControl(screen, "Upgrades") is { Visible: true } upgrades
+                && upgrades.Size.X > 1f)
+            {
+                upgrades.PivotOffset = new Vector2(0f, upgrades.Size.Y);
+                if (Math.Abs(upgrades.Scale.X - 2.2f) > 0.01f)
+                    upgrades.Scale = Vector2.One * 2.2f;
+            }
+        });
     }
 }
 
