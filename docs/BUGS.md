@@ -362,9 +362,7 @@ visual collisions and unplayable states are the biggest bug class.
 - **"Ping" coop button leaks into singleplayer**: FIXED and verified. It
   is `NPingButton` under CombatUi; the combat pass hides it (multiplayer
   does not exist on this build). Loot screen shows zero ping pixels now.
-- **View Upgrades tickbox small on select grids**: NDeckUpgradeSelectScreen
-  does not inherit NCardsViewScreen, so the AfterCapstoneOpened growth pass
-  does not reach it.
+- **View Upgrades tickbox small on select grids**: FIXED, see BUG-038.
 - **Status**: open (tracked; none block 0.4)
 
 ## BUG-035: Map top third darkened; no touch zoom on the map
@@ -404,4 +402,28 @@ visual collisions and unplayable states are the biggest bug class.
   SingleplayerRelicHolder scales about its center to 2.6x (bright box 90 ->
   330 px). Verified on device, relic picked up cleanly.
 - **Status**: verified
+- **Fixed in**: 0.4.0
+
+## BUG-037: Map opened over a finished combat kept the hand and End Turn
+
+- **Repro**: skip the loot after a fight; the map opens while the combat
+  scene is still alive underneath and the fan plus End Turn drew over it.
+- **Fix**: a visible NMapScreen counts as eclipsing the combat HUD (same
+  rule as the rewards screen and capstones); the hand guard hides the fan,
+  piles, energy and End Turn and restores them when the map closes.
+- **Status**: verified (parchment where End Turn sat, no card glow)
+- **Fixed in**: 0.4.0
+
+## BUG-038: Grid select overlays started under the top bar
+
+- **Where**: NCardGridSelectionScreen family (upgrade at the smith, transform,
+  enchant, deck picks).
+- **Root cause**: NCardGrid's authored YOffset assumes a landscape header;
+  the first card row sat under the compact bar. The View Upgrades tickbox
+  was also ~12dp because these screens do not inherit NCardsViewScreen.
+- **Fix**: AfterOverlayOpened (empty body, safe) postfix: once per screen the
+  grid's YOffset is pushed down to the content top and the game's own
+  ReflowColumns re-lays the rows (the grid scrolls, nothing is lost); the
+  tickbox grows 2.2x from its bottom-left corner.
+- **Status**: verified at the smith (rows clear of the bar, box thumb-sized)
 - **Fixed in**: 0.4.0

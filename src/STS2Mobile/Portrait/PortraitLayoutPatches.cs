@@ -3973,6 +3973,30 @@ internal static class GridSelectTickboxPatch
         {
             if (!PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
                 return;
+            // The grid's first row sat under the top bar (the authored
+            // YOffset assumes a landscape header). Push the offset down to
+            // the content top once and let the game's own reflow re-lay the
+            // rows; the grid scrolls, so nothing is lost at the bottom.
+            if (!screen.HasMeta("Sts2PortraitGridOffset")
+                && PortraitNodes.FindControl(screen, "CardGrid") is { } grid
+                && grid.Size.Y > 1f)
+            {
+                screen.SetMeta("Sts2PortraitGridOffset", true);
+                try
+                {
+                    var contentTop = PortraitHudMetrics.ContentTop(PortraitDisplay.SafeTop());
+                    var firstRowTop = grid.GlobalPosition.Y + 80f;
+                    var current = (int)(Traverse.Create(grid).Property("YOffset").GetValue() ?? 0);
+                    var shift = (int)Math.Max(0f, contentTop - firstRowTop);
+                    Traverse.Create(grid).Property("YOffset").SetValue(current + shift);
+                    AccessTools.Method(grid.GetType(), "ReflowColumns")?.Invoke(grid, null);
+                    PatchHelper.Log($"[Portrait] grid offset +{shift} (top {firstRowTop:F0} -> {contentTop:F0})");
+                }
+                catch (Exception ex)
+                {
+                    PatchHelper.Log($"[Portrait] grid offset failed: {ex.GetBaseException().Message}");
+                }
+            }
             if (PortraitNodes.FindControl(screen, "Upgrades") is { Visible: true } upgrades
                 && upgrades.Size.X > 1f)
             {
