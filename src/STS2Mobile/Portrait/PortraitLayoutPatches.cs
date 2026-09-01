@@ -4168,7 +4168,21 @@ internal static class PortraitTreasure
 
         PlaceCentered(PortraitNodes.FindControl(room, "Chest"), 800f, 500f);
         if (PortraitNodes.FindControl(room, "RelicCollection") is { Visible: true } relics)
+        {
             PlaceCentered(relics, 900f, 580f);
+            // The collection is a landscape-sized box, so fitting it to the
+            // band barely scales it and the single relic inside stayed a
+            // ~22dp icon in the middle of a dark screen. The holder itself
+            // grows about its center into a thumb-sized pick.
+            if (PortraitNodes.FindControl(relics, "SingleplayerRelicHolder") is { Visible: true } holder
+                && holder.Size.X > 1f)
+            {
+                const float holderScale = 2.6f;
+                holder.PivotOffset = holder.Size * 0.5f;
+                if (Math.Abs(holder.Scale.X - holderScale) > 0.01f)
+                    holder.Scale = Vector2.One * holderScale;
+            }
+        }
 
         void PlaceCentered(Control control, float fallbackW, float fallbackH)
         {
