@@ -390,3 +390,18 @@ visual collisions and unplayable states are the biggest bug class.
   with ink and marker aligned; 1.0 restores the original layout); the
   finger gesture itself awaits the user's test.
 - **Fixed in**: 0.4.0
+
+## BUG-036: Merchant shelves and treasure relic were fingernail-sized
+
+- **Merchant**: the relic/potion shelves sat in a 190-unit band at 0.8x
+  (icons ~15dp), first relic under the back tab, last card's price on the
+  sunflower. Side by side at thumb size they collided and the last potion
+  fell off the rug, so the shelves stack (relics above, potions below,
+  centered on measured widths) in a 520-unit band the card grid yields via
+  its cell clamp. Verified on device.
+- **Treasure**: the relic collection is a landscape-sized box; fitting it
+  barely scaled it and the single relic stayed ~22dp. The
+  SingleplayerRelicHolder scales about its center to 2.6x (bright box 90 ->
+  330 px). Verified on device, relic picked up cleanly.
+- **Status**: verified
+- **Fixed in**: 0.4.0
