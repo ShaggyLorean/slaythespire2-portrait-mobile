@@ -4,7 +4,13 @@
 # whose position depends on remembered state (that flakiness cost several
 # false "it didn't crash" readings).
 set -uo pipefail
-ADB="adb"
+# Git Bash on Windows rewrites /data/... arguments into C:/Program Files/Git/...;
+# adb needs the device paths verbatim (harmless elsewhere).
+export MSYS_NO_PATHCONV=1
+# Local paths must reach native Windows tools (dotnet, adb) in Windows form;
+# on Linux cygpath does not exist and the path passes through unchanged.
+winpath() { command -v cygpath >/dev/null 2>&1 && cygpath -w "$1" || printf '%s' "$1"; }
+ADB="${STS2_ADB:-adb}"
 SERIAL="${STS2_DEVICE:-192.168.1.128:39741}"
 PKG="com.sts2portrait.mobile.local"
 PREFS="/data/data/$PKG/shared_prefs/sts2mobile.xml"
@@ -21,7 +27,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 # The flag is set by a script that runs on the device: quoting an in-place edit
 # through adb + su mangled the XML and the flag silently never landed.
-"$ADB" -s "$SERIAL" push "$(dirname "$0")/set-launch-flag.sh" /data/local/tmp/set-launch-flag.sh >/dev/null
+"$ADB" -s "$SERIAL" push "$(winpath "$(dirname "$0")/set-launch-flag.sh")" /data/local/tmp/set-launch-flag.sh >/dev/null
 "$ADB" -s "$SERIAL" shell "su -c 'sh /data/local/tmp/set-launch-flag.sh'"
 
 "$ADB" -s "$SERIAL" logcat -c

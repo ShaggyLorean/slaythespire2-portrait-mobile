@@ -4,8 +4,14 @@
 # installs. Use scripts/build-android-local.sh when the managed layer, engine
 # or assets actually changed.
 set -uo pipefail
-REPO="/mnt/NEVERDELETETHIS/Projects/slaythespire2-portrait-mobile"
-ADB="adb"
+# Git Bash on Windows rewrites /data/... arguments into C:/Program Files/Git/...;
+# adb needs the device paths verbatim (harmless elsewhere).
+export MSYS_NO_PATHCONV=1
+# Local paths must reach native Windows tools (dotnet, adb) in Windows form;
+# on Linux cygpath does not exist and the path passes through unchanged.
+winpath() { command -v cygpath >/dev/null 2>&1 && cygpath -w "$1" || printf '%s' "$1"; }
+REPO="${STS2_REPO:-$(cd "$(dirname "$0")/../.." && pwd)}"
+ADB="${STS2_ADB:-adb}"
 SERIAL="${STS2_DEVICE:-192.168.1.128:39741}"
 VER="${1:-0.4.0-devfast}"
 CODE="${2:-40099}"
@@ -28,5 +34,5 @@ export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
 
 APK=$(ls -t "$REPO"/android/build/outputs/apk/mono/release/*.apk 2>/dev/null | head -1)
 [ -z "$APK" ] && { echo "no apk"; exit 1; }
-"$ADB" -s "$SERIAL" install -r "$APK" 2>&1 | tail -1
+"$ADB" -s "$SERIAL" install -r "$(winpath "$APK")" 2>&1 | tail -1
 echo "installed: $(basename "$APK")"

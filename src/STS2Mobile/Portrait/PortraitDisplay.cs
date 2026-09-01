@@ -124,6 +124,34 @@ internal static class PortraitDisplay
                         PatchHelper.Log($"[Cheat] weaken failed: {ex.GetBaseException().Message}");
                     }
                 }
+                // Dev probe: user://sts2_zoom holding a factor zooms the open
+                // map about its center, since adb cannot fake a two-finger pinch.
+                var zoomTrigger = "user://sts2_zoom";
+                if (Godot.FileAccess.FileExists(zoomTrigger))
+                {
+                    var text = Godot.FileAccess.GetFileAsString(zoomTrigger).Trim();
+                    DirAccess.RemoveAbsolute(zoomTrigger);
+                    if (float.TryParse(text, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var factor))
+                    {
+                        var size = (Vector2)window.ContentScaleSize;
+                        PortraitMap.BeginPinch(size * 0.5f);
+                        PortraitMap.SetZoom(factor);
+                        PatchHelper.Log($"[Portrait] zoom probe {factor:F2} -> {PortraitMap.Zoom:F2}");
+                    }
+                }
+                var panTrigger = "user://sts2_pan";
+                if (Godot.FileAccess.FileExists(panTrigger))
+                {
+                    var text = Godot.FileAccess.GetFileAsString(panTrigger).Trim();
+                    DirAccess.RemoveAbsolute(panTrigger);
+                    if (float.TryParse(text, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var dx))
+                    {
+                        PortraitMap.PanX(dx);
+                        PatchHelper.Log($"[Portrait] pan probe {dx:F0}");
+                    }
+                }
                 var typesTrigger = "user://sts2_types";
                 if (Godot.FileAccess.FileExists(typesTrigger))
                 {

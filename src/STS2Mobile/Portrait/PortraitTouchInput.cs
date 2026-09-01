@@ -44,15 +44,69 @@ internal static class PortraitTouchInput
         PortraitDisplay.StartAspectGuard(tree);
     }
 
+    // Pinch-to-zoom on the map: the game has no touch zoom, and the portrait
+    // map is a tall dense column where node icons sit near the touch floor.
+    // Two fingers down while NMapScreen is visible open a pinch session
+    // scaled off the starting distance; either finger lifting ends it.
+    private static Vector2? _finger0;
+    private static Vector2? _finger1;
+    private static bool _pinching;
+    private static float _pinchStartDistance = 1f;
+    private static float _pinchStartZoom = 1f;
+    private static Vector2 _pinchMid;
+
     private static void OnWindowInput(InputEvent inputEvent)
     {
-        if (inputEvent is not InputEventScreenTouch touch || touch.Index != 0)
-            return;
+        switch (inputEvent)
+        {
+            case InputEventScreenTouch touch:
+                if (touch.Index == 0)
+                {
+                    _finger0 = touch.Pressed ? touch.Position : null;
+                    if (touch.Pressed)
+                        MovePointer(touch.Position);
+                    else
+                        Callable.From(ParkPointer).CallDeferred();
+                }
+                else if (touch.Index == 1)
+                {
+                    _finger1 = touch.Pressed ? touch.Position : null;
+                }
+                UpdatePinchState();
+                break;
+            case InputEventScreenDrag drag:
+                if (drag.Index == 0)
+                    _finger0 = drag.Position;
+                else if (drag.Index == 1)
+                    _finger1 = drag.Position;
+                if (_pinching && _finger0 is { } a && _finger1 is { } b)
+                {
+                    var distance = Math.Max(a.DistanceTo(b), 1f);
+                    PortraitMap.SetZoom(_pinchStartZoom * distance / _pinchStartDistance);
+                    // Two-finger drift pans; a single finger stays the game's
+                    // own gesture (the quill draws with it).
+                    var mid = (a + b) * 0.5f;
+                    PortraitMap.PanX(mid.X - _pinchMid.X);
+                    _pinchMid = mid;
+                }
+                break;
+        }
+    }
 
-        if (touch.Pressed)
-            MovePointer(touch.Position);
-        else
-            Callable.From(ParkPointer).CallDeferred();
+    private static void UpdatePinchState()
+    {
+        if (_finger0 is { } a && _finger1 is { } b)
+        {
+            if (_pinching || PortraitMap.VisibleMap() is null)
+                return;
+            _pinching = true;
+            _pinchStartDistance = Math.Max(a.DistanceTo(b), 1f);
+            _pinchStartZoom = PortraitMap.Zoom;
+            _pinchMid = (a + b) * 0.5f;
+            PortraitMap.BeginPinch(_pinchMid);
+            return;
+        }
+        _pinching = false;
     }
 
     private static void MovePointer(Vector2 position)

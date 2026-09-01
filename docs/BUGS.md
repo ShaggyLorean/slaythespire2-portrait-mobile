@@ -366,3 +366,27 @@ visual collisions and unplayable states are the biggest bug class.
   does not inherit NCardsViewScreen, so the AfterCapstoneOpened growth pass
   does not reach it.
 - **Status**: open (tracked; none block 0.4)
+
+## BUG-035: Map top third darkened; no touch zoom on the map
+
+- **Where**: NMapScreen on device.
+- **Root cause (darkness)**: the shared scrim's default depth (ContentTop + 470)
+  dated from before the event prose got its own measured depth; every
+  non-combat screen, the map included, carried a needless dark band.
+  Default is now the bar band plus a 140-unit fade (event keeps its
+  prose-measured depth). Map band brightness 85.9 -> 134.3 (0-255 mean).
+- **Zoom**: the game has no touch zoom. Two fingers down over a visible map
+  open a pinch session (PortraitTouchInput tracks touch index 0/1); TheMap,
+  the container holding MapBg/Paths/Points/Drawings/MapMarker, scales about
+  the fingers' midpoint (1.0-2.2). Scaling only Points/Paths left the ink
+  strokes and marker behind. Two-finger drift pans horizontally through
+  PivotOffset (dp*(1-s)) because the game rewrites TheMap.Position every
+  frame for its vertical scroll. A single finger stays the game's gesture:
+  the quill draws with it.
+- **Probes**: user://sts2_zoom (factor) and user://sts2_pan (dx) drive the
+  same code from adb, since adb cannot fake multi-touch. Real pinch needs a
+  hand on the device.
+- **Status**: zoom/pan verified via probes (1.8x + pan showed the left column
+  with ink and marker aligned; 1.0 restores the original layout); the
+  finger gesture itself awaits the user's test.
+- **Fixed in**: 0.4.0

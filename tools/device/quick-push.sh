@@ -5,15 +5,21 @@
 # every assembly from the APK on each start, so the push is silently reverted.
 # Java, manifest, native or asset changes still need scripts/build-android-local.ps1.
 set -uo pipefail
+# Git Bash on Windows rewrites /data/... arguments into C:/Program Files/Git/...;
+# adb needs the device paths verbatim (harmless elsewhere).
+export MSYS_NO_PATHCONV=1
+# Local paths must reach native Windows tools (dotnet, adb) in Windows form;
+# on Linux cygpath does not exist and the path passes through unchanged.
+winpath() { command -v cygpath >/dev/null 2>&1 && cygpath -w "$1" || printf '%s' "$1"; }
 
-REPO="/mnt/NEVERDELETETHIS/Projects/slaythespire2-portrait-mobile"
-ADB="adb"
+REPO="${STS2_REPO:-$(cd "$(dirname "$0")/../.." && pwd)}"
+ADB="${STS2_ADB:-adb}"
 SERIAL="${STS2_DEVICE:-192.168.1.128:39741}"
 
 echo "[1/3] building managed layer"
 BUILD_LOG="$REPO/tmp/device/build.log"
 mkdir -p "$REPO/tmp/device"
-dotnet build "$REPO/src/STS2Mobile/STS2Mobile.csproj" -c Release > "$BUILD_LOG" 2>&1
+dotnet build "$(winpath "$REPO/src/STS2Mobile/STS2Mobile.csproj")" -c Release > "$BUILD_LOG" 2>&1
 if [ $? -ne 0 ]; then
   grep -E "error" "$BUILD_LOG" | head -5
   echo "build failed, not deploying"
@@ -31,7 +37,7 @@ fi
 
 echo "[2/3] pushing to override dir"
 "$ADB" -s "$SERIAL" shell "mkdir -p /data/local/tmp/sts2_override" >/dev/null 2>&1
-"$ADB" -s "$SERIAL" push "$DLL" /data/local/tmp/sts2_override/STS2Mobile.dll
+"$ADB" -s "$SERIAL" push "$(winpath "$DLL")" /data/local/tmp/sts2_override/STS2Mobile.dll
 "$ADB" -s "$SERIAL" shell "chmod 644 /data/local/tmp/sts2_override/STS2Mobile.dll"
 
 echo "[3/3] booting game leg"

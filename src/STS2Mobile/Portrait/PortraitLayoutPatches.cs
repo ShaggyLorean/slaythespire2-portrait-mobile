@@ -2366,7 +2366,11 @@ internal static class PortraitTopBar
         // fixed depth cannot hold it: measure the live block and keep the
         // gradient under its last line. Anything else on screen keeps the
         // default depth.
-        var depth = PortraitHudMetrics.ContentTop(safeTop) + 470f;
+        // The scrim exists for bar legibility: the bar band plus a short
+        // fade tail. The old default (ContentTop + 470) dated from before the
+        // event prose got its own measured depth below, and it darkened the
+        // top third of the map for nothing.
+        var depth = PortraitHudMetrics.HudBottom(safeTop) + 140f;
         // The map draws OVER the event room without hiding it, and the deep
         // event scrim hung over the map's top third; event depth only applies
         // while the event is actually the screen being read.
@@ -2971,6 +2975,80 @@ internal static class PortraitMap
             background.SetMeta("sts2_portrait_overscan", true);
             background.Position -= new Vector2(0f, 120f);
         }
+    }
+
+    // Pinch zoom state. The graph lives in TheMap (MapBg, Paths, Points,
+    // Drawings, MapMarker); scaling only Points and Paths left the player's
+    // ink strokes and the position marker behind, so the whole container is
+    // the zoom target. The game pans TheMap by Position, which a scale on
+    // the same node leaves intact.
+    private static float _zoom = 1f;
+    internal const float MaxZoom = 2.2f;
+
+    internal static float Zoom => _zoom;
+
+    internal static NMapScreen VisibleMap()
+    {
+        if (Engine.GetMainLoop() is not SceneTree tree)
+            return null;
+        return PortraitSceneCache.FindByType(tree.Root, "NMapScreen") is NMapScreen
+            { Visible: true } map && map.IsVisibleInTree()
+            ? map
+            : null;
+    }
+
+    private static IEnumerable<Control> GraphLayers(NMapScreen map)
+    {
+        if (PortraitNodes.FindControl(map, "Points")?.GetParent() is Control theMap)
+            yield return theMap;
+    }
+
+    // A pinch scales about the fingers' midpoint. Moving PivotOffset while a
+    // scale is already applied shifts the drawn graph (visual point q sits
+    // at pos + q*s + pivot*(1-s)), so the position is compensated to keep
+    // the graph exactly where it was when the session starts.
+    internal static void BeginPinch(Vector2 globalPivot)
+    {
+        var map = VisibleMap();
+        if (map is null)
+            return;
+        foreach (var layer in GraphLayers(map))
+        {
+            var scale = Math.Max(layer.Scale.X, 0.01f);
+            var newPivot = (globalPivot - layer.GlobalPosition) / scale + layer.PivotOffset;
+            var shift = (newPivot - layer.PivotOffset) * (scale - 1f);
+            layer.PivotOffset = newPivot;
+            layer.Position += shift;
+        }
+    }
+
+    internal static void SetZoom(float zoom)
+    {
+        var map = VisibleMap();
+        if (map is null)
+            return;
+        zoom = Mathf.Clamp(zoom, 1f, MaxZoom);
+        _zoom = zoom;
+        foreach (var layer in GraphLayers(map))
+        {
+            layer.Scale = Vector2.One * zoom;
+        }
+    }
+
+    // Two-finger drag while zoomed pans horizontally. The game rewrites
+    // TheMap.Position every frame for its own vertical scroll, so a Position
+    // write is undone instantly; PivotOffset is untouched by the game, and
+    // with scale s a pivot shift dp moves the drawn graph by dp*(1-s). At
+    // zoom 1 the factor is zero, so the pan needs no reset.
+    internal static void PanX(float deltaX)
+    {
+        if (_zoom <= 1.001f)
+            return;
+        var map = VisibleMap();
+        if (map is null)
+            return;
+        foreach (var layer in GraphLayers(map))
+            layer.PivotOffset += new Vector2(deltaX / (1f - _zoom), 0f);
     }
 
     internal static void CenterGraph(NMapScreen screen)
