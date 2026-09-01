@@ -3357,7 +3357,10 @@ internal static class PortraitShop
         var itemCount = cards.Count + (hasRemoval ? 1 : 0);
         const int columns = 2;
         var rows = Math.Max(1, (itemCount + columns - 1) / columns);
-        const float utilityBand = 190f;
+        // The relic and potion shelves need thumb-sized icons (they were
+        // ~15dp at 0.8x in a 190-unit band); the band grows and the cards
+        // above give up a little height through the cell clamp.
+        const float utilityBand = 520f;
         var cellWidth = panelWidth / columns;
         var cellHeight = (panelHeight - utilityBand) / rows;
         var scale = Mathf.Clamp(cellHeight / 500f, 0.72f, 1.05f);
@@ -3368,15 +3371,26 @@ internal static class PortraitShop
         if (hasRemoval)
             Place(removal, origin + CellCenter(cards.Count, cellWidth, cellHeight), scale);
 
-        // The utility band holds two shelves side by side; at 0.95 scale the
-        // right shelf's last potion ran off the canvas and the rows touched.
+        // The utility band holds two shelves side by side, each three slots
+        // wide; 1.4x lands the icons near 30dp with prices still inside the
+        // rug, shelves parked at the band's left and right thirds.
         var relics = PortraitNodes.FindControl(slots, "Relics");
         var potions = PortraitNodes.FindControl(slots, "Potions");
-        var bandY = panelHeight - utilityBand + 42f;
+        // Two thumb-sized shelves do not fit side by side on this canvas
+        // (they collided and the last potion fell off the rug), so they
+        // stack: relics above, potions below, both centered and clear of
+        // the back tab and of the last card row's price tags.
+        const float shelfScale = 1.4f;
+        const float shelfPitch = 175f;
+        var bandY = panelHeight - utilityBand + 110f;
+        // The shelf containers report less width than their three slots
+        // draw (measured ~370 units at 1x), so the rendered width centers.
+        var relicsWidth = Math.Max(relics?.Size.X ?? 0f, 370f) * shelfScale;
+        var potionsWidth = Math.Max(potions?.Size.X ?? 0f, 370f) * shelfScale;
         if (relics is not null)
-            Place(relics, origin + new Vector2(panelWidth * 0.22f, bandY), 0.8f);
+            Place(relics, origin + new Vector2((panelWidth - relicsWidth) * 0.5f, bandY), shelfScale);
         if (potions is not null)
-            Place(potions, origin + new Vector2(panelWidth * 0.64f, bandY), 0.8f);
+            Place(potions, origin + new Vector2((panelWidth - potionsWidth) * 0.5f, bandY + shelfPitch), shelfScale);
     }
 
     private static Vector2 CellCenter(int index, float width, float height)
