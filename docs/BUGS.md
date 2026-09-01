@@ -427,3 +427,14 @@ visual collisions and unplayable states are the biggest bug class.
   tickbox grows 2.2x from its bottom-left corner.
 - **Status**: verified at the smith (rows clear of the bar, box thumb-sized)
 - **Fixed in**: 0.4.0
+
+## BUG-039: Deck button vanished from the compact bar after a smith upgrade (transient)
+
+- **Repro (once)**: second rest-site smith of the run, upgrade confirmed; on the
+  following map screens the bar showed only the map scroll and the gear.
+  A fresh boot restored it. Probe (reflow signature carries the deck
+  state) read Visible/InTree/alpha 1/scale 1 while it was gone, so the
+  node was fine and a child (icon) was hidden or off-slot, most likely
+  the game's OnScreenClosed -> AnimUnhover path on a touch device that
+  never delivers a hover to undo it.
+- **Status**: open, not reproduced yet; watch after grid overlays close.

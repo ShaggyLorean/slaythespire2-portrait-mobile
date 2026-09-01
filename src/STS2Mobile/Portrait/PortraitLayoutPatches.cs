@@ -2189,7 +2189,9 @@ internal static class PortraitTopBar
         // touch sweep must not second-guess its sizes.
         PortraitTouchPass.MarkManaged(bar as Control);
 
-        var signature = $"portrait-zones-6:{canvas.X:F0}:{(combat ? "combat" : "compact")}:{relics?.GetChildCount() ?? 0}";
+        // Probe: the deck button vanished from the compact bar after a smith
+        // visit; report its state whenever the bar's shape changes.
+        var signature = $"portrait-zones-6:{canvas.X:F0}:{(combat ? "combat" : "compact")}:{relics?.GetChildCount() ?? 0}:{(deck is null ? "nodeck" : $"deck v={deck.Visible} vt={deck.IsVisibleInTree()} a={deck.Modulate.A:F2} s={deck.Scale.X:F2} p={deck.GlobalPosition.X:F0},{deck.GlobalPosition.Y:F0} sz={deck.Size.X:F0}")}";
         if (_lastSignature != signature)
         {
             _lastSignature = signature;
