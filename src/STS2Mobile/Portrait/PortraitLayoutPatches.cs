@@ -1044,11 +1044,23 @@ internal static class PortraitPauseMenu
                 continue;
 
             row.CustomMinimumSize = new Vector2(ButtonWidth, ButtonHeight);
+            // The rows came out narrower than the container and the VBox
+            // left-aligned them, so the whole stack sat left of the title;
+            // center each row inside the container instead.
+            row.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
             // The plate art and label do not follow the grown row since a
             // game update: the label autosized to the full row while the
             // plate stayed authored-size, so "Compendium" and "Save and
             // Quit" spilled past their buttons. Pin both to the row rect.
-            FillRowRect(row.GetNodeOrNull<Control>("ButtonImage"));
+            if (row.GetNodeOrNull<Control>("ButtonImage") is { } art)
+            {
+                FillRowRect(art);
+                // The plate texture carries its drop shadow on the right, so
+                // the art reads ~16 units left of the centered label; shift
+                // the art, not the text.
+                art.OffsetLeft = 16f;
+                art.OffsetRight = 16f;
+            }
             if (row.GetNodeOrNull<Control>("Label") is { } label)
             {
                 FillRowRect(label);
@@ -1066,7 +1078,13 @@ internal static class PortraitPauseMenu
         var height = rows * ButtonHeight + (rows - 1) * RowSeparation;
         PortraitNodes.ClearAnchors(container);
         container.Size = new Vector2(ButtonWidth, height);
-        var top = (canvas.Y - height) * 0.5f;
+        // Centering on the canvas left the lower 40% dead under four rows;
+        // the block sits in the content band at the same lower bias the
+        // main menu uses, so the thumb reaches it and the hole closes.
+        var bandTop = PortraitHudMetrics.ContentTop(PortraitDisplay.SafeTop()) + TitleGap + 80f;
+        var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - 140f;
+        var free = Mathf.Max(0f, bandBottom - bandTop - height);
+        var top = bandTop + free * 0.62f;
         container.Position += new Vector2((canvas.X - ButtonWidth) * 0.5f, top)
             - container.GlobalPosition;
 
