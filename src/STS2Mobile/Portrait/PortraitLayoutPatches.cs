@@ -1797,6 +1797,29 @@ internal static class PortraitSettingsOverlay
         clipper.Scale = Vector2.One * SettingsContentScale;
         GrowSmallControls(clipper);
         SpreadRows(clipper);
+        ClampAboveBackTab(clipper);
+    }
+
+    // The spread list scrolls all the way to the screen bottom, so the back
+    // tab parked bottom-left sat on the Credits row's label. The clipper's
+    // visible height ends above the tab band instead; the list keeps
+    // scrolling inside it. The authored height is kept in meta so the clamp
+    // never compounds across ticks or reopenings.
+    private const string ClipperHeightMeta = "Sts2PortraitSettingsClipperHeight";
+    private const float BackTabBand = 160f;
+
+    private static void ClampAboveBackTab(Control clipper)
+    {
+        if (!clipper.HasMeta(ClipperHeightMeta))
+            clipper.SetMeta(ClipperHeightMeta, clipper.Size.Y);
+        var authored = (float)clipper.GetMeta(ClipperHeightMeta);
+        var canvas = PortraitDisplay.CanvasSize;
+        var floor = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - BackTabBand;
+        var scale = Math.Max(clipper.Scale.Y, 0.01f);
+        var allowed = (floor - clipper.GlobalPosition.Y) / scale;
+        var target = Mathf.Clamp(allowed, 200f, authored);
+        if (Math.Abs(clipper.Size.Y - target) > 1f)
+            clipper.Size = new Vector2(clipper.Size.X, target);
     }
 
     // The authored 86-unit pitch packs every row into the top half and
@@ -3158,6 +3181,30 @@ internal static class MapScreenReadyPatch
                 rewards.Visible = false;
                 PatchHelper.Log("[Portrait] rewards screen hidden while map shows");
             }
+
+            // Settings and pause are capstones drawn UNDER the map's own
+            // furniture: the legend and the drawing-tools plate stayed bright
+            // over the settings rows. Hide both while a capstone is open and
+            // hand them back on close (meta marks what this pass hid).
+            var capstoneUp = PortraitCapstone.IsOpen(__instance);
+            foreach (var name in new[] { "MapLegend", "DrawingTools" })
+            {
+                if (PortraitNodes.FindControl(__instance, name) is not { } furniture)
+                    continue;
+                const string hiddenMeta = "Sts2PortraitMapFurnitureHidden";
+                if (capstoneUp && furniture.Visible)
+                {
+                    furniture.Visible = false;
+                    furniture.SetMeta(hiddenMeta, true);
+                }
+                else if (!capstoneUp && furniture.HasMeta(hiddenMeta))
+                {
+                    furniture.RemoveMeta(hiddenMeta);
+                    furniture.Visible = true;
+                }
+            }
+            if (capstoneUp)
+                return;
 
             // The legend floated mid-screen over live map nodes; the lower
             // band of the portrait map is empty, so it belongs there.

@@ -438,3 +438,23 @@ visual collisions and unplayable states are the biggest bug class.
   the game's OnScreenClosed -> AnimUnhover path on a touch device that
   never delivers a hover to undo it.
 - **Status**: open, not reproduced yet; watch after grid overlays close.
+
+## BUG-040: Map legend and drawing tools drew over settings and pause
+
+- **Where**: open settings or pause while the map screen is up.
+- **Root cause**: the map's own furniture (MapLegend, DrawingTools plate)
+  lives above the capstone layer, so it stayed bright over the settings
+  rows (the tools plate sat on "Reset to Default").
+- **Fix**: the map pass hides both while `PortraitCapstone.IsOpen` and hands
+  them back on close (meta marks what the pass hid).
+- **Status**: fix deployed; device check pending (phone rebooted mid-run)
+
+## BUG-041: Settings back tab sat on the Credits row
+
+- **Root cause**: the spread settings list (BUG-034/settings fill) scrolls to
+  the very bottom of the screen, and the back tab parked bottom-left landed
+  on the last rows' labels.
+- **Fix**: the clipper's visible height is clamped to end above a 160-unit
+  back-tab band (authored height kept in meta so the clamp never
+  compounds); the list keeps scrolling inside the shorter area.
+- **Status**: built; deploy and device check pending
