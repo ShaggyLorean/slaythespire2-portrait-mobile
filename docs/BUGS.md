@@ -447,7 +447,8 @@ visual collisions and unplayable states are the biggest bug class.
   rows (the tools plate sat on "Reset to Default").
 - **Fix**: the map pass hides both while `PortraitCapstone.IsOpen` and hands
   them back on close (meta marks what the pass hid).
-- **Status**: fix deployed; device check pending (phone rebooted mid-run)
+- **Status**: verified (pause over the act 2 map: legend and tools zones dark, restored on close)
+- **Fixed in**: 0.4.0
 
 ## BUG-041: Settings back tab sat on the Credits row
 
