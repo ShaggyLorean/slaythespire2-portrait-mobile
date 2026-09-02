@@ -269,6 +269,26 @@ internal static class PortraitNodes
             PatchHelper.Log("[Portrait] edge peek: none found");
     }
 
+    // NBackButton tweens global_position to its private _showPos on every
+    // show, so a Position write is undone within the frame. Rewrite the
+    // destination itself and the game's own slide lands the tab where the
+    // portrait layout wants it (same source-hook idea as the piles).
+    internal static void PlaceBackTab(Control back, Vector2 globalTarget)
+    {
+        if (back is null)
+            return;
+        try
+        {
+            Traverse.Create(back).Field("_showPos").SetValue(globalTarget);
+        }
+        catch
+        {
+            // Not an NBackButton; fall through to the plain write.
+        }
+        if (back.Visible && back.GlobalPosition.DistanceTo(globalTarget) > 3f)
+            back.GlobalPosition = globalTarget;
+    }
+
     internal static void After(Node node, double delay, Action action)
     {
         node.GetTree().CreateTimer(delay).Timeout += () =>
@@ -1100,17 +1120,18 @@ internal static class PortraitPauseMenu
             ) - title.GlobalPosition;
         }
 
-        // The stack's back tab is authored half outside the canvas; park it
-        // fully on screen at the bottom left, where the run screens keep it.
+        // The stack's back tab is shared with the settings screen opened
+        // from here, and at the bottom left it landed on the settings list's
+        // last rows (Credits). The top band is free on every capstone (the
+        // top bar hides), so the tab lives top-left, mobile-header style.
         var back = PortraitNodes.FindControl(menu, "BackButton");
         if (back is not null)
         {
             PortraitNodes.ClearAnchors(back);
-            var backHeight = back.Size.Y > 1f ? back.Size.Y : 110f;
-            back.Position += new Vector2(
-                PortraitHudMetrics.EdgeMargin,
-                PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - backHeight
-            ) - back.GlobalPosition;
+            PortraitNodes.PlaceBackTab(
+                back,
+                new Vector2(PortraitHudMetrics.EdgeMargin, PortraitDisplay.SafeTop() + 6f)
+            );
         }
 
         RefreshLabels(menu);
@@ -1752,8 +1773,11 @@ internal static class PortraitSettingsOverlay
     }
 
     private const string ContentOffsetMeta = "sts2_portrait_settings_offset";
-    private const float TabTopGap = 36f;
-    private const float SettingsContentScale = 1.14f;
+    // The back tab now lives above the tab strip, so the strip and the
+    // list start lower; the content scale gives back what the long General
+    // tab needs to keep its last row above the nav clearance.
+    private const float TabTopGap = 150f;
+    private const float SettingsContentScale = 1.0f;
 
     // The settings screen is authored for landscape: tabs jammed at the top
     // edge, an 86-unit row pitch, the back tab half outside the canvas and a
@@ -1815,39 +1839,39 @@ internal static class PortraitSettingsOverlay
         clipper.Scale = Vector2.One * SettingsContentScale;
         GrowSmallControls(clipper);
         SpreadRows(clipper);
-        ClampAboveBackTab(clipper);
-    }
-
-    // The spread list scrolls all the way to the screen bottom, so the back
-    // tab parked bottom-left sat on the Credits row's label. The clipper's
-    // visible height ends above the tab band instead; the list keeps
-    // scrolling inside it. The authored height is kept in meta so the clamp
-    // never compounds across ticks or reopenings.
-    private const string ClipperHeightMeta = "Sts2PortraitSettingsClipperHeight";
-    private const float BackTabBand = 160f;
-
-    private static void ClampAboveBackTab(Control clipper)
-    {
-        if (!clipper.HasMeta(ClipperHeightMeta))
-            clipper.SetMeta(ClipperHeightMeta, clipper.Size.Y);
-        var authored = (float)clipper.GetMeta(ClipperHeightMeta);
-        var canvas = PortraitDisplay.CanvasSize;
-        var floor = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - BackTabBand;
-        var scale = Math.Max(clipper.Scale.Y, 0.01f);
-        var allowed = (floor - clipper.GlobalPosition.Y) / scale;
-        var target = Mathf.Clamp(allowed, 200f, authored);
-        if (Math.Abs(clipper.Size.Y - target) > 1f)
-            clipper.Size = new Vector2(clipper.Size.X, target);
     }
 
     // The authored 86-unit pitch packs every row into the top half and
     // leaves the lower half of the screen dead; spreading the list fills
     // the phone's height (the scroll container absorbs any overflow).
+    // The separation is derived per tab so the list ends above the back
+    // tab band instead of running under it (a fixed 34 put the Credits
+    // label under the tab on the General tab); short tabs get the roomier
+    // pitch, long ones tighten to fit.
+    // Bottom clearance for the list now that the back tab lives at the top.
+    private const float BackTabBand = 80f;
+
     private static void SpreadRows(Node node)
     {
         if (node is BoxContainer { Vertical: true } list && list.GetChildCount() >= 6)
         {
-            list.AddThemeConstantOverride("separation", 34);
+            var rows = 0;
+            var rowHeight = 0f;
+            foreach (var child in list.GetChildren())
+                if (child is Control { Visible: true } row && row.Size.Y > 1f)
+                {
+                    rows++;
+                    rowHeight += row.Size.Y;
+                }
+            if (rows < 2)
+                return;
+            rowHeight /= rows;
+            var scale = Math.Max(list.GetGlobalTransform().Scale.Y, 0.01f);
+            var canvas = PortraitDisplay.CanvasSize;
+            var floor = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - BackTabBand;
+            var availLocal = (floor - list.GlobalPosition.Y) / scale;
+            var separation = (availLocal - rows * rowHeight) / (rows - 1);
+            list.AddThemeConstantOverride("separation", (int)Mathf.Clamp(separation, 6f, 32f));
             return;
         }
         foreach (var child in node.GetChildren())
@@ -1886,13 +1910,15 @@ internal static class PortraitSettingsOverlay
         if (PortraitNodes.FindControl(screen, "BackButton") is not { } back)
             return;
 
-        var canvas = PortraitDisplay.CanvasSize;
+        // The settings list fills the screen to the bottom on the long
+        // tabs, so a bottom-left tab landed on the Credits label. The top
+        // band above the tab strip is free here (the top bar is hidden while
+        // settings are open); the back tab lives there, mobile-header style.
         PortraitNodes.ClearAnchors(back);
-        var height = back.Size.Y > 1f ? back.Size.Y : 110f;
-        back.Position += new Vector2(
-            PortraitHudMetrics.EdgeMargin,
-            PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - height
-        ) - back.GlobalPosition;
+        PortraitNodes.PlaceBackTab(
+            back,
+            new Vector2(PortraitHudMetrics.EdgeMargin, PortraitDisplay.SafeTop() + 6f)
+        );
     }
 }
 

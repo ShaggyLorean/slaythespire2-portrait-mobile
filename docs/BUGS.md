@@ -451,10 +451,16 @@ visual collisions and unplayable states are the biggest bug class.
 
 ## BUG-041: Settings back tab sat on the Credits row
 
-- **Root cause**: the spread settings list (BUG-034/settings fill) scrolls to
-  the very bottom of the screen, and the back tab parked bottom-left landed
-  on the last rows' labels.
-- **Fix**: the clipper's visible height is clamped to end above a 160-unit
-  back-tab band (authored height kept in meta so the clamp never
-  compounds); the list keeps scrolling inside the shorter area.
-- **Status**: built; deploy and device check pending
+- **Root cause**: the spread settings list fills the screen on the long
+  General tab and the shared back tab parked bottom-left landed on the last
+  rows' labels. A Position write on that tab is undone within the frame:
+  NBackButton tweens global_position to its private _showPos on every show.
+- **Fix**: the back tab moves to the top band (free while settings/pause are
+  open, the top bar hides) through a _showPos rewrite (PlaceBackTab, same
+  source-hook idea as the piles), for both the pause menu and the settings
+  screen; the tab strip and list start 150 units lower, content scale 1.0,
+  and the row separation derives per tab (6-32) so the list ends with a
+  bottom margin. Verified on device (General tab: no overlaps, Reset row
+  at 86% height).
+- **Status**: verified
+- **Fixed in**: 0.4.0

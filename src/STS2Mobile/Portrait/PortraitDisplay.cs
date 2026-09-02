@@ -164,7 +164,8 @@ internal static class PortraitDisplay
                         if (n is Control { Visible: true } c && c.IsVisibleInTree()
                             && c.Size.X > 300f && c.Size.Y > 300f)
                             sb.Append($"{c.GetType().Name}:{c.Name} | ");
-                        if (n.Name.ToString().Contains("Ping", StringComparison.OrdinalIgnoreCase)
+                        if ((n.Name.ToString().Contains("Ping", StringComparison.OrdinalIgnoreCase)
+                                || n.Name.ToString().Contains("Back", StringComparison.OrdinalIgnoreCase))
                             && n is Control pc)
                             sb.Append($"PING>{pc.GetType().Name}:{pc.Name} vis={pc.IsVisibleInTree()} rect={pc.GetGlobalRect().Position.X:F0},{pc.GetGlobalRect().Position.Y:F0} {pc.Size.X:F0}x{pc.Size.Y:F0} parent={pc.GetParent()?.Name} | ");
                         foreach (var child in n.GetChildren())
