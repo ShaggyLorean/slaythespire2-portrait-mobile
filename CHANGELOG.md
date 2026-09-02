@@ -11,6 +11,17 @@ Notable changes to the portrait project. Bug ids refer to [docs/BUGS.md](docs/BU
 - BUG-003 (event slice): event text starts below the run HUD band. `PortraitHudMetrics` is the single source for HUD-occupied space; the event block keeps its authored Y only when it clears the HUD.
 - BUG-004 (geometry): the combat top band and the native top cover take the real display-cutout inset as a lower bound instead of being purely fixed-size; cover sizing is logged for the gutter investigation.
 
+- BUG-030/031: layout loops survive overlay detach windows (resume-into-loot stayed native); the patched-copy access rule sharpened to protected base-class FIELDS, and the pile arrival rewrite moved out of the unpatchable AnimIn. Device applies every registered patch class (50/50 at the time).
+- BUG-032/033: deploy guard verifies a fresh patch orchestration; Save and Quit no longer freezes the menu into a landscape strip (native content scale drift; ForceRefresh writes a different size first).
+- BUG-035: map scrim shortened to the bar band; pinch-to-zoom (TheMap scales about the fingers, two-finger drift pans through PivotOffset).
+- BUG-036/037/038: merchant shelves and the treasure relic at thumb size; the map eclipses a finished combat's hand and End Turn; grid select overlays start below the bar with a grown View Upgrades box.
+- BUG-040/041: map furniture yields to pause/settings; the back tab moves to the top on pause and settings (NBackButton _showPos rewrite) and the settings list fits above it.
+- Card pick overlays rebuilt as a 2+1 grid of 1.5x cards; pause rows centered under their labels; potion capsule keeps its vanilla station at thumb size; coop Ping button hidden; Proceed arrow floors below character art.
+
+### Added (dev tooling)
+- File-triggered probes under user://: `sts2_weaken` (all enemies to 1 hp for test runs), `sts2_zoom` / `sts2_pan`, `sts2_types`, `sts2_vpdump`.
+- Device scripts run from Linux or Git Bash on Windows (repo derived from script location, adb/serial from env, MSYS path conversion off, Windows-form local paths).
+
 ### Removed
 - BUG-006/BUG-010: five unregistered patch files (EventLayout, Merchant, MobileLayout, UiScale, CombatBackground), the never-called PortraitTopVignette, and a dead LauncherActivity helper (1,000+ lines of misleading dead code).
 
