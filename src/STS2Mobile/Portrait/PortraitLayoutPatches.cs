@@ -4085,6 +4085,7 @@ internal static class PortraitAncientEvent
 internal static class PortraitCardPick
 {
     private const string LoopMeta = "Sts2PortraitCardPickLoop";
+    private const string SlotMeta = "Sts2PortraitCardPickSlot";
 
     internal static void EnsureLoop(Control screen)
     {
@@ -4130,12 +4131,24 @@ internal static class PortraitCardPick
         // descriptions grow with them. Holders are positioned directly and
         // center-pivot scaled; CardRow itself is a zero-sized center anchor
         // the game owns, and it stays untouched.
+        // Slots are pinned to each holder on first sight: the game moves the
+        // hovered card to the front of the child list for z-order, and a grid
+        // keyed on child order swapped the cards under the finger on the
+        // press that should have selected one.
         var holders = new System.Collections.Generic.List<Control>();
         foreach (var child in row.GetChildren())
             if (child is Control { Visible: true } holder)
                 holders.Add(holder);
         if (holders.Count == 0)
             return;
+        var nextSlot = 0;
+        foreach (var h in holders)
+            if (h.HasMeta(SlotMeta))
+                nextSlot = Math.Max(nextSlot, (int)h.GetMeta(SlotMeta) + 1);
+        foreach (var h in holders)
+            if (!h.HasMeta(SlotMeta))
+                h.SetMeta(SlotMeta, nextSlot++);
+        holders.Sort((a, b) => ((int)a.GetMeta(SlotMeta)).CompareTo((int)b.GetMeta(SlotMeta)));
         const float cardScale = 1.5f;
         const float gapX = 44f;
         const float gapY = 36f;

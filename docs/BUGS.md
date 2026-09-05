@@ -516,3 +516,17 @@ visual collisions and unplayable states are the biggest bug class.
   date line below it.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-045: card pick grid swapped cards under the finger
+
+- **Symptom**: tapping a card on the reward/boss card pick shuffled the three
+  cards to new positions instead of selecting one; a second tap on the moved
+  card selected it.
+- **Cause**: the game moves the hovered card holder to the front of CardRow's
+  child list for z-order. The portrait 2+1 grid assigned slots by child order
+  on every pass, so the hover that precedes a touch press re-dealt the grid
+  and the press released over a different card.
+- **Fix**: slots are pinned to each holder on first sight (meta) and the grid
+  sorts by that slot. Verified on device: one tap selects (deck 16 to 17).
+- **Status**: verified
+- **Fixed in**: 0.4.0
