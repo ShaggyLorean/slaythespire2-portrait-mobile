@@ -475,10 +475,13 @@ visual collisions and unplayable states are the biggest bug class.
   once; the hover that precedes a touch press shrank the button to 1.02 at
   pivot zero, so the press landed outside it, and the layout loop grew it
   back before the next frame. Visually nothing moved.
-- **Fix**: postfixes on OnFocus/OnUnfocus re-express the game's writes on
-  top of the touch scale (1.02x of ours on focus, ours on unfocus, the
-  unfocus tween killed); the placement pass tolerates the focused value.
-  Verified on device: the profile screen opens on the first tap.
+- **Fix**: the button's own Scale is left alone. Its children are scaled and
+  spread about the origin once and the button's Size grows with them, so
+  the game's 1.02 hover rides on top harmlessly. A first attempt with
+  postfixes on OnFocus/OnUnfocus was withdrawn: those bodies call protected
+  base members and the patched copies threw MethodAccessException on every
+  focus change (BUG-020 rule). Verified on device: same rendered size, the
+  profile screen opens on the first tap, no exceptions in the log.
 - **Status**: verified
 - **Fixed in**: 0.4.0
 

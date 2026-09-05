@@ -641,33 +641,7 @@ internal static class PortraitMainMenu
     // edges. Drop them below the safe inset, grow them, and inset them.
     private const float CornerButtonMaxScale = 1.9f;
     private const float CornerButtonTopGap = 18f;
-    private const string CornerScaleMeta = "Sts2PortraitCornerScale";
-    internal const float CornerFocusFactor = 1.02f;
-
-    // Called after the game's own focus/unfocus scale writes on a corner
-    // button: keep its hover feel (2 percent grow) relative to the touch scale
-    // instead of the authored 1.0, and drop the unfocus tween that would pull
-    // the button back to the authored size over 0.3 s.
-    internal static void RestoreCornerScale(Control button, float factor, bool killTween)
-    {
-        if (button is null || !button.HasMeta(CornerScaleMeta))
-            return;
-        var scale = (float)button.GetMeta(CornerScaleMeta);
-        if (killTween)
-        {
-            try
-            {
-                if (Traverse.Create(button).Field("_tween").GetValue() is Tween tween && tween.IsValid())
-                    tween.Kill();
-            }
-            catch
-            {
-                // Field layout changed; the tolerant placement pass still wins.
-            }
-        }
-        button.PivotOffset = Vector2.Zero;
-        button.Scale = Vector2.One * scale * factor;
-    }
+    private const string CornerGrownMeta = "Sts2PortraitCornerGrown";
 
     private static void ApplyCornerButtons(NMainMenu menu, Vector2 canvas)
     {
@@ -681,27 +655,37 @@ internal static class PortraitMainMenu
         if (button is null)
             return;
 
-        // Size is left alone so repeat passes cannot compound. The profile
-        // button writes its own Scale on focus (1.02) and tweens it back to 1
-        // on unfocus; a plain Scale write here made the button shrink out from
-        // under the finger between hover and press, so no tap ever landed. The
-        // focus hooks below re-express those writes on top of our scale, and
-        // this pass tolerates the focused (slightly larger) value.
+        // The button's own Scale is off limits: the profile button writes
+        // Scale 1.02 on focus and tweens it back to 1 on unfocus, and the
+        // hover that precedes a touch press shrank a scaled button out from
+        // under the finger (no tap ever landed). Patching those methods is
+        // not an option either, their bodies call protected base members
+        // (BUG-020). So the growth lives one level down: the children are
+        // scaled and spread about the button's origin and the button's Size
+        // grows with them, once; the game's 1.02 then rides on top harmlessly.
         var width = button.Size.X > 1f ? button.Size.X : 64f;
         var height = button.Size.Y > 1f ? button.Size.Y : 64f;
         var scale = PortraitHudMetrics.TouchScale(width, height, CornerButtonMaxScale);
-        button.SetMeta(CornerScaleMeta, scale);
-        var current = button.Scale.X;
-        if (current < scale - 0.01f || current > scale * CornerFocusFactor + 0.01f)
+        if (!button.HasMeta(CornerGrownMeta))
         {
-            button.PivotOffset = Vector2.Zero;
-            button.Scale = Vector2.One * scale;
+            foreach (var child in button.GetChildren())
+            {
+                if (child is not Control c)
+                    continue;
+                c.PivotOffset = Vector2.Zero;
+                c.Position *= scale;
+                c.Scale *= scale;
+            }
+            PortraitNodes.ClearAnchors(button);
+            button.Size = new Vector2(width, height) * scale;
+            button.SetMeta(CornerGrownMeta, scale);
         }
+        var grown = (float)button.GetMeta(CornerGrownMeta);
 
         PortraitNodes.ClearAnchors(button);
         var target = new Vector2(
             onRight
-                ? canvas.X - width * scale - PortraitHudMetrics.EdgeMargin
+                ? canvas.X - width * grown - PortraitHudMetrics.EdgeMargin
                 : PortraitHudMetrics.EdgeMargin,
             top
         );
@@ -1021,20 +1005,6 @@ internal static class CharacterSelectOpenedPatch
 
 // The gold focus reticles are placed from the label's global position, which
 // follows our scaled menu, but padded with the label's unscaled width. On a
-[HarmonyPatch(typeof(NOpenProfileScreenButton), "OnFocus")]
-internal static class ProfileButtonFocusPatch
-{
-    private static void Postfix(NOpenProfileScreenButton __instance)
-        => PortraitMainMenu.RestoreCornerScale(__instance, PortraitMainMenu.CornerFocusFactor, killTween: false);
-}
-
-[HarmonyPatch(typeof(NOpenProfileScreenButton), "OnUnfocus")]
-internal static class ProfileButtonUnfocusPatch
-{
-    private static void Postfix(NOpenProfileScreenButton __instance)
-        => PortraitMainMenu.RestoreCornerScale(__instance, 1f, killTween: true);
-}
-
 // Patch notes: the back tab is authored bottom-left and sat on the article
 // text; settings and pause moved theirs to the top, so this one follows.
 // The article gets a top margin equal to the tab band so the date line does
