@@ -465,3 +465,51 @@ visual collisions and unplayable states are the biggest bug class.
   at 86% height).
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-042: main menu profile button never opened the profile screen
+
+- **Symptom**: tapping "Profile 1 / Click to edit" on the main menu did
+  nothing; the patch-notes button beside it (same corner placement) worked.
+- **Cause**: NOpenProfileScreenButton writes its own Scale on focus (1.02)
+  and tweens it back to 1 on unfocus. The corner placement wrote Scale 1.9
+  once; the hover that precedes a touch press shrank the button to 1.02 at
+  pivot zero, so the press landed outside it, and the layout loop grew it
+  back before the next frame. Visually nothing moved.
+- **Fix**: postfixes on OnFocus/OnUnfocus re-express the game's writes on
+  top of the touch scale (1.02x of ours on focus, ours on unfocus, the
+  unfocus tween killed); the placement pass tolerates the focused value.
+  Verified on device: the profile screen opens on the first tap.
+- **Status**: verified
+- **Fixed in**: 0.4.0
+
+## BUG-043: profile card clipped the "Updated" timestamp
+
+- **Symptom**: the save-profile card showed "Updated / September 2," with the
+  year and time cut off.
+- **Cause**: the card's Info block is a clipped 340x360 rich label with
+  auto-size off; "September 2, 2026 12:48 PM" wraps to a sixth and seventh
+  line that the rect cuts (the label's fitter measures with the theme face
+  and reports one date line, so font caps changed nothing).
+- **Fix**: the rect takes the card's full width and the free plate above and
+  below the block (y 100, 460 tall): the date wraps once and six lines fit.
+  The profile back tab also moves to the top band like every other submenu.
+  Verified on device.
+- **Status**: verified
+- **Fixed in**: 0.4.0
+
+## BUG-044: patch notes back tab sat on the article text
+
+- **Symptom**: the patch-notes back tab was bottom-left over the paragraph
+  text, while pause and settings had theirs at the top.
+- **Cause**: authored bottom-left tab; the article's scroll box starts at the
+  top of the screen. Moving the tab up alone put it over the date line, and
+  neither OffsetTop on the scroll box nor a margin override on the inner
+  MarginContainer moved the text: NScrollableContainer positions its Content
+  from its private _paddingTop.
+- **Fix**: a prefix on NPatchNotesScreen.Open rewrites the tab's _showPos
+  before Open enables the tab (OnEnable captures the target into a tween);
+  a postfix raises the container's padding through its public UpdatePadding
+  by 280 and places the content there. Verified on device: tab top-left,
+  date line below it.
+- **Status**: verified
+- **Fixed in**: 0.4.0

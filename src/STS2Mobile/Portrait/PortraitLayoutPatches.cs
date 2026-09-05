@@ -273,6 +273,30 @@ internal static class PortraitNodes
     // show, so a Position write is undone within the frame. Rewrite the
     // destination itself and the game's own slide lands the tab where the
     // portrait layout wants it (same source-hook idea as the piles).
+    internal static void DumpSubtree(Node root, string tag, int maxDepth = 6)
+    {
+        void Walk(Node node, int depth)
+        {
+            if (depth > maxDepth)
+                return;
+            if (node is Control c)
+            {
+                var text = node switch
+                {
+                    RichTextLabel r => r.Text,
+                    Label l => l.Text,
+                    _ => "",
+                };
+                if (text.Length > 40)
+                    text = text[..40];
+                PatchHelper.Log($"[Portrait] {tag} {new string(' ', depth * 2)}{c.Name}:{c.GetType().Name} pos={c.Position} size={c.Size} scale={c.Scale} vis={c.Visible} clip={c.ClipContents} text={text.Replace('\n', '|')}");
+            }
+            foreach (var child in node.GetChildren())
+                Walk(child, depth + 1);
+        }
+        Walk(root, 0);
+    }
+
     internal static void PlaceBackTab(Control back, Vector2 globalTarget)
     {
         if (back is null)
@@ -617,6 +641,33 @@ internal static class PortraitMainMenu
     // edges. Drop them below the safe inset, grow them, and inset them.
     private const float CornerButtonMaxScale = 1.9f;
     private const float CornerButtonTopGap = 18f;
+    private const string CornerScaleMeta = "Sts2PortraitCornerScale";
+    internal const float CornerFocusFactor = 1.02f;
+
+    // Called after the game's own focus/unfocus scale writes on a corner
+    // button: keep its hover feel (2 percent grow) relative to the touch scale
+    // instead of the authored 1.0, and drop the unfocus tween that would pull
+    // the button back to the authored size over 0.3 s.
+    internal static void RestoreCornerScale(Control button, float factor, bool killTween)
+    {
+        if (button is null || !button.HasMeta(CornerScaleMeta))
+            return;
+        var scale = (float)button.GetMeta(CornerScaleMeta);
+        if (killTween)
+        {
+            try
+            {
+                if (Traverse.Create(button).Field("_tween").GetValue() is Tween tween && tween.IsValid())
+                    tween.Kill();
+            }
+            catch
+            {
+                // Field layout changed; the tolerant placement pass still wins.
+            }
+        }
+        button.PivotOffset = Vector2.Zero;
+        button.Scale = Vector2.One * scale * factor;
+    }
 
     private static void ApplyCornerButtons(NMainMenu menu, Vector2 canvas)
     {
@@ -630,12 +681,18 @@ internal static class PortraitMainMenu
         if (button is null)
             return;
 
-        // Scale is safe to write here: these buttons carry no press animation
-        // of their own, and Size is left alone so repeat passes cannot compound.
+        // Size is left alone so repeat passes cannot compound. The profile
+        // button writes its own Scale on focus (1.02) and tweens it back to 1
+        // on unfocus; a plain Scale write here made the button shrink out from
+        // under the finger between hover and press, so no tap ever landed. The
+        // focus hooks below re-express those writes on top of our scale, and
+        // this pass tolerates the focused (slightly larger) value.
         var width = button.Size.X > 1f ? button.Size.X : 64f;
         var height = button.Size.Y > 1f ? button.Size.Y : 64f;
         var scale = PortraitHudMetrics.TouchScale(width, height, CornerButtonMaxScale);
-        if (Mathf.Abs(button.Scale.X - scale) > 0.01f)
+        button.SetMeta(CornerScaleMeta, scale);
+        var current = button.Scale.X;
+        if (current < scale - 0.01f || current > scale * CornerFocusFactor + 0.01f)
         {
             button.PivotOffset = Vector2.Zero;
             button.Scale = Vector2.One * scale;
@@ -964,6 +1021,92 @@ internal static class CharacterSelectOpenedPatch
 
 // The gold focus reticles are placed from the label's global position, which
 // follows our scaled menu, but padded with the label's unscaled width. On a
+[HarmonyPatch(typeof(NOpenProfileScreenButton), "OnFocus")]
+internal static class ProfileButtonFocusPatch
+{
+    private static void Postfix(NOpenProfileScreenButton __instance)
+        => PortraitMainMenu.RestoreCornerScale(__instance, PortraitMainMenu.CornerFocusFactor, killTween: false);
+}
+
+[HarmonyPatch(typeof(NOpenProfileScreenButton), "OnUnfocus")]
+internal static class ProfileButtonUnfocusPatch
+{
+    private static void Postfix(NOpenProfileScreenButton __instance)
+        => PortraitMainMenu.RestoreCornerScale(__instance, 1f, killTween: true);
+}
+
+// Patch notes: the back tab is authored bottom-left and sat on the article
+// text; settings and pause moved theirs to the top, so this one follows.
+// The article gets a top margin equal to the tab band so the date line does
+// not start under the tab.
+[HarmonyPatch(typeof(NPatchNotesScreen), nameof(NPatchNotesScreen.Open))]
+internal static class PatchNotesOpenPatch
+{
+    private const string MarginMeta = "Sts2PortraitPatchNotesMargin";
+    // Measured: the date label starts 5 units below the content top and the
+    // back tab ends near 256; 280 puts the date under the tab with a gap.
+    private const float TabBand = 280f;
+
+    // Prefix: Open() enables the back button, and OnEnable captures _showPos
+    // into a tween right there. Rewriting the field afterwards leaves that
+    // tween heading for the authored bottom-left corner.
+    private static void Prefix(NPatchNotesScreen __instance)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        try
+        {
+            var back = PortraitNodes.FindControl(__instance, "BackButton");
+            PortraitNodes.PlaceBackTab(
+                back,
+                new Vector2(PortraitHudMetrics.EdgeMargin, PortraitDisplay.SafeTop() + 6f)
+            );
+            // Several nodes are named Content; the article's margin box is the
+            // parent of the patch text.
+        }
+        catch (Exception e)
+        {
+            PatchHelper.Log($"[Portrait] patch notes back tab failed: {e.Message}");
+        }
+    }
+
+    // The article scrolls inside ScreenContents; start that box below the tab
+    // band instead of under the tab. Postfix: Open() lays the text out first.
+    private static void Postfix(NPatchNotesScreen __instance)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        try
+        {
+            // NScrollableContainer drives its Content's Y from _paddingTop
+            // (scroll-to-top and drag both write Position from it), so offsets
+            // and margins on the box never moved the text. Raise the padding by
+            // the tab band and put the content there; the container's own
+            // scroll-to-top then agrees with us.
+            if (PortraitNodes.FindControl(__instance, "ScreenContents") is { } contents
+                && !contents.HasMeta(MarginMeta))
+            {
+                var t = Traverse.Create(contents);
+                var content = t.Field("_content").GetValue<Control>();
+                if (content is not null)
+                {
+                    var authoredTop = content.Position.Y;
+                    var bottom = (float)t.Field("_paddingBottom").GetValue();
+                    t.Method("UpdatePadding", new object[] { authoredTop + TabBand, bottom }).GetValue();
+                    content.Position = new Vector2(content.Position.X, authoredTop + TabBand);
+                }
+                contents.SetMeta(MarginMeta, true);
+            }
+        }
+        catch (Exception e)
+        {
+            PatchHelper.Log($"[Portrait] patch notes pass failed: {e.Message}");
+        }
+    }
+}
+
 // touch-sized menu that puts the right one inside the text and leaves both at
 // a fraction of the button's height. Re-place and re-size them after the game
 // has started its own tween, and drop that tween so it cannot pull them back.
@@ -2503,9 +2646,10 @@ internal static class PortraitProfileScreen
         // Centre the whole block in the free band instead of pinning it near
         // the top: the authored screen leaves the bottom two thirds of a phone
         // empty, which reads as a broken layout rather than a deliberate one.
-        var bandTop = PortraitDisplay.SafeTop() + 40f;
-        var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom())
-            - BackButtonReserve;
+        // The back tab lives at the top here like every other submenu, so the
+        // reserve comes off the top of the band.
+        var bandTop = PortraitDisplay.SafeTop() + BackButtonReserve;
+        var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom());
         var deleteHeight = DeleteGap + PortraitHudMetrics.MinTouchSide;
         var blockHeight = messageHeight + MessageGap + authoredHeight * scale + deleteHeight;
         var blockTop = Mathf.Max(bandTop, bandTop + (bandBottom - bandTop - blockHeight) * 0.5f);
@@ -2562,6 +2706,8 @@ internal static class PortraitProfileScreen
             if (card is null || button is null)
                 continue;
 
+            FitInfoLabel(card);
+
             var width = button.Size.X > 1f ? button.Size.X : 80f;
             var height = button.Size.Y > 1f ? button.Size.Y : 80f;
             var scale = PortraitHudMetrics.TouchScale(width, height, DeleteMaxScale);
@@ -2580,19 +2726,35 @@ internal static class PortraitProfileScreen
         }
     }
 
+    private const string InfoFitMeta = "Sts2PortraitInfoFit";
+    private const float InfoTop = 100f;
+    private const float InfoHeight = 460f;
+
+    private static void FitInfoLabel(Control card)
+    {
+        if (card.FindChild("Info", recursive: true, owned: false) is not Control info
+            || info.HasMeta(InfoFitMeta))
+            return;
+        // The Info block ("Playtime / Updated <date> <time>") is a clipped
+        // 340x360 rich label at y 150 in a 560-tall card; the timestamp wraps
+        // to a sixth and seventh line that the rect cuts. Give the rect the
+        // card's full width (the date then wraps once, not twice) and the
+        // free plate above and below the block: six lines fit in 460.
+        PortraitNodes.ClearAnchors(info);
+        info.Position = new Vector2(0f, InfoTop);
+        info.Size = new Vector2(card.Size.X, InfoHeight);
+        info.SetMeta(InfoFitMeta, true);
+    }
+
     private static void PlaceBackButton(Control screen, Vector2 canvas)
     {
         if (PortraitNodes.FindControl(screen, "BackButton") is not { } back)
             return;
 
         PortraitNodes.ClearAnchors(back);
-        var height = back.Size.Y > 1f ? back.Size.Y : 110f;
-        PlaceGlobal(
+        PortraitNodes.PlaceBackTab(
             back,
-            new Vector2(
-                PortraitHudMetrics.EdgeMargin,
-                PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - height
-            )
+            new Vector2(PortraitHudMetrics.EdgeMargin, PortraitDisplay.SafeTop() + 6f)
         );
     }
 

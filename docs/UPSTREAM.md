@@ -62,3 +62,11 @@ For mixed files: port upstream behavior change by change, never overwrite the fi
 ## Inherited reference docs
 
 `docs/current-android-status.md` was upstream's own evidence ledger and has been removed with the root-level upstream governance files (`MIGRATION_CHECKLIST.md`, `OVERHAUL_ROADMAP.md`, `OVERHAUL_STATUS.md`); they described upstream's project, not this one. `docs/testing-needed.md`, `docs/device-log-checklist.md` and the runbook/release docs are inherited but still useful as reference; rewrite them for the portrait project when they next need substantive edits.
+
+## Sync check log
+
+Every work session starts with a check of upstream `main` against the baseline (clone kept at `D:\Projects	mp-upstream-launcher`, `git log --since=<baseline date>`). Record the verdict here even when nothing is ported.
+
+| Date | Upstream head | Verdict |
+| --- | --- | --- |
+| 2026-09-05 | `5592513` (2026-08-22), 13 commits past baseline | Nothing to port. Upstream rewrote its cloud-save layer (SaveSyncService, SteamCloudTransport) and split the launcher into hundreds of partial classes; the two small fixes in that stream (cloud RPC timeout, skip unchanged files) are behaviors our `CloudSyncCoordinator` / `SteamKit2CloudSaveStore` already have (per-path timeouts, identical-content skip). The rest is restructuring, mod loading, runtime identity and handoff lifecycle work tied to their new file layout; revisit only if a concrete launcher defect appears here. |
