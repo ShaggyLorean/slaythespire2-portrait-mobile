@@ -173,6 +173,70 @@ internal static class PortraitDisplay
                     }
                     Walk(window, 0);
                     PatchHelper.Log("[Portrait] big visibles: " + sb);
+                    // Input gates: who is on top of the map, and is the map itself listening.
+                    void Gates(Node n, int depth)
+                    {
+                        if (depth > 8)
+                            return;
+                        var name = n.Name.ToString();
+                        if (n is Control gc && (name.EndsWith("Backstop") || name.EndsWith("ScreensContainer") || name == "OverlayScreensContainer" || name == "CapstoneScreenContainer"))
+                        {
+                            var kids = new System.Text.StringBuilder();
+                            foreach (var k in n.GetChildren())
+                                if (k is Control kc)
+                                    kids.Append($"{kc.Name}(vis={kc.Visible},filter={kc.MouseFilter}) ");
+                            PatchHelper.Log($"[Portrait] gate {gc.GetPath()} vis={gc.IsVisibleInTree()} filter={gc.MouseFilter} kids: {kids}");
+                        }
+                        if (n.GetType().Name == "NMapScreen")
+                        {
+                            try
+                            {
+                                var t = HarmonyLib.Traverse.Create(n);
+                                var tween = t.Field("_actAnimTween").GetValue() as Tween;
+                                PatchHelper.Log($"[Portrait] map gates: inputDisabled={t.Field("_isInputDisabled").GetValue()} actAnimRunning={(tween is not null && tween.IsValid() && tween.IsRunning())} drawing={t.Field("_drawingInput").GetValue() is not null} dragging={t.Field("_isDragging").GetValue()} target={t.Field("_targetDragPos").GetValue()} container={t.Field("_mapContainer").GetValue<Control>()?.Position} filter={(n as Control)?.MouseFilter}");
+                            }
+                            catch (Exception e)
+                            {
+                                PatchHelper.Log($"[Portrait] map gates failed: {e.Message}");
+                            }
+                            try
+                            {
+                                var t = HarmonyLib.Traverse.Create(n);
+                                var drawings = t.Property("Drawings").GetValue();
+                                var mode = drawings is null ? "null" : HarmonyLib.Traverse.Create(drawings).Method("GetLocalDrawingMode").GetValue()?.ToString();
+                                var pts = new System.Text.StringBuilder();
+                                var count = 0;
+                                void Points(Node q)
+                                {
+                                    foreach (var k in q.GetChildren())
+                                    {
+                                        if (k.GetType().Name.Contains("MapPoint") && k is Control pc && count < 12)
+                                        {
+                                            var pt = HarmonyLib.Traverse.Create(k);
+                                            var trav = pt.Property("IsTravelable").GetValue();
+                                            var en = pt.Field("_isEnabled").GetValue();
+                                            var r = pc.GetGlobalRect();
+                                            if (trav is true || count < 4)
+                                            {
+                                                pts.Append($"{k.Name} trav={trav} en={en} rect={r.Position.X:F0},{r.Position.Y:F0} {r.Size.X:F0}x{r.Size.Y:F0} filter={pc.MouseFilter} | ");
+                                                count++;
+                                            }
+                                        }
+                                        Points(k);
+                                    }
+                                }
+                                Points(n);
+                                PatchHelper.Log($"[Portrait] map points: drawMode={mode} {pts}");
+                            }
+                            catch (Exception e)
+                            {
+                                PatchHelper.Log($"[Portrait] map points failed: {e.Message}");
+                            }
+                        }
+                        foreach (var child in n.GetChildren())
+                            Gates(child, depth + 1);
+                    }
+                    Gates(window, 0);
                 }
                 var trigger = "user://sts2_vpdump";
                 if (Godot.FileAccess.FileExists(trigger))

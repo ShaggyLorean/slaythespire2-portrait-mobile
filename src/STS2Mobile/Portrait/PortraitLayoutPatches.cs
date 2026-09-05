@@ -4194,6 +4194,36 @@ internal static class PortraitCardPick
     }
 }
 
+// The map's drag range is two landscape constants: the container's Y is
+// nudged back into [-600, 1800] every frame, and the current row parks at
+// -600 + row * distY. On a 1080-tall view that puts the bottom row near the
+// bottom edge; on a 2596-tall portrait canvas the same -600 leaves the bottom
+// 45 percent of the screen as bare parchment (the gap under the map). The
+// lower bound moves down by a portrait allowance so the bottom row sits above
+// the legend; every park below it glides there through the game's own lerp.
+[HarmonyPatch(typeof(NMapScreen), "UpdateScrollPosition")]
+internal static class MapScrollRangePatch
+{
+    internal const float PortraitAllowance = 780f;
+
+    private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+    {
+        var portrait = OperatingSystem.IsAndroid();
+        foreach (var instruction in instructions)
+        {
+            if (portrait
+                && instruction.opcode == System.Reflection.Emit.OpCodes.Ldc_R4
+                && instruction.operand is float f
+                && Math.Abs(f + 600f) < 0.01f)
+            {
+                yield return new CodeInstruction(System.Reflection.Emit.OpCodes.Ldc_R4, -600f + PortraitAllowance);
+                continue;
+            }
+            yield return instruction;
+        }
+    }
+}
+
 // The grid select overlays (upgrade, transform, enchant, deck picks) inherit
 // NCardGridSelectionScreen, not NCardsViewScreen, so the deck view's tickbox
 // growth never reached their "View Upgrades" box. AfterOverlayOpened has an

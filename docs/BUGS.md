@@ -530,3 +530,20 @@ visual collisions and unplayable states are the biggest bug class.
   sorts by that slot. Verified on device: one tap selects (deck 16 to 17).
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-046: map parked with the bottom 45 percent of the screen empty
+
+- **Symptom**: on entering an act (and whenever the current row is low), the
+  map's bottom row sat mid-screen with bare parchment below it down to the
+  drawing tools; scrolling could not bring it lower.
+- **Cause**: NMapScreen nudges the container's Y back into the landscape
+  constants [-600, 1800] every frame and parks the current row at -600 +
+  row * distY. On a 1080-tall view that puts the bottom row near the bottom
+  edge; on the 2596-tall portrait canvas the same -600 leaves the band.
+- **Fix**: a transpiler on UpdateScrollPosition replaces the two -600
+  constants with -600 + 780 (portrait allowance). Parks below the new bound
+  glide there through the game's own lerp, so the act start still animates.
+  Verified on device: the bottom row sits just above the legend, rows fill
+  the screen up to the HUD.
+- **Status**: verified
+- **Fixed in**: 0.4.0

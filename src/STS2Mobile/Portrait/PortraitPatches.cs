@@ -47,6 +47,7 @@ internal static class PortraitPatches
         typeof(MapBackgroundWindowPatch),
         typeof(MapScreenReadyPatch),
         typeof(MapLegendPatch),
+        typeof(MapScrollRangePatch),
         typeof(EventRoomPatch),
         typeof(AncientEventReadyPatch),
         typeof(AncientEventDialoguePatch),
