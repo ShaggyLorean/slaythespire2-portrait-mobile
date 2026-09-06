@@ -3842,7 +3842,9 @@ internal static class PortraitRestSite
             1.4f
         );
         var rowHeight = baseH * scale;
-        var rowY = PortraitHudMetrics.BottomAnchoredY(canvas.Y, safeBottom, rowHeight) - 40f;
+        // Same baseline as the grid footer strip (60 above the content
+        // bottom): the plates used to hug the gesture edge.
+        var rowY = PortraitHudMetrics.ContentBottom(canvas.Y, safeBottom) - 60f - rowHeight;
         PortraitNodes.ClearAnchors(choices);
         choices.PivotOffset = Vector2.Zero;
         choices.Scale = Vector2.One * scale;
@@ -3898,6 +3900,22 @@ internal static class PortraitGridStrip
     private const float CaptionReserve = 44f;
     private const string PlateName = "Sts2PortraitGridStripPlate";
 
+    private static List<Control> FindAll(Node root, params string[] names)
+    {
+        var found = new List<Control>();
+        void Walk(Node node, int depth)
+        {
+            if (depth > 8)
+                return;
+            if (node is Control c && Array.IndexOf(names, node.Name.ToString()) >= 0)
+                found.Add(c);
+            foreach (var child in node.GetChildren())
+                Walk(child, depth + 1);
+        }
+        Walk(root, 0);
+        return found;
+    }
+
     internal static void Place(Control screen)
     {
         var canvas = PortraitDisplay.CanvasSize;
@@ -3906,8 +3924,13 @@ internal static class PortraitGridStrip
         var baseline = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - StripInset;
         var tabTop = baseline - TabHeight;
 
-        var back = PortraitNodes.FindControl(screen, "Close") ?? PortraitNodes.FindControl(screen, "BackButton");
-        if (back is not null)
+        // The preview (a card selected, the confirm tick armed) swaps in its
+        // own cancel tab and confirm; they take the same spots so the strip
+        // does not grow a second tab above the first.
+        // Every tab and tick on the screen, the preview container's own
+        // "Cancel"/"Confirm" pair included (a single-name lookup found the
+        // screen's main Confirm first and left the preview's at the edge).
+        foreach (var back in FindAll(screen, "Close", "BackButton", "Cancel", "PreviewCancel"))
             PortraitNodes.PlaceBackTab(back, new Vector2(PortraitHudMetrics.EdgeMargin, tabTop));
 
         var nextX = PortraitHudMetrics.EdgeMargin + 250f;
@@ -3939,8 +3962,10 @@ internal static class PortraitGridStrip
                 caption.GlobalPosition = target;
         }
 
-        if (PortraitNodes.FindControl(screen, "Confirm") is { } confirm && confirm.Size.X > 1f)
+        foreach (var confirm in FindAll(screen, "Confirm", "PreviewConfirm"))
         {
+            if (confirm.Size.X <= 1f)
+                continue;
             var rect = confirm.GetGlobalRect();
             var target = new Vector2(canvas.X - rect.Size.X - PortraitHudMetrics.EdgeMargin, baseline - rect.Size.Y);
             if (rect.Position.DistanceTo(target) > 1.5f)

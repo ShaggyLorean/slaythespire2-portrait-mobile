@@ -678,3 +678,22 @@ visual collisions and unplayable states are the biggest bug class.
   appears to hand initial focus to the first reward. Cosmetic; candidate
   fix is a prefix on NSelectionReticle.OnSelect for reward rows on touch.
 - **Status**: open
+
+## BUG-055: grid screens and rest site parked their controls on the gesture edge
+
+- **Symptom** (user): on the smith grid the View Upgrades box, the caption
+  and the tabs sat at the very bottom of the phone, the confirm tick
+  higher up; the rest site's prompt and plates hugged the bottom edge too.
+  "Neither far up nor far down" is the mobile rule.
+- **Fix**: a shared footer strip (PortraitGridStrip) 60 above the content
+  bottom for every grid screen: back tab and preview cancel left, the
+  tickbox beside them on the same center line, the caption at 1.5x above
+  them, confirm ticks right on the same baseline, on a dark plate that the
+  grid's viewport ends at (the last row scrolls clear). The rest site's
+  plates use the same baseline; the deck view's sort row and first grid
+  row start from the safe inset. DeckViewSortRowPatch had lost its
+  HarmonyPatch attribute for a while (the audit said 56/57); restored, and
+  MainMenuAspectWritePatch is registered now. Verified on device at 20:9
+  and 16:9 (deck view), smith grid with and without a preview, rest site.
+- **Status**: verified
+- **Fixed in**: 0.4.0
