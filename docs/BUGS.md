@@ -610,3 +610,15 @@ visual collisions and unplayable states are the biggest bug class.
   2 elite: compact bar, capsule at the bar.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-051: loot and card pick sat 100 units lower after a fight than after a resume
+
+- **Symptom**: the Loot panel and the card pick grid hung from the expanded
+  combat bar's bottom when the fight scene was still alive underneath,
+  and from the compact bar otherwise; the same screens landed at two
+  heights depending on how they were reached.
+- **Fix**: both overlays always start from the compact content top, since
+  the bar is compact under them (BUG-050). Verified on device: loot after
+  the fight at the resume position.
+- **Status**: verified
+- **Fixed in**: 0.4.0

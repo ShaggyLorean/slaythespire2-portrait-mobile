@@ -4198,9 +4198,10 @@ internal static class PortraitCardPick
         // reflects the live transform, so scaling converges and placement is
         // origin-agnostic.
         var safeTop = PortraitDisplay.SafeTop();
-        var y = (PortraitCombat.CombatHudActive
-            ? PortraitHudMetrics.CombatHudBottom(safeTop) + PortraitHudMetrics.ContentMargin
-            : PortraitHudMetrics.ContentTop(safeTop)) + 16f;
+        // The pick opens over the rewards overlay, where the bar is compact
+        // (BUG-050): the grid hangs from the compact content top in every
+        // case, so it does not drop 100 units after a fight.
+        var y = PortraitHudMetrics.ContentTop(safeTop) + 16f;
 
         if (PortraitNodes.FindControl(screen, "Banner") is { Visible: true } banner)
         {
@@ -4445,11 +4446,11 @@ internal static class PortraitRewards
         }
         var safeTop = PortraitDisplay.SafeTop();
         var safeBottom = PortraitDisplay.SafeBottom();
-        // Rewards show over the combat room, where the HUD is still the
-        // expanded stack; the band starts below whichever bar is active.
-        var bandTop = PortraitCombat.CombatHudActive
-            ? PortraitHudMetrics.CombatHudBottom(safeTop) + PortraitHudMetrics.ContentMargin
-            : PortraitHudMetrics.ContentTop(safeTop);
+        // Rewards show over the finished combat room, and the bar goes
+        // compact for them (BUG-050); the band starts below the compact bar
+        // whether the room underneath is combat or not, so the loot after a
+        // fight sits where the loot after a resume does.
+        var bandTop = PortraitHudMetrics.ContentTop(safeTop);
         var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, safeBottom);
         var panelBottom = bandBottom;
 
