@@ -781,6 +781,8 @@ visual collisions and unplayable states are the biggest bug class.
 - **Symptom**: back on the main menu after Save and Quit, the wing reticle
   sat on "Abandon Run" although nothing was hovered (touch has no hover).
 - **Notes**: the game focuses a row on return; same family as BUG-054.
-  Candidate: skip MainMenuButtonFocused's reticle on Android unless the row
-  is actually pressed.
-- **Status**: open
+- **Fix**: MainMenuReticlePatch keeps both wings hidden on Android. The
+  focused row's gold label color still shows after Save and Quit (the
+  game's focus color); minor, left as is.
+- **Status**: verified (wings)
+- **Fixed in**: 0.4.0

@@ -1144,6 +1144,16 @@ internal static class MainMenuReticlePatch
             if (label is null || left is null || right is null)
                 return;
 
+            // Touch has no hover; the wings marked whichever row the game
+            // last focused (after Save and Quit that was "Abandon Run") and
+            // read as a stale cursor. They stay off on the phone (BUG-061).
+            if (OperatingSystem.IsAndroid())
+            {
+                left.Visible = false;
+                right.Visible = false;
+                return;
+            }
+
             // The label is grown through its font size now, so its own rect is
             // already the visible one; only the reticle art still needs scaling.
             var labelWidth = label.Size.X;
