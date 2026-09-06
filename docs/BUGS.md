@@ -666,3 +666,15 @@ visual collisions and unplayable states are the biggest bug class.
   Verified on device: five rows, Skip under the panel.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-054: focus brackets stay on the first loot row after a fight
+
+- **Symptom**: on a loot that follows a fight ended by a card drag, the
+  first reward row shows the yellow selection brackets (hover/focus
+  visual) until something else is touched; a loot reached by resume does
+  not show them.
+- **Notes**: the touch bridge parks the emulated pointer off-canvas after
+  every release, so this is not a stuck hover from the finger; the game
+  appears to hand initial focus to the first reward. Cosmetic; candidate
+  fix is a prefix on NSelectionReticle.OnSelect for reward rows on touch.
+- **Status**: open
