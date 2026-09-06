@@ -644,8 +644,13 @@ visual collisions and unplayable states are the biggest bug class.
   Proceed).
 - **Symptom**: sphere on the left, the button column and instructions cut
   at the right edge, "divinations remain" cut at the bottom-left.
-- **Plan**: portrait composition with the sphere centered in the upper
-  band, the two buttons in a row under it, instructions under those and
-  Proceed at the bottom; geometry to be measured from the tree dump the
-  open hook logs.
-- **Status**: open
+- **Fix**: PortraitCrystalSphere (AssertLoop from AfterOverlayOpened): the
+  Bg art slides so the sphere centers right under the bar; RightUi (a
+  VBox whose children fill its width) takes the panel width at 1.0 with
+  its hand-placed inner instruction VBox widened to match, placed under
+  the sphere; the footer line sits bottom-left, Proceed bottom-right at
+  1.3x, the dialogue bubble in the sphere's top-right corner. Verified on
+  device: sphere, both buttons, full instructions, tile reveals, footer
+  count, session end into the loot.
+- **Status**: verified
+- **Fixed in**: 0.4.0

@@ -4448,12 +4448,96 @@ internal static class PortraitCrystalSphere
         PortraitNodes.AssertLoop(screen, () => Apply(screen));
     }
 
+    private const float RightUiMargin = 90f;
+    private const float ProceedScale = 1.3f;
+
+    // Measured tree: Bg (2560x1200 art at 1.04) carries the 792 Sphere at its
+    // left third; Ui (1544 wide, starting at x -182) holds the footer line at
+    // the far left and RightUi (buttons, spacer, a 976-tall instruction
+    // block) at x 1101; the dialogue bubble sits at x 1291. Portrait: the
+    // sphere centered right under the bar, the button/instruction column
+    // under the sphere at 0.85, the footer line bottom-left, Proceed
+    // bottom-right, the bubble in the sphere's empty top-right corner.
     private static void Apply(Control screen)
     {
         var canvas = PortraitDisplay.CanvasSize;
         if (!PortraitDisplay.IsPortrait(canvas))
             return;
-        // Placement lands once the geometry dump has been read.
+        var safeTop = PortraitDisplay.SafeTop();
+        var contentTop = PortraitHudMetrics.ContentTop(safeTop) + 20f;
+        var contentBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom());
+
+        var bg = PortraitNodes.FindControl(screen, "Bg");
+        var sphere = PortraitNodes.FindControl(screen, "Sphere");
+        var sphereBottom = contentTop + 824f;
+        if (bg is not null && sphere is not null)
+        {
+            var rect = sphere.GetGlobalRect();
+            var center = rect.Position + rect.Size * 0.5f;
+            var want = new Vector2(canvas.X * 0.5f, contentTop + rect.Size.Y * 0.5f);
+            if (center.DistanceTo(want) > 1.5f)
+                bg.Position += want - center;
+            sphereBottom = contentTop + rect.Size.Y;
+        }
+
+        if (PortraitNodes.FindControl(screen, "RightUi") is { } right)
+        {
+            // The column is a 395-wide VBox whose children fill its width;
+            // at that width the instruction text ran to ten lines and the
+            // description label cut it. Give the column the portrait panel
+            // width and the text wraps into a few lines under the buttons.
+            PortraitNodes.ClearAnchors(right);
+            right.PivotOffset = Vector2.Zero;
+            if (Math.Abs(right.Scale.X - 1f) > 0.01f)
+                right.Scale = Vector2.One;
+            var width = canvas.X - 2f * RightUiMargin;
+            if (Math.Abs(right.CustomMinimumSize.X - width) > 0.5f)
+                right.CustomMinimumSize = new Vector2(width, 0f);
+            if (Math.Abs(right.Size.X - width) > 0.5f)
+                right.Size = new Vector2(width, right.Size.Y);
+            var target = new Vector2(RightUiMargin, sphereBottom + 24f);
+            if (right.GlobalPosition.DistanceTo(target) > 1.5f)
+                right.GlobalPosition = target;
+            // The instruction plate's inner VBox is placed by hand (28 in,
+            // 339 wide) and never follows the plate; widen it to the plate.
+            if (PortraitNodes.FindControl(right, "Instructions")?.GetNodeOrNull<Control>("VBoxContainer") is { } inner)
+            {
+                var innerWidth = width - 56f;
+                if (Math.Abs(inner.Size.X - innerWidth) > 0.5f)
+                {
+                    inner.CustomMinimumSize = new Vector2(innerWidth, 0f);
+                    inner.Size = new Vector2(innerWidth, inner.Size.Y);
+                }
+            }
+        }
+
+        if (PortraitNodes.FindControl(screen, "DivinationsLeft") is { } left)
+        {
+            PortraitNodes.ClearAnchors(left);
+            var target = new Vector2(PortraitHudMetrics.EdgeMargin, contentBottom - 56f);
+            if (left.GlobalPosition.DistanceTo(target) > 1.5f)
+                left.GlobalPosition = target;
+        }
+
+        if (PortraitNodes.FindControl(screen, "ProceedButton") is { } proceed)
+        {
+            PortraitNodes.ClearAnchors(proceed);
+            proceed.PivotOffset = Vector2.Zero;
+            if (Math.Abs(proceed.Scale.X - ProceedScale) > 0.01f)
+                proceed.Scale = Vector2.One * ProceedScale;
+            var w = (proceed.Size.X > 1f ? proceed.Size.X : 269f) * ProceedScale;
+            var h = (proceed.Size.Y > 1f ? proceed.Size.Y : 108f) * ProceedScale;
+            var target = new Vector2(canvas.X - w - PortraitHudMetrics.EdgeMargin, contentBottom - h - 8f);
+            if (proceed.GlobalPosition.DistanceTo(target) > 1.5f)
+                proceed.GlobalPosition = target;
+        }
+
+        if (screen.FindChild("Dialogue", recursive: false, owned: false) is Node2D dialogue)
+        {
+            var target = new Vector2(canvas.X - 300f, contentTop + 90f);
+            if (dialogue.Position.DistanceTo(target) > 1.5f)
+                dialogue.Position = target;
+        }
     }
 }
 
