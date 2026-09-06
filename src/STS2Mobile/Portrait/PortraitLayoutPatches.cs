@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Godot;
 using HarmonyLib;
@@ -918,7 +919,7 @@ internal static class PortraitCharacterSelect
     private const float InfoPanelBottomGap = 48f;
     private const float ArtToRowGap = 70f;
     private const float RowToNavGap = 44f;
-    private const float CharacterRowScale = 1.3f;
+    private const float CharacterRowScale = 1.8f;
     private const float NavButtonWidth = 200f;
     private const float NavButtonHeight = 110f;
 
@@ -4326,6 +4327,10 @@ internal static class PortraitAncientEvent
                     // The head fills the painting's top edge; the scene
                     // drops so the eyes come under the bar.
                     return (1.6f, -350f, 300f);
+                case "Neow":
+                    // Flat painting, the face in the right third above the
+                    // water; slide it to the center and a little down.
+                    return (1.6f, -800f, 150f);
             }
         }
         return (1.8f, -400f, 0f);
@@ -4373,11 +4378,34 @@ internal static class PortraitAncientEvent
             if (!hasDescription)
                 continue;
             text.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            text.CustomMinimumSize = new Vector2(text.Size.X, OptionTextHeight);
-            text.Size = new Vector2(text.Size.X, OptionTextHeight);
+            // Height from the wrapped content (Neow's Silver Crucible runs to
+            // four lines and a fixed 150 cut its last line); the fixed value
+            // is the floor so short rows keep the same plate.
+            // The label's own content height is not ready on the pass that
+            // turns wrapping on, so the height comes from the text itself:
+            // one title line plus the description wrapped at about 42
+            // characters per 830 units (measured), 47 units per line.
+            var plain = System.Text.RegularExpressions.Regex.Replace(text.Text, @"\[[^\]]*\]", "");
+            var descLines = 0;
+            foreach (var line in plain.Split('\n').Skip(1))
+                if (line.Trim().Length > 0)
+                    descLines += Math.Max(1, (int)Math.Ceiling(line.Trim().Length / 42.0));
+            var textHeight = Math.Max(OptionTextHeight, 13f + 47f * (1 + descLines));
+            try
+            {
+                var content = text.GetContentHeight();
+                if (content > 1)
+                    textHeight = Math.Max(textHeight, content + 12f);
+            }
+            catch
+            {
+                // Not laid out yet; the estimate above carries the row.
+            }
+            text.CustomMinimumSize = new Vector2(text.Size.X, textHeight);
+            text.Size = new Vector2(text.Size.X, textHeight);
             // Three text lines run 141 tall; the authored 160 plate put the
             // next row's title on the last line. The plate grows with them.
-            option.CustomMinimumSize = new Vector2(option.CustomMinimumSize.X, OptionRowHeight);
+            option.CustomMinimumSize = new Vector2(option.CustomMinimumSize.X, textHeight + (OptionRowHeight - OptionTextHeight));
         }
     }
 
