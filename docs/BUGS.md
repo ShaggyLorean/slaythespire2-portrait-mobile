@@ -596,3 +596,17 @@ visual collisions and unplayable states are the biggest bug class.
   ancient value.
 - **Status**: verified (Tezcatara)
 - **Fixed in**: 0.4.0
+
+## BUG-050: combat top bar stayed expanded on the loot screen
+
+- **Symptom**: right after a fight the Loot overlay showed the expanded
+  combat bar (HP and gold stacked, potions in the combat station, relic
+  rows) instead of the compact bar with the potion capsule at its station.
+- **Cause**: the bar's combat branch only yielded to capstone screens; the
+  finished combat scene stays alive under the loot overlay, so
+  CombatHudActive alone still said combat.
+- **Fix**: the bar also yields to the shared eclipse rule (rewards overlay,
+  map over a finished fight). Verified on device on the loot after the act
+  2 elite: compact bar, capsule at the bar.
+- **Status**: verified
+- **Fixed in**: 0.4.0

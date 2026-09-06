@@ -2246,8 +2246,13 @@ internal static class PortraitTopBar
         var safeTop = PortraitDisplay.SafeTop();
         // Fullscreen capstone screens (deck view, in-run settings) open over
         // combat too; the expanded stack would poke into their content, so
-        // they always get the slim bar.
-        var combat = PortraitCombat.CombatHudActive && !IsCapstoneScreenOpen(bar);
+        // they always get the slim bar. The loot overlay and the map after a
+        // fight count the same way: the fight is over, the potions go back to
+        // their bar station (the combat scene stays alive underneath, so
+        // CombatHudActive alone still says combat).
+        var combat = PortraitCombat.CombatHudActive
+            && !IsCapstoneScreenOpen(bar)
+            && !PortraitCapstone.EclipsesCombatHud(bar);
         var left = bar.GetNodeOrNull<Control>("LeftAlignedStuff");
         var right = bar.GetNodeOrNull<Control>("RightAlignedStuff");
 
