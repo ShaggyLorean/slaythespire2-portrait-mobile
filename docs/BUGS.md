@@ -726,9 +726,16 @@ visual collisions and unplayable states are the biggest bug class.
   other NModal dialogs).
 - **Symptom**: the panel is about 40 percent of the canvas width with two
   small No/Yes plates; fine for a mouse, small for a thumb.
-- **Fix**: every modal enters through NModalContainer.Add; a postfix
-  scales it 1.5x about its center a frame later (ModalAddPatch).
-- **Status**: fix written, device verification pending
+- **Fix**: every modal enters through NModalContainer.Add, which calls
+  ShowBackstop; a postfix on ShowBackstop scales the container's newest
+  modal child 1.5x about its center a frame later (ModalAddPatch).
+  A detour on Add itself made the process abort at startup (FORTIFY:
+  pthread_mutex_lock on a destroyed mutex during the launcher handoff,
+  every boot); the hook moved one call down and the abort is gone.
+  Verified on device: Abandon Run prompt at 1.5x, centered, No/Yes at
+  thumb size, boot clean.
+- **Status**: verified
+- **Fixed in**: 0.4.0
 
 ## BUG-058: Timeline intro text ran off both edges, Proceed tiny above it
 

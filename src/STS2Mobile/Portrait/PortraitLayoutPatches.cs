@@ -4904,16 +4904,25 @@ internal static class TimelineScreenPatch
 // Confirmation modals ("Are you sure?", the profile delete prompt, the
 // quit prompt) are authored about 470 wide with two 58-tall plates, centered
 // on the canvas: fine for a mouse, small for a thumb (BUG-057). Every modal
-// enters through NModalContainer.Add; a frame later (its own _Ready has
+// enters through NModalContainer.Add, which then calls ShowBackstop; a
+// detour on Add itself aborted the process at startup (destroyed-mutex
+// FORTIFY in the handoff), so the hook is ShowBackstop: the container's
+// newest Control child is the modal, and a frame later (its own _Ready has
 // sized it) it scales 1.5 about its center, which keeps it centered.
-[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer), "Add")]
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer), "ShowBackstop")]
 internal static class ModalAddPatch
 {
     private const float ModalScale = 1.5f;
 
-    private static void Postfix(Node modalToCreate)
+    private static void Postfix(Node __instance)
     {
-        if (modalToCreate is not Control modal || !PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
+        if (!PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
+            return;
+        Control modal = null;
+        foreach (var child in __instance.GetChildren())
+            if (child is Control c && c.Name != "Backstop")
+                modal = c;
+        if (modal is null)
             return;
         PortraitNodes.After(modal, 0.05, () =>
         {
