@@ -3657,8 +3657,10 @@ internal static class PortraitShop
             return;
 
         const float margin = 24f;
-        var top = Math.Max(210f, PortraitDisplay.SafeTop() + 180f);
-        var bottom = 170f + PortraitDisplay.SafeBottom();
+        // The panel hangs from the compact bar's content top and ends above
+        // the footer strip baseline, whatever the phone's height.
+        var top = Math.Max(210f, PortraitHudMetrics.ContentTop(PortraitDisplay.SafeTop()) + 16f);
+        var bottom = canvas.Y - (PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - 60f);
         var panelWidth = canvas.X - margin * 2f;
         var panelHeight = canvas.Y - top - bottom;
 
@@ -3684,10 +3686,16 @@ internal static class PortraitShop
         // The relic and potion shelves need thumb-sized icons (they were
         // ~15dp at 0.8x in a 190-unit band); the band grows and the cards
         // above give up a little height through the cell clamp.
-        const float utilityBand = 520f;
+        // The shelf band (relics row, potions row) and the card cells share
+        // the panel; on a 16:9 canvas the fixed 520 band and the 0.72 floor
+        // stacked the card rows into each other. Both shrink with the panel
+        // (measured against the 20:9 panel height) and the cards may go to
+        // half size before anything overlaps.
+        var shelfFactor = Mathf.Clamp(panelHeight / 1900f, 0.7f, 1f);
+        var utilityBand = 520f * shelfFactor;
         var cellWidth = panelWidth / columns;
         var cellHeight = (panelHeight - utilityBand) / rows;
-        var scale = Mathf.Clamp(cellHeight / 500f, 0.72f, 1.05f);
+        var scale = Mathf.Clamp(cellHeight / 500f, 0.5f, 1.05f);
         var origin = slots.GlobalPosition;
 
         for (var i = 0; i < cards.Count; i++)
@@ -3704,9 +3712,9 @@ internal static class PortraitShop
         // (they collided and the last potion fell off the rug), so they
         // stack: relics above, potions below, both centered and clear of
         // the back tab and of the last card row's price tags.
-        const float shelfScale = 1.4f;
-        const float shelfPitch = 175f;
-        var bandY = panelHeight - utilityBand + 110f;
+        var shelfScale = 1.4f * shelfFactor;
+        var shelfPitch = 175f * shelfFactor;
+        var bandY = panelHeight - utilityBand + 110f * shelfFactor;
         // The shelf containers report less width than their three slots
         // draw (measured ~370 units at 1x), so the rendered width centers.
         var relicsWidth = Math.Max(relics?.Size.X ?? 0f, 370f) * shelfScale;
@@ -5141,8 +5149,10 @@ internal static class ProceedButtonPatch
         // arrow ON the resting hero's chest. The arrow always drops to the
         // bottom content band, under any room's character art.
         var height = (button.Size.Y > 1f ? button.Size.Y : 108f) * Math.Max(button.Scale.Y, 1f);
+        // Same baseline as the grid footer strip: 8 above the content bottom
+        // put the arrow on the gesture edge.
         var floorY = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom())
-            - height - 8f;
+            - height - 60f;
         __result.Y = Math.Max(__result.Y, floorY);
     }
 
