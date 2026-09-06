@@ -4959,10 +4959,15 @@ internal static class CreatureHitboxPatch
         var size = hitbox.Size;
         if (size.X >= MinHitbox.X && size.Y >= MinHitbox.Y)
             return;
+        // Grow sideways about the center and downward only: the intent icon
+        // (a hover control above the head) sits right over the sprite, and a
+        // box grown upward put releases there on the intent instead. Below
+        // the feet is floor, which the finger can use.
         var grown = new Vector2(Math.Max(size.X, MinHitbox.X), Math.Max(size.Y, MinHitbox.Y));
-        var center = hitbox.GlobalPosition + size * 0.5f;
+        var top = hitbox.GlobalPosition.Y;
+        var centerX = hitbox.GlobalPosition.X + size.X * 0.5f;
         hitbox.Size = grown;
-        hitbox.GlobalPosition = center - grown * 0.5f;
+        hitbox.GlobalPosition = new Vector2(centerX - grown.X * 0.5f, top);
     }
 }
 

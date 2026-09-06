@@ -768,9 +768,10 @@ visual collisions and unplayable states are the biggest bug class.
   in targeting mode (arrow up) and the next tap cancelled it; the same drag
   onto the sprite's body played the card.
 - **Fix**: a postfix on NCreature.UpdateBounds(Node) grows every hitbox to
-  at least 200x220 about its center on Android (a beetle's went from
-  240x161 to 240x220); reticle and intents keep the sprite's true bounds.
-  Verified on device: a Strike released 40 units above the beetle's sprite
-  but inside the grown box played, one released above the box did not.
+  at least 200x220 on Android, sideways about the center and downward only
+  (the intent icon is a hover control right above the head; a box grown
+  upward put releases there on the intent instead). Reticle and intents
+  keep the sprite's true bounds. Verified on device: a Strike released 60
+  units below a 7-hp slime's feet played it.
 - **Status**: verified
 - **Fixed in**: 0.4.0
