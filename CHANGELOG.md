@@ -24,6 +24,11 @@ Notable changes to the portrait project. Bug ids refer to [docs/BUGS.md](docs/BU
 - Dynamic fit: main menu rows scale to the band under the logo and the VBox minimum is cleared (the last row left the screen on 16:9); the map's lower scroll bound and the card pick grid derive from the canvas height; a dev trigger `sts2_aspect` ("16:9", "off") letterboxes the canvas to emulate shorter phones on this device.
 - Events: option descriptions wrap on regular event plates too, the option block measures its visible rows (a lone Proceed no longer floats mid-screen), and the top-bar scrim keeps the bar-band depth while an overlay covers the event (the removal grid's top rows read dim).
 - Card pick: the Skip plate's open tween is dropped so it no longer bounces against the portrait placement.
+- BUG-052/053: the Crystal Sphere divination overlay gets a portrait composition (sphere under the bar, buttons and instructions at panel width, footer and Proceed on the strip); loot panels grow with the reward count.
+- BUG-054/055/056: no selection brackets on loot rows on touch; grid screens (deck view, smith/remove picks) and the rest site put their footer controls on one strip 60 above the content bottom with a plate, and the closed shop panel parks fully above the screen.
+- BUG-057/058/059: confirmation modals scale 1.5x (verification pending), the Timeline intro wraps its text with Proceed on the strip, the Timeline epoch row draws at 1.9x with the story/unlock plates at 1.6x, and the game over screen gets the compact bar, a scaled summary and stacked run-end plates.
+- Ancients: per-scene zoom and slide (Tezcatara, Tanx, Neow), option plates sized from their wrapped line count, Neow's Continue hint inside the canvas; character select icon row at 1.8x; map parchment extends above the boss row.
+- Dev: `sts2_lowhp` (player to 1 hp) beside `sts2_weaken`; the tree dump prints global rects and alpha.
 - BUG-040/041: map furniture yields to pause/settings; the back tab moves to the top on pause and settings (NBackButton _showPos rewrite) and the settings list fits above it.
 - Card pick overlays rebuilt as a 2+1 grid of 1.5x cards; pause rows centered under their labels; potion capsule keeps its vanilla station at thumb size; coop Ping button hidden; Proceed arrow floors below character art.
 
