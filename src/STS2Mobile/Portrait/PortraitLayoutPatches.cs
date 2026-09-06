@@ -4291,13 +4291,24 @@ internal static class PortraitCardPick
             if (!h.HasMeta(SlotMeta))
                 h.SetMeta(SlotMeta, nextSlot++);
         holders.Sort((a, b) => ((int)a.GetMeta(SlotMeta)).CompareTo((int)b.GetMeta(SlotMeta)));
-        const float cardScale = 1.5f;
+        const float maxCardScale = 1.5f;
         const float gapX = 44f;
         const float gapY = 36f;
-        var cardW = (holders[0].Size.X > 1f ? holders[0].Size.X : 350f) * cardScale;
-        var cardH = (holders[0].Size.Y > 1f ? holders[0].Size.Y : 520f) * cardScale;
         const int perRow = 2;
+        // The Skip plate and its gaps live under the grid; on a 16:9 canvas
+        // the fixed 1.5x grid pushed it off the screen, so the scale is the
+        // largest that keeps grid plus plate inside the content band.
+        const float skipReserve = 200f;
         var rowCount = (holders.Count + perRow - 1) / perRow;
+        var authoredW = holders[0].Size.X > 1f ? holders[0].Size.X : 350f;
+        var authoredH = holders[0].Size.Y > 1f ? holders[0].Size.Y : 520f;
+        var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom());
+        var gridRoom = bandBottom - skipReserve - y - gapY * (rowCount - 1);
+        var fitScale = gridRoom / (rowCount * authoredH);
+        var widthFit = (canvas.X - 2f * PortraitHudMetrics.EdgeMargin - gapX) / (perRow * authoredW);
+        var cardScale = Mathf.Clamp(Math.Min(Math.Min(maxCardScale, fitScale), widthFit), 0.8f, maxCardScale);
+        var cardW = authoredW * cardScale;
+        var cardH = authoredH * cardScale;
         for (var i = 0; i < holders.Count; i++)
         {
             var r = i / perRow;
@@ -4327,7 +4338,8 @@ internal static class PortraitCardPick
             alts.PivotOffset = Vector2.Zero;
             alts.Scale = Vector2.One * 1.6f;
             var ar = alts.GetGlobalRect();
-            var target = new Vector2(PortraitHudMetrics.CenterX(canvas.X, ar.Size.X), y);
+            var floorY = bandBottom - ar.Size.Y - 8f;
+            var target = new Vector2(PortraitHudMetrics.CenterX(canvas.X, ar.Size.X), Math.Min(y, floorY));
             // The open tween animates this container in; only correct real
             // drift so presses are not cancelled mid-animation.
             if ((target - ar.Position).Length() > 3f)
