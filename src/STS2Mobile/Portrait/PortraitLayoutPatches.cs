@@ -4500,9 +4500,12 @@ internal static class PortraitAncientEvent
 
         // The "next" hint follows the bubble instead of floating at the
         // bottom edge of the screen.
+        // The hint's HBox sits 858 in from the container's left edge and is
+        // 395 wide, past the right edge of a 1180 canvas; the container
+        // slides left so the hint ends inside the margin.
         if (PortraitNodes.FindControl(layout, "FakeNextButtonContainer") is { } fakeNext)
             fakeNext.GlobalPosition = new Vector2(
-                fakeNext.GlobalPosition.X,
+                canvas.X - 858f - 395f - PortraitHudMetrics.EdgeMargin,
                 top + dialogue.Size.Y + 12f
             );
     }
@@ -4895,6 +4898,35 @@ internal static class TimelineScreenPatch
                 label.Position = new Vector2(-(canvas.X - 120f) * 0.5f, 0f);
             }
         }
+    }
+}
+
+// Confirmation modals ("Are you sure?", the profile delete prompt, the
+// quit prompt) are authored about 470 wide with two 58-tall plates, centered
+// on the canvas: fine for a mouse, small for a thumb (BUG-057). Every modal
+// enters through NModalContainer.Add; a frame later (its own _Ready has
+// sized it) it scales 1.5 about its center, which keeps it centered.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer), "Add")]
+internal static class ModalAddPatch
+{
+    private const float ModalScale = 1.5f;
+
+    private static void Postfix(Node modalToCreate)
+    {
+        if (modalToCreate is not Control modal || !PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
+            return;
+        PortraitNodes.After(modal, 0.05, () =>
+        {
+            if (modal.Size.X < 1f || modal.HasMeta("Sts2PortraitModalScaled"))
+                return;
+            modal.SetMeta("Sts2PortraitModalScaled", true);
+            var center = modal.GetGlobalRect().GetCenter();
+            modal.PivotOffset = modal.Size * 0.5f;
+            modal.Scale = Vector2.One * ModalScale;
+            var drift = modal.GetGlobalRect().GetCenter() - center;
+            if (drift.Length() > 0.5f)
+                modal.GlobalPosition -= drift;
+        });
     }
 }
 

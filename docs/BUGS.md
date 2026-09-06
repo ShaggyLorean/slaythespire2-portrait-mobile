@@ -726,7 +726,9 @@ visual collisions and unplayable states are the biggest bug class.
   other NModal dialogs).
 - **Symptom**: the panel is about 40 percent of the canvas width with two
   small No/Yes plates; fine for a mouse, small for a thumb.
-- **Status**: open (seen 2026-09-06; not yet measured)
+- **Fix**: every modal enters through NModalContainer.Add; a postfix
+  scales it 1.5x about its center a frame later (ModalAddPatch).
+- **Status**: fix written, device verification pending
 
 ## BUG-058: Timeline intro text ran off both edges, Proceed tiny above it
 
