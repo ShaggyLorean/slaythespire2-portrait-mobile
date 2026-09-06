@@ -714,9 +714,10 @@ internal static class PortraitMainMenu
     // The measurement uses the remembered authored height: reading the live
     // size would shrink the scale to 1 on the second pass, because the row has
     // already been grown by the first.
-    private static float MenuScale(Control buttons)
+    private static float MenuScale(Control buttons, Vector2 canvas)
     {
         var row = MenuRowFallback;
+        var rows = 0;
         foreach (var child in buttons.GetChildren())
         {
             if (child is not Control { Visible: true } control)
@@ -726,11 +727,19 @@ internal static class PortraitMainMenu
             if (authored.Y <= 1f)
                 continue;
 
-            row = authored.Y;
-            break;
+            if (rows == 0)
+                row = authored.Y;
+            rows++;
         }
 
-        return Mathf.Clamp(MenuRowTarget / row, MenuScaleMin, MenuScaleMax);
+        // The thumb target says 168 per row; the band under the logo says how
+        // many of those fit. On a 16:9 phone the fixed scale ran the last row
+        // off the bottom edge, so the band wins when it is the tighter one.
+        var bandTop = canvas.Y * LogoBandBottomRatio;
+        var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom());
+        var need = Math.Max(rows, 1) * row + Math.Max(rows - 1, 0) * MenuRowSeparation;
+        var fit = need > 0f ? (bandBottom - bandTop) / need : MenuScaleMax;
+        return Mathf.Clamp(Math.Min(MenuRowTarget / row, fit), MenuScaleMin, MenuScaleMax);
     }
 
     private static void ApplyButtons(NMainMenu menu, Vector2 canvas, Vector2 center)
@@ -745,7 +754,7 @@ internal static class PortraitMainMenu
         // visibly breathes as the two passes alternate.
         PortraitTouchPass.MarkManaged(buttons);
 
-        var scale = MenuScale(buttons);
+        var scale = MenuScale(buttons, canvas);
         LastMenuScale = scale;
 
         if (buttons is BoxContainer box)
@@ -788,6 +797,14 @@ internal static class PortraitMainMenu
         PortraitNodes.ClearAnchors(buttons);
         buttons.PivotOffset = Vector2.Zero;
         buttons.Scale = Vector2.One;
+        // The VBox carries an authored minimum height (1306 on the 16:9
+        // check) and centers its rows inside it, so the block hung 285 lower
+        // than the placement below assumed and the last row left the screen
+        // on shorter phones. The block is exactly its rows.
+        if (buttons.CustomMinimumSize != Vector2.Zero)
+            buttons.CustomMinimumSize = Vector2.Zero;
+        if (buttons is BoxContainer menuBox && menuBox.Alignment != BoxContainer.AlignmentMode.Begin)
+            menuBox.Alignment = BoxContainer.AlignmentMode.Begin;
         var blockHeight = rows > 0
             ? rowTotal + MenuRowSeparation * scale * (rows - 1)
             : buttons.Size.Y;

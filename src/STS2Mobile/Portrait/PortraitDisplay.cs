@@ -80,11 +80,24 @@ internal static class PortraitDisplay
                     PatchHelper.Log(
                         $"[Portrait] aspect guard: {window.ContentScaleAspect} {scale.X}x{scale.Y} mode={window.ContentScaleMode}"
                     );
-                if (window.ContentScaleAspect != Window.ContentScaleAspectEnum.Expand
+                if (window.ContentScaleAspect != ExpectedAspect()
                     || (scale.X > 0 && scale.Y > 0 && scale.X > scale.Y))
                 {
                     PatchHelper.Log("[Portrait] aspect drifted to landscape; re-applying");
                     Apply();
+                }
+                // Emulation file changed (new ratio, or removed): rebuild the
+                // canvas and kick every layout through the size change.
+                if (ticks % 30 == 0)
+                {
+                    var wanted = ReadAspectOverride();
+                    if (wanted != _appliedAspect)
+                    {
+                        _appliedAspect = wanted;
+                        PatchHelper.Log($"[Portrait] aspect emulation: {(wanted is float w ? w.ToString("F3") : "off")}");
+                        Apply();
+                        ForceRefresh();
+                    }
                 }
                 // File-triggered viewport dump: drop user://sts2_vpdump to
                 // capture what GODOT thinks the frame looks like, separating
@@ -309,6 +322,40 @@ internal static class PortraitDisplay
         Apply();
     }
 
+    private static float? _appliedAspect;
+
+    private static Window.ContentScaleAspectEnum ExpectedAspect()
+        => ReadAspectOverride() is null
+            ? Window.ContentScaleAspectEnum.Expand
+            : Window.ContentScaleAspectEnum.Keep;
+
+    // "W:H" as height over width; null when absent, unreadable or "off".
+    private static float? ReadAspectOverride()
+    {
+        const string path = "user://sts2_aspect";
+        try
+        {
+            if (!Godot.FileAccess.FileExists(path))
+                return null;
+            var text = Godot.FileAccess.GetFileAsString(path).Trim();
+            if (text.Length == 0 || text.Equals("off", StringComparison.OrdinalIgnoreCase))
+                return null;
+            var parts = text.Split(':');
+            if (parts.Length != 2
+                || !float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var w)
+                || !float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var h)
+                || w <= 0f || h <= 0f)
+                return null;
+            // Accept either order; the phone is portrait, so the ratio is the
+            // long side over the short side.
+            return Math.Max(w, h) / Math.Min(w, h);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     internal static bool Apply()
     {
         if (Engine.GetMainLoop() is not SceneTree tree)
@@ -342,6 +389,13 @@ internal static class PortraitDisplay
             Mathf.RoundToInt(canvasWidth),
             Mathf.RoundToInt(canvasWidth * physicalSize.Y / physicalSize.X)
         );
+        // Phone emulation: user://sts2_aspect holding "W:H" (16:9, 18:9,
+        // 19.5:9 ...) letterboxes the canvas to that shape on this device,
+        // so layouts can be checked against shorter screens without owning
+        // them. The file persists across boots; "off" or deleting it ends it.
+        var ratio = ReadAspectOverride();
+        if (ratio is float r)
+            target = new Vector2I(target.X, Mathf.RoundToInt(canvasWidth * r));
 
         // canvas_items renders at the panel's native pixel count; viewport
         // mode renders at the canvas size and upscales, cutting GPU work by
@@ -355,7 +409,7 @@ internal static class PortraitDisplay
         window.ContentScaleMode = RenderAtCanvasResolution()
             ? Window.ContentScaleModeEnum.Viewport
             : Window.ContentScaleModeEnum.CanvasItems;
-        window.ContentScaleAspect = Window.ContentScaleAspectEnum.Expand;
+        window.ContentScaleAspect = ExpectedAspect();
         window.ContentScaleSize = target;
 
         if (_lastCanvas != target)
