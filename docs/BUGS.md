@@ -604,10 +604,13 @@ visual collisions and unplayable states are the biggest bug class.
   authored transform in meta so repeat passes do not compound; the dialogue
   block hangs 430 under the bar so the face shows between the bar and the
   bubble. Verified on device with Tezcatara (act 2): face centered above the
-  bubble, scene to the options, text white. Open item: check Neow (act 1)
-  and the act 3 ancient with the same anchor; the shift may need a per
-  ancient value.
-- **Status**: verified (Tezcatara)
+  bubble, scene to the options, text white. The act 3 ancient (Tanx, a
+  flat 2582x1221 painting with the head at its top edge) needed its own
+  framing, so the scene node's name now picks zoom and slide (Tezcatara
+  2.2x/-280, Tanx 1.6x/-350/+300, others 1.8x/-400); the option block ends
+  on the shared strip baseline. Verified on device for both. Neow (act 1)
+  still to check with the default entry.
+- **Status**: verified (Tezcatara, Tanx)
 - **Fixed in**: 0.4.0
 
 ## BUG-050: combat top bar stayed expanded on the loot screen

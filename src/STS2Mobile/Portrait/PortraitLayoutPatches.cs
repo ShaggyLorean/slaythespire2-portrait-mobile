@@ -4283,31 +4283,49 @@ internal static class PortraitAncientEvent
     private const string LoopMeta = "Sts2PortraitAncientLoop";
     private const string OptionFitMeta = "Sts2PortraitAncientOptionFit";
     private const string BgAuthoredMeta = "Sts2PortraitAncientBgAuthored";
-    private const float BgScale = 2.2f;
     private const float BubbleTopGap = 430f;
     private static readonly Vector2 BgAnchor = new(590f, 120f);
-    private static readonly Vector2 BgShift = new(-280f, 0f);
 
     // The ancient's scene is a landscape Spine composition drawn at 1.12 in
     // a full-rect container: on the phone it filled the top third and left
     // the middle of the screen black down to the options. Scale it about a
     // top-center anchor so the speaker keeps its place and the scene grows
     // down to the options; the sides crop, which the wide painting affords.
+    // Each ancient's scene is composed differently: Tezcatara is a Spine
+    // rig with the speaker right of center, Tanx (act 3) a flat 2582x1221
+    // painting with the head at its top-right. One zoom does not fit both,
+    // so the scene node's name picks the zoom and the horizontal slide.
+    private static (float scale, float shiftX, float shiftY) SceneZoom(Control bg)
+    {
+        foreach (var child in bg.GetChildren())
+        {
+            switch (child.Name.ToString())
+            {
+                case "Tezcatara":
+                    return (2.2f, -280f, 0f);
+                case "Tanx":
+                    // The head fills the painting's top edge; the scene
+                    // drops so the eyes come under the bar.
+                    return (1.6f, -350f, 300f);
+            }
+        }
+        return (1.8f, -400f, 0f);
+    }
+
     private static void FillBackground(Control layout, Vector2 canvas)
     {
         if (PortraitNodes.FindControl(layout, "AncientBgContainer") is not { } bg)
             return;
+        var (sceneScale, sceneShiftX, sceneShiftY) = SceneZoom(bg);
         if (!bg.HasMeta(BgAuthoredMeta))
             bg.SetMeta(BgAuthoredMeta, new Vector3(bg.Position.X, bg.Position.Y, bg.Scale.X));
         var authored = bg.GetMeta(BgAuthoredMeta).AsVector3();
         var authoredScale = Math.Max(authored.Z, 0.01f);
         var local = (BgAnchor - new Vector2(authored.X, authored.Y)) / authoredScale;
-        // The speaker stands right of center in the wide painting; after the
-        // zoom its face hung on the right edge, so the scene slides left.
-        var target = BgAnchor - local * BgScale + BgShift;
+        var target = BgAnchor - local * sceneScale + new Vector2(sceneShiftX, sceneShiftY);
         bg.PivotOffset = Vector2.Zero;
-        if (Math.Abs(bg.Scale.X - BgScale) > 0.01f)
-            bg.Scale = Vector2.One * BgScale;
+        if (Math.Abs(bg.Scale.X - sceneScale) > 0.01f)
+            bg.Scale = Vector2.One * sceneScale;
         if (bg.Position.DistanceTo(target) > 1.5f)
             bg.Position = target;
     }
@@ -4389,7 +4407,8 @@ internal static class PortraitAncientEvent
             PortraitHudMetrics.ContentTop(safeTop) + 26f,
             PortraitHudMetrics.HudBottom(safeTop) + BubbleTopGap
         );
-        var bottom = canvas.Y - PortraitDisplay.SafeBottom() - 40f;
+        // Same baseline as the footer strip on every other screen.
+        var bottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - 60f;
 
         PortraitNodes.ClearAnchors(container);
         container.Position = new Vector2(10f, top);
