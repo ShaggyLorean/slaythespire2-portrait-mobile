@@ -15,6 +15,10 @@ Notable changes to the portrait project. Bug ids refer to [docs/BUGS.md](docs/BU
 - BUG-032/033: deploy guard verifies a fresh patch orchestration; Save and Quit no longer freezes the menu into a landscape strip (native content scale drift; ForceRefresh writes a different size first).
 - BUG-035: map scrim shortened to the bar band; pinch-to-zoom (TheMap scales about the fingers, two-finger drift pans through PivotOffset).
 - BUG-036/037/038: merchant shelves and the treasure relic at thumb size; the map eclipses a finished combat's hand and End Turn; grid select overlays start below the bar with a grown View Upgrades box.
+- BUG-042/043/044: the main menu profile button takes a tap (corner buttons grow through their children, not their own Scale); the profile card shows the whole "Updated" timestamp and its back tab sits at the top; the patch notes back tab moves to the top and the article starts below it.
+- BUG-045: the card pick grid pins slots per holder, so the hover that precedes a touch no longer re-deals the cards under the finger.
+- BUG-046: the map's lower scroll bound moves down 780 in portrait; the bottom row sits above the legend instead of mid-screen.
+- BUG-047/048/049: act ancients: option descriptions wrap on taller plates, the top-bar scrim no longer covers the whole ancient screen (text and art at full brightness), and the scene fills the phone with the speaker's face above the bubble.
 - BUG-040/041: map furniture yields to pause/settings; the back tab moves to the top on pause and settings (NBackButton _showPos rewrite) and the settings list fits above it.
 - Card pick overlays rebuilt as a 2+1 grid of 1.5x cards; pause rows centered under their labels; potion capsule keeps its vanilla station at thumb size; coop Ping button hidden; Proceed arrow floors below character art.
 
