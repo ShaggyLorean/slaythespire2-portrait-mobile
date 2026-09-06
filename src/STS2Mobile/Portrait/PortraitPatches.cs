@@ -42,6 +42,7 @@ internal static class PortraitPatches
         typeof(TimelineTutorialPatch),
         typeof(TimelineScreenPatch),
         typeof(ModalAddPatch),
+        typeof(CreatureHitboxPatch),
         typeof(ChooseACardScreenPatch),
         typeof(EndTurnShowPosPatch),
         typeof(PortraitFtuePatch),

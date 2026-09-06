@@ -4939,6 +4939,33 @@ internal static class ModalAddPatch
     }
 }
 
+// Creature hitboxes follow the sprite's Bounds node (a small slime is about
+// 60 units wide), so a card released a thumb's width off the sprite stayed
+// in targeting mode (BUG-060). On the phone every hitbox grows to a touch
+// minimum about its own center whenever the game re-derives it; the
+// selection reticle and intents keep the sprite's true bounds.
+[HarmonyPatch(typeof(NCreature), "UpdateBounds", typeof(Node))]
+internal static class CreatureHitboxPatch
+{
+    private static readonly Vector2 MinHitbox = new(200f, 220f);
+
+    private static void Postfix(NCreature __instance)
+    {
+        if (!OperatingSystem.IsAndroid())
+            return;
+        var hitbox = __instance.Hitbox;
+        if (hitbox is null)
+            return;
+        var size = hitbox.Size;
+        if (size.X >= MinHitbox.X && size.Y >= MinHitbox.Y)
+            return;
+        var grown = new Vector2(Math.Max(size.X, MinHitbox.X), Math.Max(size.Y, MinHitbox.Y));
+        var center = hitbox.GlobalPosition + size * 0.5f;
+        hitbox.Size = grown;
+        hitbox.GlobalPosition = center - grown * 0.5f;
+    }
+}
+
 // Timeline intro (first epoch unlock): a full-rect rich label holding one
 // long centered line that ran off both edges, and a 260x58 Proceed plate
 // tweened to y 920, above the text. AnimateTutorial builds one tween for

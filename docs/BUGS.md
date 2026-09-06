@@ -767,7 +767,10 @@ visual collisions and unplayable states are the biggest bug class.
 - **Symptom**: a drag released a thumb's width off the sprite left the card
   in targeting mode (arrow up) and the next tap cancelled it; the same drag
   onto the sprite's body played the card.
-- **Idea**: grow the creature hover/drop hitboxes to a touch minimum on
-  Android (NCreature hitbox control), or accept a release within a margin
-  of the nearest enemy.
-- **Status**: open
+- **Fix**: a postfix on NCreature.UpdateBounds(Node) grows every hitbox to
+  at least 200x220 about its center on Android (a beetle's went from
+  240x161 to 240x220); reticle and intents keep the sprite's true bounds.
+  Verified on device: a Strike released 40 units above the beetle's sprite
+  but inside the grown box played, one released above the box did not.
+- **Status**: verified
+- **Fixed in**: 0.4.0

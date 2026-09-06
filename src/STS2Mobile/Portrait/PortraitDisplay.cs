@@ -293,15 +293,28 @@ internal static class PortraitDisplay
                     var wanted = Godot.FileAccess.GetFileAsString(dumpTrigger).Trim();
                     DirAccess.RemoveAbsolute(dumpTrigger);
                     Node found = null;
+                    // "type:Class:N" picks the Nth match (1-based) of that class.
+                    var wantIndex = 1;
+                    var byType = wanted.StartsWith("type:", StringComparison.Ordinal);
+                    var wantName = byType ? wanted[5..] : wanted;
+                    if (byType && wantName.Contains(':'))
+                    {
+                        var parts = wantName.Split(':');
+                        wantName = parts[0];
+                        int.TryParse(parts[1], out wantIndex);
+                    }
+                    var seen = 0;
                     void Find(Node n, int depth)
                     {
                         if (found is not null || depth > 14)
                             return;
-                        var byType = wanted.StartsWith("type:", StringComparison.Ordinal);
-                        if (n is Control && (byType ? n.GetType().Name == wanted[5..] : n.Name == wanted))
+                        if (n is Control && (byType ? n.GetType().Name == wantName : n.Name == wantName))
                         {
-                            found = n;
-                            return;
+                            if (++seen >= wantIndex)
+                            {
+                                found = n;
+                                return;
+                            }
                         }
                         foreach (var child in n.GetChildren())
                             Find(child, depth + 1);
