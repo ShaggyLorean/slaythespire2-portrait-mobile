@@ -55,6 +55,7 @@ internal static class PortraitPatches
         typeof(AncientEventReadyPatch),
         typeof(AncientEventDialoguePatch),
         typeof(RewardsScreenPatch),
+        typeof(RewardReticlePatch),
         typeof(TreasureRoomPatch),
         typeof(GameOverScreenPatch),
         typeof(CompendiumSubmenuPatch),

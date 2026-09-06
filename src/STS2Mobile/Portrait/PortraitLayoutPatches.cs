@@ -4689,6 +4689,29 @@ internal static class PortraitCrystalSphere
     }
 }
 
+// Loot rows show the selection brackets whenever they hold focus; after a
+// fight ended by a card drag the first row came up bracketed and stayed so
+// until the next touch (BUG-054). A finger has no hover to speak of, so the
+// brackets never appear on reward rows on the phone; every other reticle
+// (targeting, cards) keeps its behavior.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Combat.NSelectionReticle), "OnSelect")]
+internal static class RewardReticlePatch
+{
+    private static bool Prefix(Control __instance)
+    {
+        if (!OperatingSystem.IsAndroid())
+            return true;
+        Node node = __instance;
+        for (var i = 0; i < 3 && node is not null; i++)
+        {
+            node = node.GetParent();
+            if (node?.GetType().Name == "NRewardButton")
+                return false;
+        }
+        return true;
+    }
+}
+
 // The grid select overlays (upgrade, transform, enchant, deck picks) inherit
 // NCardGridSelectionScreen, not NCardsViewScreen, so the deck view's tickbox
 // growth never reached their "View Upgrades" box. AfterOverlayOpened has an

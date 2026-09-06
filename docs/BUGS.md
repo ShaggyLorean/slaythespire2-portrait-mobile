@@ -675,9 +675,13 @@ visual collisions and unplayable states are the biggest bug class.
   not show them.
 - **Notes**: the touch bridge parks the emulated pointer off-canvas after
   every release, so this is not a stuck hover from the finger; the game
-  appears to hand initial focus to the first reward. Cosmetic; candidate
-  fix is a prefix on NSelectionReticle.OnSelect for reward rows on touch.
-- **Status**: open
+  hands initial focus to the first reward.
+- **Fix**: an Android-only prefix on NSelectionReticle.OnSelect returns
+  early when the reticle belongs to an NRewardButton; targeting and card
+  reticles are untouched. Verified on device on the next loot after a
+  drag-ended fight: no brackets.
+- **Status**: verified
+- **Fixed in**: 0.4.0
 
 ## BUG-055: grid screens and rest site parked their controls on the gesture edge
 
