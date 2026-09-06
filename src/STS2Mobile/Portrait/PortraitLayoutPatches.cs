@@ -4412,6 +4412,51 @@ internal static class MapScrollRangePatch
     }
 }
 
+// Crystal Sphere (the divination mini-game some events open) is an overlay
+// authored for landscape: sphere left, buttons and instructions right, the
+// "divinations remain" line bottom-left. On the phone the right column and
+// the footer left the screen. First pass: dump the tree once per open so the
+// portrait composition can be measured, then place (see PortraitCrystalSphere).
+[HarmonyPatch(
+    typeof(MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere.NCrystalSphereScreen),
+    "AfterOverlayOpened"
+)]
+internal static class CrystalSphereScreenPatch
+{
+    private static void Postfix(object __instance)
+    {
+        if (__instance is not Control screen)
+            return;
+        if (!screen.HasMeta("Sts2PortraitSphereDumped"))
+        {
+            screen.SetMeta("Sts2PortraitSphereDumped", true);
+            PortraitNodes.DumpSubtree(screen, "sphere", 4);
+        }
+        PortraitCrystalSphere.EnsureLoop(screen);
+    }
+}
+
+internal static class PortraitCrystalSphere
+{
+    private const string LoopMeta = "Sts2PortraitSphereLoop";
+
+    internal static void EnsureLoop(Control screen)
+    {
+        if (screen is null || !GodotObject.IsInstanceValid(screen) || screen.HasMeta(LoopMeta))
+            return;
+        screen.SetMeta(LoopMeta, true);
+        PortraitNodes.AssertLoop(screen, () => Apply(screen));
+    }
+
+    private static void Apply(Control screen)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        // Placement lands once the geometry dump has been read.
+    }
+}
+
 // The grid select overlays (upgrade, transform, enchant, deck picks) inherit
 // NCardGridSelectionScreen, not NCardsViewScreen, so the deck view's tickbox
 // growth never reached their "View Upgrades" box. AfterOverlayOpened has an

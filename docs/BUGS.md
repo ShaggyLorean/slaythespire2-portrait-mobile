@@ -635,3 +635,17 @@ visual collisions and unplayable states are the biggest bug class.
   the fight at the resume position.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-052: Crystal Sphere divination overlay laid out for landscape
+
+- **Where**: the "Crystal Sphere" event's Uncover Future / Payment Plan
+  options open NCrystalSphereScreen (an overlay with a sphere of tiles,
+  Big/Small Divination buttons, instructions, a divinations-left line and
+  Proceed).
+- **Symptom**: sphere on the left, the button column and instructions cut
+  at the right edge, "divinations remain" cut at the bottom-left.
+- **Plan**: portrait composition with the sphere centered in the upper
+  band, the two buttons in a row under it, instructions under those and
+  Proceed at the bottom; geometry to be measured from the tree dump the
+  open hook logs.
+- **Status**: open

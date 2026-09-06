@@ -37,6 +37,7 @@ internal static class PortraitPatches
         typeof(CardDescriptionCapPatch),
         typeof(CardRewardScreenPatch),
         typeof(GridSelectTickboxPatch),
+        typeof(CrystalSphereScreenPatch),
         typeof(ChooseACardScreenPatch),
         typeof(EndTurnShowPosPatch),
         typeof(PortraitFtuePatch),
