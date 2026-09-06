@@ -19,6 +19,11 @@ Notable changes to the portrait project. Bug ids refer to [docs/BUGS.md](docs/BU
 - BUG-045: the card pick grid pins slots per holder, so the hover that precedes a touch no longer re-deals the cards under the finger.
 - BUG-046: the map's lower scroll bound moves down 780 in portrait; the bottom row sits above the legend instead of mid-screen.
 - BUG-047/048/049: act ancients: option descriptions wrap on taller plates, the top-bar scrim no longer covers the whole ancient screen (text and art at full brightness), and the scene fills the phone with the speaker's face above the bubble.
+- BUG-039 (closed) and BUG-050/051: the deck, map and pause buttons return to their bar slots after a fight (the icon "vanishing" was a stale combat transform in a margin slot); the loot overlay gets the compact bar with the potion capsule at its station, and loot/card pick hang from the same content top whether reached after a fight or a resume.
+- Pause menu: the portrait pass runs on every open (a pause opened mid-combat came up at authored size), rows take 82 percent of the canvas width with taller plates and a larger title.
+- Dynamic fit: main menu rows scale to the band under the logo and the VBox minimum is cleared (the last row left the screen on 16:9); the map's lower scroll bound and the card pick grid derive from the canvas height; a dev trigger `sts2_aspect` ("16:9", "off") letterboxes the canvas to emulate shorter phones on this device.
+- Events: option descriptions wrap on regular event plates too, the option block measures its visible rows (a lone Proceed no longer floats mid-screen), and the top-bar scrim keeps the bar-band depth while an overlay covers the event (the removal grid's top rows read dim).
+- Card pick: the Skip plate's open tween is dropped so it no longer bounces against the portrait placement.
 - BUG-040/041: map furniture yields to pause/settings; the back tab moves to the top on pause and settings (NBackButton _showPos rewrite) and the settings list fits above it.
 - Card pick overlays rebuilt as a 2+1 grid of 1.5x cards; pause rows centered under their labels; potion capsule keeps its vanilla station at thumb size; coop Ping button hidden; Proceed arrow floors below character art.
 
