@@ -289,7 +289,8 @@ internal static class PortraitNodes
                 };
                 if (text.Length > 40)
                     text = text[..40];
-                PatchHelper.Log($"[Portrait] {tag} {new string(' ', depth * 2)}{c.Name}:{c.GetType().Name} pos={c.Position} size={c.Size} scale={c.Scale} vis={c.Visible} clip={c.ClipContents} text={text.Replace('\n', '|')}");
+                var gr = c.GetGlobalRect();
+                PatchHelper.Log($"[Portrait] {tag} {new string(' ', depth * 2)}{c.Name}:{c.GetType().Name} pos={c.Position} size={c.Size} scale={c.Scale} global={gr.Position.X:F0},{gr.Position.Y:F0} {gr.Size.X:F0}x{gr.Size.Y:F0} vis={c.Visible} clip={c.ClipContents} text={text.Replace('\n', '|')}");
             }
             else if (node is Node2D n2)
             {
@@ -3881,6 +3882,110 @@ internal static class PortraitRestSite
 // not overridden by the deck screen, body touches only its own private field,
 // and the capstone container calls it right after the screen opens. Bonus:
 // every NCardsViewScreen subclass with a sort row gets the same fit.
+// The grid screens (deck view, smith/remove/transform picks) park their
+// footer at the canvas edge: back tab, the View Upgrades box and the one-line
+// caption hugged the gesture strip while the confirm tick sat higher up. The
+// footer is one strip 60 above the content bottom: back tab left, the tickbox
+// beside it at the same center line, the caption centered above them at
+// 1.5x, the confirm tick right on the same baseline. Everything derives from
+// the content bottom, so shorter phones keep the same strip.
+internal static class PortraitGridStrip
+{
+    private const float StripInset = 60f;
+    private const float TabHeight = 110f;
+    private const float TickboxScale = 2.2f;
+    private const float CaptionScale = 1.5f;
+    private const float CaptionReserve = 44f;
+    private const string PlateName = "Sts2PortraitGridStripPlate";
+
+    internal static void Place(Control screen)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        var baseline = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - StripInset;
+        var tabTop = baseline - TabHeight;
+
+        var back = PortraitNodes.FindControl(screen, "Close") ?? PortraitNodes.FindControl(screen, "BackButton");
+        if (back is not null)
+            PortraitNodes.PlaceBackTab(back, new Vector2(PortraitHudMetrics.EdgeMargin, tabTop));
+
+        var nextX = PortraitHudMetrics.EdgeMargin + 250f;
+        if (PortraitNodes.FindControl(screen, "Upgrades") is { Visible: true } box && box.Size.X > 1f)
+        {
+            box.PivotOffset = Vector2.Zero;
+            if (Math.Abs(box.Scale.X - TickboxScale) > 0.01f)
+                box.Scale = Vector2.One * TickboxScale;
+            var h = box.Size.Y * TickboxScale;
+            var target = new Vector2(nextX, tabTop + (TabHeight - h) * 0.5f);
+            if (box.GlobalPosition.DistanceTo(target) > 1.5f)
+                box.GlobalPosition = target;
+        }
+
+        if (PortraitNodes.FindControl(screen, "BottomLabel") is { } label && label.Size.X > 1f)
+        {
+            // The label sits in a container that re-lays it on every sort,
+            // so the container is what moves (BUG-014 rule); the label
+            // itself only when it stands alone.
+            var caption = label.GetParent() is Container parent ? parent : label;
+            PortraitNodes.ClearAnchors(caption);
+            caption.PivotOffset = Vector2.Zero;
+            if (Math.Abs(caption.Scale.X - CaptionScale) > 0.01f)
+                caption.Scale = Vector2.One * CaptionScale;
+            var w = caption.Size.X * CaptionScale;
+            var h = caption.Size.Y * CaptionScale;
+            var target = new Vector2((canvas.X - w) * 0.5f, tabTop - 36f - h);
+            if (caption.GlobalPosition.DistanceTo(target) > 1.5f)
+                caption.GlobalPosition = target;
+        }
+
+        if (PortraitNodes.FindControl(screen, "Confirm") is { } confirm && confirm.Size.X > 1f)
+        {
+            var rect = confirm.GetGlobalRect();
+            var target = new Vector2(canvas.X - rect.Size.X - PortraitHudMetrics.EdgeMargin, baseline - rect.Size.Y);
+            if (rect.Position.DistanceTo(target) > 1.5f)
+                confirm.GlobalPosition += target - rect.Position;
+        }
+
+        // The strip needs its own ground: cards scrolled under it made the
+        // caption unreadable. A dark plate sits right above the grid in tree
+        // order (under the footer controls), and the grid's viewport ends at
+        // the plate so the last row can still scroll clear of it.
+        var stripTop = tabTop - 36f - CaptionReserve - 16f;
+        if (PortraitNodes.FindControl(screen, "CardGrid") is { } grid)
+        {
+            var plate = screen.GetNodeOrNull<ColorRect>(PlateName);
+            if (plate is null)
+            {
+                plate = new ColorRect
+                {
+                    Name = PlateName,
+                    Color = new Color(0.03f, 0.05f, 0.07f, 0.82f),
+                    MouseFilter = Control.MouseFilterEnum.Ignore,
+                };
+                screen.AddChild(plate);
+                if (grid.GetParent() == screen)
+                    screen.MoveChild(plate, grid.GetIndex() + 1);
+            }
+            var plateRect = new Rect2(0f, stripTop, canvas.X, canvas.Y - stripTop);
+            if (plate.GlobalPosition.DistanceTo(plateRect.Position) > 0.5f || plate.Size.DistanceTo(plateRect.Size) > 0.5f)
+            {
+                plate.GlobalPosition = plateRect.Position;
+                plate.Size = plateRect.Size;
+            }
+            var gridRect = grid.GetGlobalRect();
+            var wantBottom = stripTop - 8f;
+            if (Math.Abs(gridRect.End.Y - wantBottom) > 1f)
+            {
+                if (grid.AnchorBottom > 0.5f)
+                    grid.OffsetBottom += wantBottom - gridRect.End.Y;
+                else
+                    grid.Size = new Vector2(grid.Size.X, Math.Max(200f, wantBottom - gridRect.Position.Y));
+            }
+        }
+    }
+}
+
 [HarmonyPatch(
     typeof(MegaCrit.Sts2.Core.Nodes.Screens.NCardsViewScreen),
     "AfterCapstoneOpened"
@@ -3898,6 +4003,7 @@ internal static class DeckViewSortRowPatch
             var canvas = PortraitDisplay.CanvasSize;
             if (!PortraitDisplay.IsPortrait(canvas))
                 return;
+            PortraitGridStrip.Place(screen);
             if (PortraitNodes.FindControl(screen, "SortingOptions") is not { } holder)
                 return;
             if (holder.GetNodeOrNull<Control>("HBoxContainer") is not { } row)
@@ -3906,18 +4012,35 @@ internal static class DeckViewSortRowPatch
             var fit = Math.Min(1f, (canvas.X - 2f * PortraitHudMetrics.EdgeMargin) / rowWidth);
             row.PivotOffset = Vector2.Zero;
             row.Scale = Vector2.One * fit;
+            // The bar is hidden under this capstone, so the row takes the
+            // top band from the safe inset (it sat inside the cutout band),
+            // and the grid's first row starts under it.
+            var rowTop = PortraitDisplay.SafeTop() + 16f;
             row.GlobalPosition = new Vector2(
                 PortraitHudMetrics.CenterX(canvas.X, rowWidth * fit),
-                row.GlobalPosition.Y
+                rowTop
             );
-            // The View Upgrades tickbox is ~12dp tall as authored and the
-            // touch sweep skips it (not a full-width row). Grow it from its
-            // bottom-left corner into the empty band it sits in.
-            if (PortraitNodes.FindControl(screen, "Upgrades") is { Visible: true } upgrades)
+            if (!screen.HasMeta("Sts2PortraitDeckGridOffset")
+                && PortraitNodes.FindControl(screen, "CardGrid") is { } grid)
             {
-                upgrades.PivotOffset = new Vector2(0f, upgrades.Size.Y);
-                upgrades.Scale = Vector2.One * 2.2f;
+                screen.SetMeta("Sts2PortraitDeckGridOffset", true);
+                try
+                {
+                    var rowHeight = (row.Size.Y > 1f ? row.Size.Y : 60f) * fit;
+                    var contentTop = rowTop + rowHeight + 40f;
+                    var firstRowTop = grid.GlobalPosition.Y + 80f;
+                    var current = (int)(Traverse.Create(grid).Property("YOffset").GetValue() ?? 0);
+                    var shift = (int)(contentTop - firstRowTop);
+                    Traverse.Create(grid).Property("YOffset").SetValue(current + shift);
+                    AccessTools.Method(grid.GetType(), "ReflowColumns")?.Invoke(grid, null);
+                }
+                catch (Exception ex)
+                {
+                    PatchHelper.Log($"[Portrait] deck grid offset failed: {ex.GetBaseException().Message}");
+                }
             }
+            // The View Upgrades tickbox lives in the shared footer strip
+            // (PortraitGridStrip) together with the caption and the tab.
         });
     }
 }
@@ -4582,13 +4705,7 @@ internal static class GridSelectTickboxPatch
                     PatchHelper.Log($"[Portrait] grid offset failed: {ex.GetBaseException().Message}");
                 }
             }
-            if (PortraitNodes.FindControl(screen, "Upgrades") is { Visible: true } upgrades
-                && upgrades.Size.X > 1f)
-            {
-                upgrades.PivotOffset = new Vector2(0f, upgrades.Size.Y);
-                if (Math.Abs(upgrades.Scale.X - 2.2f) > 0.01f)
-                    upgrades.Scale = Vector2.One * 2.2f;
-            }
+            PortraitGridStrip.Place(screen);
         });
     }
 }
