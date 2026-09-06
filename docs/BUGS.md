@@ -775,3 +775,12 @@ visual collisions and unplayable states are the biggest bug class.
   units below a 7-hp slime's feet played it.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-061: main menu row keeps the hover reticle after Save and Quit
+
+- **Symptom**: back on the main menu after Save and Quit, the wing reticle
+  sat on "Abandon Run" although nothing was hovered (touch has no hover).
+- **Notes**: the game focuses a row on return; same family as BUG-054.
+  Candidate: skip MainMenuButtonFocused's reticle on Android unless the row
+  is actually pressed.
+- **Status**: open

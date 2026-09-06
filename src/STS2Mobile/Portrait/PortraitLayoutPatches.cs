@@ -3462,8 +3462,10 @@ internal static class MapScreenReadyPatch
             // furniture: the legend and the drawing-tools plate stayed bright
             // over the settings rows. Hide both while a capstone is open and
             // hand them back on close (meta marks what this pass hid).
+            // The map's own back tab (bottom-left) showed through the pause
+            // menu the same way; it is furniture here too.
             var capstoneUp = PortraitCapstone.IsOpen(__instance);
-            foreach (var name in new[] { "MapLegend", "DrawingTools" })
+            foreach (var name in new[] { "MapLegend", "DrawingTools", "Back" })
             {
                 if (PortraitNodes.FindControl(__instance, name) is not { } furniture)
                     continue;
