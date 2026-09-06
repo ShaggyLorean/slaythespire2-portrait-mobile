@@ -1318,6 +1318,18 @@ internal static class PauseMenuPatch
         => PortraitNodes.AssertLoop(__instance, () => PortraitPauseMenu.Apply(__instance));
 }
 
+// Initialize runs once per run (NGlobalUi.Initialize); the pause menu is a
+// capstone submenu shown and hidden many times after that, and on a pause
+// opened mid-combat the rows came up at their authored 372x80 with the tab
+// bottom-left: the loop from Initialize was gone. OnSubmenuOpened runs on
+// every open; its body is a public base call plus a public singleton call.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.PauseMenu.NPauseMenu), "OnSubmenuOpened")]
+internal static class PauseMenuOpenedPatch
+{
+    private static void Postfix(Control __instance)
+        => PortraitNodes.AssertLoop(__instance, () => PortraitPauseMenu.Apply(__instance));
+}
+
 [HarmonyPatch(typeof(NMainMenuBg), "OnWindowChange")]
 internal static class MainMenuWindowChangePatch
 {
