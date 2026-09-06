@@ -4837,6 +4837,23 @@ internal static class TimelineScreenPatch
         if (PortraitNodes.FindControl(screen, "BackButton") is { } back)
             PortraitNodes.PlaceBackTab(back, new Vector2(PortraitHudMetrics.EdgeMargin, tabTop));
 
+        // The epoch story's Continue is a 260x58 plate at 1x near the bottom
+        // edge; thumb size on the strip baseline.
+        foreach (var name in new[] { "CloseButton", "ConfirmButton" })
+        {
+            if (PortraitNodes.FindControl(screen, name) is not { } plate || plate.Size.X <= 1f)
+                continue;
+            const float plateScale = 1.6f;
+            var w = plate.Size.X * plateScale;
+            var h = plate.Size.Y * plateScale;
+            plate.PivotOffset = Vector2.Zero;
+            if (Math.Abs(plate.Scale.X - plateScale) > 0.01f)
+                plate.Scale = Vector2.One * plateScale;
+            var target = new Vector2((canvas.X - w) * 0.5f, contentBottom - 60f - h);
+            if (plate.GlobalPosition.DistanceTo(target) > 1.5f)
+                plate.GlobalPosition = target;
+        }
+
         if (PortraitNodes.FindControl(screen, "EpochReminderText") is { } holder)
         {
             var target = new Vector2(canvas.X * 0.5f, tabTop - 150f);
