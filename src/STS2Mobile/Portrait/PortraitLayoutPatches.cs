@@ -2356,6 +2356,11 @@ internal static class PortraitTopBar
             // re-sort it on the way back to the slim bar, so hand it back
             // explicitly or it lingers at the combat coordinates (BUG-014).
             RestoreIntoSlot(room);
+            // Same story for the deck button: combat places it directly at
+            // 1.5x, and its DeckContainer margin slot does not re-sort on the
+            // way back, so it kept a stale local position far off the bar and
+            // the icon "vanished" after fights (BUG-039).
+            RestoreIntoSlot(deck);
             // Outside combat the capsule keeps its vanilla station in row 1
             // next to the gold counter, but grown into the empty stretch
             // between gold and the right icon cluster: the native slot size

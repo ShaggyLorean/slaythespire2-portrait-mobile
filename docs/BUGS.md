@@ -437,7 +437,17 @@ visual collisions and unplayable states are the biggest bug class.
   node was fine and a child (icon) was hidden or off-slot, most likely
   the game's OnScreenClosed -> AnimUnhover path on a touch device that
   never delivers a hover to undo it.
-- **Status**: open, not reproduced yet; watch after grid overlays close.
+- **Root cause (2026-09-06, reproduced on the act 2 map after a fight)**:
+  the tree probe showed the Deck button back inside its DeckContainer
+  margin slot but with the combat-branch transform still on it (local
+  position 574,167, scale 1.5), so it drew far off the bar. Combat places
+  the button directly; the compact branch handed only the room icon back
+  to its slot, and a MarginContainer does not re-sort on the way back
+  (same trap as BUG-014). Not a hover path after all.
+- **Fix**: the compact branch restores the deck button into its slot too.
+  Verified on device: icon present on the loot and on the map after Skip.
+- **Status**: verified
+- **Fixed in**: 0.4.0
 
 ## BUG-040: Map legend and drawing tools drew over settings and pause
 
