@@ -3584,6 +3584,10 @@ internal static class EventRoomPatch
                 // and the rows drew on top of each other; open the list up.
                 if (options is BoxContainer { Vertical: true } optionList)
                     optionList.AddThemeConstantOverride("separation", 30);
+                // Regular event options carry the same 830x74 unwrapped
+                // Text label as the ancients' (BUG-047): "Remove 2 cards
+                // from your" was cut at the plate's edge.
+                PortraitAncientEvent.FitOptionText(options);
                 options.PivotOffset = Vector2.Zero;
                 options.Scale = Vector2.One * optionsScale;
                 var optionsWidth = (options.Size.X > 1f ? options.Size.X : 800f) * optionsScale;
@@ -4094,7 +4098,7 @@ internal static class PortraitAncientEvent
     // on the 1000-wide portrait row the description ran off the right edge
     // and was cut mid-sentence. Wrap it and give it a third line; the
     // 160-tall plate already has the room.
-    private static void FitOptionText(Control options)
+    internal static void FitOptionText(Control options)
     {
         foreach (var child in options.GetChildren())
         {
