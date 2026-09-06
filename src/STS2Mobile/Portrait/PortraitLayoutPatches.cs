@@ -291,6 +291,11 @@ internal static class PortraitNodes
                     text = text[..40];
                 PatchHelper.Log($"[Portrait] {tag} {new string(' ', depth * 2)}{c.Name}:{c.GetType().Name} pos={c.Position} size={c.Size} scale={c.Scale} vis={c.Visible} clip={c.ClipContents} text={text.Replace('\n', '|')}");
             }
+            else if (node is Node2D n2)
+            {
+                var tex = node is Sprite2D sp && sp.Texture is not null ? $" tex={sp.Texture.GetWidth()}x{sp.Texture.GetHeight()} centered={sp.Centered} offset={sp.Offset}" : "";
+                PatchHelper.Log($"[Portrait] {tag} {new string(' ', depth * 2)}{n2.Name}:{n2.GetType().Name} 2D pos={n2.Position} scale={n2.Scale} vis={n2.Visible}{tex}");
+            }
             foreach (var child in node.GetChildren())
                 Walk(child, depth + 1);
         }
@@ -3993,6 +3998,35 @@ internal static class PortraitAncientEvent
     private const string SpacerName = "Sts2PortraitAncientSpacer";
     private const string LoopMeta = "Sts2PortraitAncientLoop";
     private const string OptionFitMeta = "Sts2PortraitAncientOptionFit";
+    private const string BgAuthoredMeta = "Sts2PortraitAncientBgAuthored";
+    private const float BgScale = 2.2f;
+    private const float BubbleTopGap = 430f;
+    private static readonly Vector2 BgAnchor = new(590f, 120f);
+    private static readonly Vector2 BgShift = new(-280f, 0f);
+
+    // The ancient's scene is a landscape Spine composition drawn at 1.12 in
+    // a full-rect container: on the phone it filled the top third and left
+    // the middle of the screen black down to the options. Scale it about a
+    // top-center anchor so the speaker keeps its place and the scene grows
+    // down to the options; the sides crop, which the wide painting affords.
+    private static void FillBackground(Control layout, Vector2 canvas)
+    {
+        if (PortraitNodes.FindControl(layout, "AncientBgContainer") is not { } bg)
+            return;
+        if (!bg.HasMeta(BgAuthoredMeta))
+            bg.SetMeta(BgAuthoredMeta, new Vector3(bg.Position.X, bg.Position.Y, bg.Scale.X));
+        var authored = bg.GetMeta(BgAuthoredMeta).AsVector3();
+        var authoredScale = Math.Max(authored.Z, 0.01f);
+        var local = (BgAnchor - new Vector2(authored.X, authored.Y)) / authoredScale;
+        // The speaker stands right of center in the wide painting; after the
+        // zoom its face hung on the right edge, so the scene slides left.
+        var target = BgAnchor - local * BgScale + BgShift;
+        bg.PivotOffset = Vector2.Zero;
+        if (Math.Abs(bg.Scale.X - BgScale) > 0.01f)
+            bg.Scale = Vector2.One * BgScale;
+        if (bg.Position.DistanceTo(target) > 1.5f)
+            bg.Position = target;
+    }
     private const float OptionTextHeight = 150f;
     private const float OptionRowHeight = 180f;
 
@@ -4058,12 +4092,12 @@ internal static class PortraitAncientEvent
             return;
 
         var safeTop = PortraitDisplay.SafeTop();
-        // The HUD backdrop (the dark plate under the top bar) runs to
-        // HudBottom + 140 on non-event rooms; the bubble started inside that
-        // band and read grey. Hang the block below the plate instead.
+        // The scene is zoomed 2.2x about a top anchor (FillBackground), which
+        // puts the speaker's face in the band right under the bar; the bubble
+        // hangs below that band so the face stays in view above the words.
         var top = Math.Max(
             PortraitHudMetrics.ContentTop(safeTop) + 26f,
-            PortraitHudMetrics.HudBottom(safeTop) + 140f + 20f
+            PortraitHudMetrics.HudBottom(safeTop) + BubbleTopGap
         );
         var bottom = canvas.Y - PortraitDisplay.SafeBottom() - 40f;
 
@@ -4106,6 +4140,7 @@ internal static class PortraitAncientEvent
             content.MoveChild(spacer, optionsIndex - 1);
 
         FitOptionText(options);
+        FillBackground(layout, canvas);
 
         // The "next" hint follows the bubble instead of floating at the
         // bottom edge of the screen.

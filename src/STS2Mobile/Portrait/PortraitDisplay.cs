@@ -250,7 +250,8 @@ internal static class PortraitDisplay
                     {
                         if (found is not null || depth > 14)
                             return;
-                        if (n.Name == wanted && n is Control)
+                        var byType = wanted.StartsWith("type:", StringComparison.Ordinal);
+                        if (n is Control && (byType ? n.GetType().Name == wanted[5..] : n.Name == wanted))
                         {
                             found = n;
                             return;

@@ -576,3 +576,20 @@ visual collisions and unplayable states are the biggest bug class.
   on both the bubble and the options, the scene art lit.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-049: ancient event scene filled the top third, black below
+
+- **Symptom**: on act ancients the painted scene (a landscape Spine
+  composition drawn at 1.12 in a full-rect container) covered only the top
+  third of the phone; the middle of the screen down to the options was black
+  and the speaker's face sat under the top bar.
+- **Fix**: the portrait pass scales AncientBgContainer 2.2x about a
+  top-center anchor (590,120) and slides it 280 left, remembering the
+  authored transform in meta so repeat passes do not compound; the dialogue
+  block hangs 430 under the bar so the face shows between the bar and the
+  bubble. Verified on device with Tezcatara (act 2): face centered above the
+  bubble, scene to the options, text white. Open item: check Neow (act 1)
+  and the act 3 ancient with the same anchor; the shift may need a per
+  ancient value.
+- **Status**: verified (Tezcatara)
+- **Fixed in**: 0.4.0
