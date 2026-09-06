@@ -3229,6 +3229,7 @@ internal static class TopBarPotionPatch
 internal static class PortraitMap
 {
     private static readonly string[] Sections = { "MapTop", "MapMid", "MapBot" };
+    private const float TopExtension = 600f;
 
     internal static void Cover(NMapBg background)
     {
@@ -3244,17 +3245,22 @@ internal static class PortraitMap
             texture.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
         }
 
+        // The tall portrait view shows far more above the boss than the
+        // landscape view ever did, and the parchment's torn top edge sat 550
+        // above the boss with bare screen above it (the "dark band" over the
+        // map). The middle sheet grows by 600 and the whole background moves
+        // up by that much, so the parchment runs past the top of the view.
         var middle = background.GetNodeOrNull<TextureRect>("MapMid");
         if (middle is not null)
         {
-            middle.CustomMinimumSize = new Vector2(0f, 3600f);
+            middle.CustomMinimumSize = new Vector2(0f, 3600f + TopExtension);
             middle.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
         }
 
         if (!background.HasMeta("sts2_portrait_overscan"))
         {
             background.SetMeta("sts2_portrait_overscan", true);
-            background.Position -= new Vector2(0f, 120f);
+            background.Position -= new Vector2(0f, 120f + TopExtension);
         }
     }
 
