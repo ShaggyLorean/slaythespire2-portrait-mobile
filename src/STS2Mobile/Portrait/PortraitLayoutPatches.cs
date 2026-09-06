@@ -315,7 +315,21 @@ internal static class PortraitNodes
         {
             // Not an NBackButton; fall through to the plain write.
         }
-        if (back.Visible && back.GlobalPosition.DistanceTo(globalTarget) > 3f)
+        // A "hidden" tab is parked off-screen, not invisible (NBackButton
+        // tweens to _hidePos on Disable); driving its position while disabled
+        // dragged it on screen during the timeline tutorial. Only an enabled
+        // tab is held at the target.
+        var enabled = true;
+        try
+        {
+            if (Traverse.Create(back).Field("_isEnabled").GetValue() is bool flag)
+                enabled = flag;
+        }
+        catch
+        {
+            // Not an NClickableControl; treat as enabled.
+        }
+        if (enabled && back.Visible && back.GlobalPosition.DistanceTo(globalTarget) > 3f)
             back.GlobalPosition = globalTarget;
     }
 
@@ -4788,6 +4802,54 @@ internal static class RewardReticlePatch
                 return false;
         }
         return true;
+    }
+}
+
+// Timeline screen: the epoch row lives in a zoom container drawn at 1.2 about
+// the screen center (a single epoch card came out 270 wide), the back tab is
+// authored bottom-left and the reminder line is a 1716-wide label centered at
+// the bottom edge. The zoom container is static in the game's code (only its
+// child scrolls horizontally), so a one-shot 1.9 is safe; the tab and the
+// reminder move onto the footer strip.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.Timeline.NTimelineScreen), "OnSubmenuOpened")]
+internal static class TimelineScreenPatch
+{
+    private const float ZoomScale = 1.9f;
+
+    private static void Postfix(Control __instance)
+        => PortraitNodes.AssertLoop(__instance, () => Apply(__instance));
+
+    private static void Apply(Control screen)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        var contentBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom());
+        var tabTop = contentBottom - 60f - 110f;
+
+        if (PortraitNodes.FindControl(screen, "WhatsZoomed") is { } zoom
+            && Math.Abs(zoom.Scale.X - ZoomScale) > 0.01f)
+        {
+            zoom.PivotOffset = Vector2.Zero;
+            zoom.Scale = Vector2.One * ZoomScale;
+        }
+
+        if (PortraitNodes.FindControl(screen, "BackButton") is { } back)
+            PortraitNodes.PlaceBackTab(back, new Vector2(PortraitHudMetrics.EdgeMargin, tabTop));
+
+        if (PortraitNodes.FindControl(screen, "EpochReminderText") is { } holder)
+        {
+            var target = new Vector2(canvas.X * 0.5f, tabTop - 150f);
+            if (holder.GlobalPosition.DistanceTo(target) > 1.5f)
+                holder.GlobalPosition = target;
+            if (holder.GetNodeOrNull<RichTextLabel>("ReminderLabel") is { } label && !label.HasMeta("Sts2PortraitWrapped"))
+            {
+                label.SetMeta("Sts2PortraitWrapped", true);
+                label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                label.Size = new Vector2(canvas.X - 120f, 120f);
+                label.Position = new Vector2(-(canvas.X - 120f) * 0.5f, 0f);
+            }
+        }
     }
 }
 

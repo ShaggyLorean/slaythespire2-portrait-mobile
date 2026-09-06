@@ -40,6 +40,7 @@ internal static class PortraitPatches
         typeof(GridSelectTickboxPatch),
         typeof(CrystalSphereScreenPatch),
         typeof(TimelineTutorialPatch),
+        typeof(TimelineScreenPatch),
         typeof(ChooseACardScreenPatch),
         typeof(EndTurnShowPosPatch),
         typeof(PortraitFtuePatch),
