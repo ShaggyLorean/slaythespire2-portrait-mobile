@@ -1149,10 +1149,15 @@ internal static class MainMenuReticlePatch
 // variants show at once; singleplayer keeps Save and Quit.
 internal static class PortraitPauseMenu
 {
-    private const float ButtonWidth = 720f;
-    private const float ButtonHeight = 168f;
-    private const float RowSeparation = 26f;
-    private const float TitleGap = 56f;
+    // Rows take a share of the canvas width rather than a fixed 720, so a
+    // narrower or wider phone gets the same proportions; at 1180 wide this
+    // is 968. Heights and the font ceiling grew with the user's read that
+    // the earlier plates were still small for a thumb.
+    private const float ButtonWidthShare = 0.82f;
+    private const float ButtonHeight = 200f;
+    private const float RowSeparation = 30f;
+    private const float TitleGap = 64f;
+    private const float TitleScale = 1.5f;
 
     internal static void Apply(Control menu)
     {
@@ -1175,13 +1180,14 @@ internal static class PortraitPauseMenu
         if (container is BoxContainer box)
             box.AddThemeConstantOverride("separation", (int)RowSeparation);
 
+        var buttonWidth = canvas.X * ButtonWidthShare;
         var rows = 0;
         foreach (var child in container.GetChildren())
         {
             if (child is not Control { Visible: true } row)
                 continue;
 
-            row.CustomMinimumSize = new Vector2(ButtonWidth, ButtonHeight);
+            row.CustomMinimumSize = new Vector2(buttonWidth, ButtonHeight);
             // The rows came out narrower than the container and the VBox
             // left-aligned them, so the whole stack sat left of the title;
             // center each row inside the container instead.
@@ -1205,7 +1211,7 @@ internal static class PortraitPauseMenu
                 // Fitted to the grown plate the autosizer still stops at the
                 // authored ceiling, leaving small text on a big button; lift
                 // the ceiling once and let RefreshLabels re-fit below it.
-                RaiseFontCeiling(label, 1.4f);
+                RaiseFontCeiling(label, 1.8f);
             }
             rows++;
         }
@@ -1215,7 +1221,7 @@ internal static class PortraitPauseMenu
 
         var height = rows * ButtonHeight + (rows - 1) * RowSeparation;
         PortraitNodes.ClearAnchors(container);
-        container.Size = new Vector2(ButtonWidth, height);
+        container.Size = new Vector2(buttonWidth, height);
         // Centering on the canvas left the lower 40% dead under four rows;
         // the block sits in the content band at the same lower bias the
         // main menu uses, so the thumb reaches it and the hole closes.
@@ -1223,15 +1229,17 @@ internal static class PortraitPauseMenu
         var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - 140f;
         var free = Mathf.Max(0f, bandBottom - bandTop - height);
         var top = bandTop + free * 0.62f;
-        container.Position += new Vector2((canvas.X - ButtonWidth) * 0.5f, top)
+        container.Position += new Vector2((canvas.X - buttonWidth) * 0.5f, top)
             - container.GlobalPosition;
 
         var title = PortraitNodes.FindControl(menu, "PausedText");
         if (title is not null)
         {
             PortraitNodes.ClearAnchors(title);
-            var titleWidth = title.Size.X > 1f ? title.Size.X : 440f;
-            var titleHeight = title.Size.Y > 1f ? title.Size.Y : 64f;
+            var titleWidth = (title.Size.X > 1f ? title.Size.X : 440f) * TitleScale;
+            var titleHeight = (title.Size.Y > 1f ? title.Size.Y : 64f) * TitleScale;
+            title.PivotOffset = Vector2.Zero;
+            title.Scale = Vector2.One * TitleScale;
             title.Position += new Vector2(
                 canvas.X * 0.5f - titleWidth * 0.5f,
                 top - TitleGap - titleHeight
