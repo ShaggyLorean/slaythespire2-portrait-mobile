@@ -4222,57 +4222,61 @@ internal static class PortraitCompendium
     }
 
     // The compendium's margin container keeps its landscape footprint
-    // (1920x1080 centered on the canvas), which pushes the right-aligned
-    // bottom row's visible button past the canvas edge. Sizing the margin
-    // box to the canvas pulls everything inside; the rows keep their own
-    // container arrangement.
+    // (1920x1080 centered on the canvas): a five-wide row cut at both edges.
+    // Containers reset child scale on every sort, so the shelf cards and the
+    // bottom chips move OUT to the submenu root (a plain Control) once and
+    // get laid out by hand: the four shelf cards in a 2x2 grid scaled to the
+    // canvas, the chips in a row under them. The emptied furniture hides.
+    private static readonly string[] ShelfNames =
+    {
+        "CardLibraryButton", "RelicCollectionButton", "PotionLabButton", "BestiaryButton",
+    };
+    private static readonly string[] ChipNames =
+    {
+        "LeaderboardsButton", "StatisticsButton", "RunHistoryButton",
+    };
+
     private static void Apply(Control submenu)
     {
         var canvas = PortraitDisplay.CanvasSize;
         if (!PortraitDisplay.IsPortrait(canvas))
             return;
-        var margin = PortraitNodes.FindControl(submenu, "MarginContainer");
-        var content = PortraitNodes.FindControl(submenu, "VBoxContainer");
-        if (margin is null || content is null)
+        var margin = submenu.GetNodeOrNull<Control>("MarginContainer");
+        if (margin is null)
             return;
-
         var safeTop = PortraitDisplay.SafeTop();
         var safeBottom = PortraitDisplay.SafeBottom();
         var bandTop = PortraitHudMetrics.ContentTop(safeTop);
-        var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, safeBottom);
-
-        // Containers reset child scale on every sort, so no scale survives
-        // inside the margin/vbox chain. The shelf cards move OUT to the
-        // submenu root (a plain Control) once and get laid out by hand:
-        // three cards in a row scaled to the canvas, the stats chip
-        // centered under them. The emptied stock furniture hides.
+        var bandBottom = PortraitHudMetrics.ContentBottom(canvas.Y, safeBottom) - 60f;
         margin.Visible = false;
 
-        var shelf = new[]
-        {
-            PortraitNodes.FindControl(submenu, "CardLibraryButton"),
-            PortraitNodes.FindControl(submenu, "RelicCollectionButton"),
-            PortraitNodes.FindControl(submenu, "PotionLabButton"),
-        };
-        var stats = PortraitNodes.FindControl(submenu, "StatisticsButton");
+        var shelf = new List<Control>();
+        foreach (var name in ShelfNames)
+            if (PortraitNodes.FindControl(submenu, name) is { Visible: true } card)
+                shelf.Add(card);
+        var chips = new List<Control>();
+        foreach (var name in ChipNames)
+            if (PortraitNodes.FindControl(submenu, name) is { Visible: true } chip)
+                chips.Add(chip);
+
         const float cardW = 368f;
         const float cardH = 490f;
-        const float gap = 24f;
-        var scale = Math.Min(
-            1f,
-            (canvas.X - 2f * PortraitHudMetrics.EdgeMargin - 2f * gap) / (3f * cardW)
-        );
-        var rowWidth = 3f * cardW * scale + 2f * gap;
-        var rowX = PortraitHudMetrics.CenterX(canvas.X, rowWidth);
-        var statsH = 200f * scale;
-        var totalH = cardH * scale + 36f + statsH;
-        var rowY = bandTop + (bandBottom - bandTop - totalH) * 0.5f;
+        const float gap = 28f;
+        const int columns = 2;
+        var rows = Math.Max(1, (shelf.Count + columns - 1) / columns);
+        var chipH = chips.Count > 0 ? 200f : 0f;
+        var widthScale = (canvas.X - 2f * PortraitHudMetrics.EdgeMargin - (columns - 1) * gap) / (columns * cardW);
+        var heightScale = (bandBottom - bandTop - 36f - (rows - 1) * gap) / (rows * cardH + chipH);
+        var scale = Mathf.Clamp(Math.Min(widthScale, heightScale), 0.6f, 1.6f);
+        var gridW = columns * cardW * scale + (columns - 1) * gap;
+        var gridH = rows * cardH * scale + (rows - 1) * gap;
+        var totalH = gridH + (chips.Count > 0 ? 36f + chipH * scale : 0f);
+        var x0 = PortraitHudMetrics.CenterX(canvas.X, gridW);
+        var y0 = bandTop + Math.Max(0f, (bandBottom - bandTop - totalH) * 0.5f);
 
-        for (var i = 0; i < shelf.Length; i++)
+        for (var i = 0; i < shelf.Count; i++)
         {
             var card = shelf[i];
-            if (card is null)
-                continue;
             if (card.GetParent() != submenu)
             {
                 card.GetParent().RemoveChild(card);
@@ -4280,26 +4284,40 @@ internal static class PortraitCompendium
             }
             card.PivotOffset = Vector2.Zero;
             card.Scale = Vector2.One * scale;
-            card.GlobalPosition = new Vector2(rowX + i * (cardW * scale + gap), rowY);
-        }
-        if (stats is not null)
-        {
-            if (stats.GetParent() != submenu)
-            {
-                stats.GetParent().RemoveChild(stats);
-                submenu.AddChild(stats);
-            }
-            stats.PivotOffset = Vector2.Zero;
-            stats.Scale = Vector2.One * scale;
-            stats.GlobalPosition = new Vector2(
-                PortraitHudMetrics.CenterX(canvas.X, 280f * scale),
-                rowY + cardH * scale + 36f
+            card.GlobalPosition = new Vector2(
+                x0 + i % columns * (cardW * scale + gap),
+                y0 + i / columns * (cardH * scale + gap)
             );
         }
+
+        if (chips.Count > 0)
+        {
+            const float chipW = 280f;
+            var chipRow = chips.Count * chipW * scale + (chips.Count - 1) * gap;
+            var cx = PortraitHudMetrics.CenterX(canvas.X, chipRow);
+            var cy = y0 + gridH + 36f;
+            for (var i = 0; i < chips.Count; i++)
+            {
+                var chip = chips[i];
+                if (chip.GetParent() != submenu)
+                {
+                    chip.GetParent().RemoveChild(chip);
+                    submenu.AddChild(chip);
+                }
+                chip.PivotOffset = Vector2.Zero;
+                chip.Scale = Vector2.One * scale;
+                chip.GlobalPosition = new Vector2(cx + i * (chipW * scale + gap), cy);
+            }
+        }
+
+        if (PortraitNodes.FindControl(submenu, "BackButton") is { } back)
+            PortraitNodes.PlaceBackTab(back, new Vector2(PortraitHudMetrics.EdgeMargin, PortraitDisplay.SafeTop() + 6f));
     }
 }
 
-[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NCompendiumSubmenu), "_Ready")]
+// _Ready ran before the patches (the submenu is built with the menu); the
+// open hook runs every time the compendium comes up.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NCompendiumSubmenu), "OnSubmenuOpened")]
 internal static class CompendiumSubmenuPatch
 {
     private static void Postfix(object __instance)

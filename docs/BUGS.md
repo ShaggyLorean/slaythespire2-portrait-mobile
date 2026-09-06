@@ -786,3 +786,16 @@ visual collisions and unplayable states are the biggest bug class.
   game's focus color); minor, left as is.
 - **Status**: verified (wings)
 - **Fixed in**: 0.4.0
+
+## BUG-062: Compendium shelf drawn as a landscape row, pass never installed
+
+- **Symptom**: the compendium showed a five-wide row of cards cut at both
+  edges with the chips below; the portrait pass (three cards plus a stats
+  chip) targeted an older layout and hooked _Ready, which had already run
+  when the patches loaded.
+- **Fix**: the pass hooks OnSubmenuOpened, moves the four shelf cards and
+  the three chips to the submenu root and lays them out as a 2x2 grid with
+  the chip row under it, scaled to the band; back tab at the top. Verified
+  on device.
+- **Status**: verified
+- **Fixed in**: 0.4.0
