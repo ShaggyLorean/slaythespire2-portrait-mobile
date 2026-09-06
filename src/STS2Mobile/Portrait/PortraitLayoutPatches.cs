@@ -3594,7 +3594,22 @@ internal static class EventRoomPatch
                 options.PivotOffset = Vector2.Zero;
                 options.Scale = Vector2.One * optionsScale;
                 var optionsWidth = (options.Size.X > 1f ? options.Size.X : 800f) * optionsScale;
-                var optionsHeight = (options.Size.Y > 1f ? options.Size.Y : 220f) * optionsScale;
+                // The VBox keeps its old Size for a frame or more after rows
+                // leave (three plates became one "Proceed"), so the block
+                // was hung as if three rows were still there and the lone
+                // plate floated mid-screen. Measure the visible rows.
+                var visibleRows = 0;
+                var rowsHeight = 0f;
+                foreach (var child in options.GetChildren())
+                {
+                    if (child is not Control { Visible: true } row)
+                        continue;
+                    rowsHeight += Math.Max(row.Size.Y, row.CustomMinimumSize.Y);
+                    visibleRows++;
+                }
+                if (visibleRows > 1)
+                    rowsHeight += 30f * (visibleRows - 1);
+                var optionsHeight = (rowsHeight > 1f ? rowsHeight : (options.Size.Y > 1f ? options.Size.Y : 220f)) * optionsScale;
                 optionsTop = canvas.Y - PortraitDisplay.SafeBottom() - optionsHeight - 90f;
                 options.GlobalPosition = new Vector2((canvas.X - optionsWidth) * 0.5f, optionsTop);
             }
