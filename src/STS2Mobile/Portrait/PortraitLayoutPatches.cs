@@ -2361,6 +2361,18 @@ internal static class PortraitTopBar
             // way back, so it kept a stale local position far off the bar and
             // the icon "vanished" after fights (BUG-039).
             RestoreIntoSlot(deck);
+            // The map and pause buttons are direct children of the right
+            // row; combat placed them directly as well, and an HBox only
+            // re-lays its children on a dirty event. Hand them back and ask
+            // both rows for a sort, or they stay at the combat coordinates
+            // (the scroll and the gear vanished on the loot once the deck
+            // alone was restored).
+            RestoreIntoSlot(map);
+            RestoreIntoSlot(pause);
+            RestoreIntoSlot(hp);
+            RestoreIntoSlot(gold);
+            (right as Container)?.QueueSort();
+            (left as Container)?.QueueSort();
             // Outside combat the capsule keeps its vanilla station in row 1
             // next to the gold counter, but grown into the empty stretch
             // between gold and the right icon cluster: the native slot size

@@ -444,8 +444,11 @@ visual collisions and unplayable states are the biggest bug class.
   the button directly; the compact branch handed only the room icon back
   to its slot, and a MarginContainer does not re-sort on the way back
   (same trap as BUG-014). Not a hover path after all.
-- **Fix**: the compact branch restores the deck button into its slot too.
-  Verified on device: icon present on the loot and on the map after Skip.
+- **Fix**: the compact branch hands every directly placed child back to
+  its slot (deck, map, pause, hp, gold) and queues a sort on both rows;
+  restoring the deck alone left the scroll and the gear at their combat
+  coordinates on the next loot. Verified on device: all three right icons
+  on the loot and on the map after Skip.
 - **Status**: verified
 - **Fixed in**: 0.4.0
 
