@@ -3986,6 +3986,33 @@ internal static class PortraitAncientEvent
 {
     private const string SpacerName = "Sts2PortraitAncientSpacer";
     private const string LoopMeta = "Sts2PortraitAncientLoop";
+    private const string OptionFitMeta = "Sts2PortraitAncientOptionFit";
+    private const float OptionTextHeight = 150f;
+    private const float OptionRowHeight = 180f;
+
+    // Each option's Text is a fixed 830x74 rich label (title line plus one
+    // description line) with no wrapping, authored for a wide landscape row;
+    // on the 1000-wide portrait row the description ran off the right edge
+    // and was cut mid-sentence. Wrap it and give it a third line; the
+    // 160-tall plate already has the room.
+    private static void FitOptionText(Control options)
+    {
+        foreach (var child in options.GetChildren())
+        {
+            if (child is not Control option || option.HasMeta(OptionFitMeta))
+                continue;
+            if (option.FindChild("Text", recursive: true, owned: false) is RichTextLabel text)
+            {
+                text.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                text.CustomMinimumSize = new Vector2(text.Size.X, OptionTextHeight);
+                text.Size = new Vector2(text.Size.X, OptionTextHeight);
+            }
+            // Three text lines run 141 tall; the authored 160 plate put the
+            // next row's title on the last line. The plate grows with them.
+            option.CustomMinimumSize = new Vector2(option.CustomMinimumSize.X, OptionRowHeight);
+            option.SetMeta(OptionFitMeta, true);
+        }
+    }
 
     // The layout's own intro tween keeps writing the authored (bottom
     // anchored) content position for a while after _Ready, so a one-shot
@@ -4025,8 +4052,14 @@ internal static class PortraitAncientEvent
             return;
 
         var safeTop = PortraitDisplay.SafeTop();
-        var top = PortraitHudMetrics.ContentTop(safeTop) + 26f;
-        var bottom = canvas.Y - PortraitDisplay.SafeBottom() - 24f;
+        // The HUD backdrop (the dark plate under the top bar) runs to
+        // HudBottom + 140 on non-event rooms; the bubble started inside that
+        // band and read grey. Hang the block below the plate instead.
+        var top = Math.Max(
+            PortraitHudMetrics.ContentTop(safeTop) + 26f,
+            PortraitHudMetrics.HudBottom(safeTop) + 140f + 20f
+        );
+        var bottom = canvas.Y - PortraitDisplay.SafeBottom() - 40f;
 
         PortraitNodes.ClearAnchors(container);
         container.Position = new Vector2(10f, top);
@@ -4065,6 +4098,8 @@ internal static class PortraitAncientEvent
             content.MoveChild(spacer, optionsIndex);
         else if (spacer.GetIndex() < optionsIndex - 1)
             content.MoveChild(spacer, optionsIndex - 1);
+
+        FitOptionText(options);
 
         // The "next" hint follows the bubble instead of floating at the
         // bottom edge of the screen.

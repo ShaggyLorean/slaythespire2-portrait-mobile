@@ -238,6 +238,32 @@ internal static class PortraitDisplay
                     }
                     Gates(window, 0);
                 }
+                // sts2_dump: file body names a control; its subtree is logged
+                // (name, type, rect, scale, visibility, clip, text).
+                var dumpTrigger = "user://sts2_dump";
+                if (Godot.FileAccess.FileExists(dumpTrigger))
+                {
+                    var wanted = Godot.FileAccess.GetFileAsString(dumpTrigger).Trim();
+                    DirAccess.RemoveAbsolute(dumpTrigger);
+                    Node found = null;
+                    void Find(Node n, int depth)
+                    {
+                        if (found is not null || depth > 14)
+                            return;
+                        if (n.Name == wanted && n is Control)
+                        {
+                            found = n;
+                            return;
+                        }
+                        foreach (var child in n.GetChildren())
+                            Find(child, depth + 1);
+                    }
+                    Find(window, 0);
+                    if (found is null)
+                        PatchHelper.Log($"[Portrait] dump: no control named {wanted}");
+                    else
+                        PortraitNodes.DumpSubtree(found, "dump", 8);
+                }
                 var trigger = "user://sts2_vpdump";
                 if (Godot.FileAccess.FileExists(trigger))
                 {

@@ -547,3 +547,17 @@ visual collisions and unplayable states are the biggest bug class.
   the screen up to the HUD.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-047: ancient event option text cut mid-sentence
+
+- **Symptom**: on act ancients (Tezcatara etc.) each relic option showed one
+  description line cut at the plate's right edge ("Exhaust the top", "Every
+  3 combats, your").
+- **Cause**: the option's Text is a fixed 830x74 rich label with wrapping
+  off, authored for a wide landscape row; the 1000-wide portrait row has no
+  room for the sentence on one line.
+- **Fix**: word wrap on, label 150 tall, option plate min height 180 (width
+  kept), block bottom margin 40. Verified on device: three full sentences,
+  no plate overlap, rows above the safe bottom.
+- **Status**: verified
+- **Fixed in**: 0.4.0
