@@ -727,3 +727,14 @@ visual collisions and unplayable states are the biggest bug class.
 - **Symptom**: the panel is about 40 percent of the canvas width with two
   small No/Yes plates; fine for a mouse, small for a thumb.
 - **Status**: open (seen 2026-09-06; not yet measured)
+
+## BUG-058: Timeline intro text ran off both edges, Proceed tiny above it
+
+- **Where**: first epoch unlock after a run (main menu Timeline row).
+- **Cause**: NTimelineTutorial holds one long centered line in a full-rect
+  label with wrapping off and tweens a 260x58 plate to y 920.
+- **Fix**: postfix on AnimateTutorial rebuilds the tween without the plate
+  slide, wraps the text inside 60-unit side margins and parks the plate
+  at 1.6x on the footer strip baseline. Verified on device.
+- **Status**: verified
+- **Fixed in**: 0.4.0

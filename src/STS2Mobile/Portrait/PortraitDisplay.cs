@@ -107,6 +107,37 @@ internal static class PortraitDisplay
                 // this ends the combat through the game's own death pipeline
                 // (LoseHpInternal never fires death events, so the HP write is
                 // safe and the kill still happens the legitimate way).
+                // Dev cheat: user://sts2_lowhp puts every player creature at
+                // 1 hp with no block, so the next enemy turn ends the run
+                // through the game's own death pipeline (game over screen).
+                var lowHpTrigger = "user://sts2_lowhp";
+                if (Godot.FileAccess.FileExists(lowHpTrigger))
+                {
+                    DirAccess.RemoveAbsolute(lowHpTrigger);
+                    try
+                    {
+                        var cmType = HarmonyLib.AccessTools.TypeByName(
+                            "MegaCrit.Sts2.Core.Combat.CombatManager");
+                        var cm = cmType?.GetProperty("Instance")?.GetValue(null);
+                        var state = HarmonyLib.Traverse.Create(cm).Field("_state").GetValue();
+                        var players = HarmonyLib.Traverse.Create(state).Property("PlayerCreatures").GetValue()
+                            as System.Collections.IEnumerable;
+                        var hurt = 0;
+                        if (players is not null)
+                            foreach (var creature in players)
+                            {
+                                var t = HarmonyLib.Traverse.Create(creature);
+                                t.Property("CurrentHp").SetValue(1);
+                                try { t.Property("Block").SetValue(0); } catch { }
+                                hurt++;
+                            }
+                        PatchHelper.Log($"[Portrait] lowhp cheat: {hurt} player creature(s) at 1 hp");
+                    }
+                    catch (Exception e)
+                    {
+                        PatchHelper.Log($"[Portrait] lowhp cheat failed: {e.Message}");
+                    }
+                }
                 var weakenTrigger = "user://sts2_weaken";
                 if (Godot.FileAccess.FileExists(weakenTrigger))
                 {

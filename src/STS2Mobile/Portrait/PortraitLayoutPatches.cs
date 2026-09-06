@@ -290,7 +290,7 @@ internal static class PortraitNodes
                 if (text.Length > 40)
                     text = text[..40];
                 var gr = c.GetGlobalRect();
-                PatchHelper.Log($"[Portrait] {tag} {new string(' ', depth * 2)}{c.Name}:{c.GetType().Name} pos={c.Position} size={c.Size} scale={c.Scale} global={gr.Position.X:F0},{gr.Position.Y:F0} {gr.Size.X:F0}x{gr.Size.Y:F0} vis={c.Visible} clip={c.ClipContents} text={text.Replace('\n', '|')}");
+                PatchHelper.Log($"[Portrait] {tag} {new string(' ', depth * 2)}{c.Name}:{c.GetType().Name} pos={c.Position} size={c.Size} scale={c.Scale} global={gr.Position.X:F0},{gr.Position.Y:F0} {gr.Size.X:F0}x{gr.Size.Y:F0} a={c.Modulate.A:F2}/{c.SelfModulate.A:F2} vis={c.Visible} clip={c.ClipContents} text={text.Replace('\n', '|')}");
             }
             else if (node is Node2D n2)
             {
@@ -1390,6 +1390,11 @@ internal static class PortraitCapstone
             return false;
 
         if (PortraitNodes.FindByType(anchor.GetTree().Root, "NRewardsScreen") is { Visible: true })
+            return true;
+
+        // The run is over: the bar goes compact and the hand/End Turn hide
+        // (the End Turn plate sat half on the game over summary).
+        if (PortraitNodes.FindByType(anchor.GetTree().Root, "NGameOverScreen") is { Visible: true })
             return true;
 
         // Skipping the loot opens the map while the finished combat scene is
@@ -4786,6 +4791,62 @@ internal static class RewardReticlePatch
     }
 }
 
+// Timeline intro (first epoch unlock): a full-rect rich label holding one
+// long centered line that ran off both edges, and a 260x58 Proceed plate
+// tweened to y 920, above the text. AnimateTutorial builds one tween for
+// the text reveal, the button fade and the button slide; the copy below
+// keeps the reveal and the fade, drops the slide, wraps the text inside
+// side margins and parks the plate at 1.6x on the footer strip baseline.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.Timeline.NTimelineTutorial), "AnimateTutorial")]
+internal static class TimelineTutorialPatch
+{
+    private static void Postfix(Control __instance)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        try
+        {
+            var t = Traverse.Create(__instance);
+            var text = t.Field("_text").GetValue<Control>();
+            var button = t.Field("_acknowledgeButton").GetValue<Control>();
+            if (text is null || button is null)
+                return;
+            if (t.Field("_tween").GetValue() is Tween old && old.IsValid())
+                old.Kill();
+
+            if (text is RichTextLabel rich)
+                rich.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            text.OffsetLeft = 60f;
+            text.OffsetRight = -60f;
+
+            const float scale = 1.6f;
+            var w = (button.Size.X > 1f ? button.Size.X : 260f) * scale;
+            var h = (button.Size.Y > 1f ? button.Size.Y : 58f) * scale;
+            button.PivotOffset = Vector2.Zero;
+            button.Scale = Vector2.One * scale;
+            button.GlobalPosition = new Vector2(
+                (canvas.X - w) * 0.5f,
+                PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - 60f - h
+            );
+
+            var tween = __instance.CreateTween();
+            tween.TweenProperty(text, "visible_ratio", 1f, 2.0).SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Quad);
+            tween.Parallel().TweenProperty(text, "modulate:a", 1f, 1.0);
+            tween.Chain().TweenCallback(Callable.From(() =>
+            {
+                try { Traverse.Create(button).Method("Enable").GetValue(); } catch { }
+            }));
+            tween.Parallel().TweenProperty(button, "modulate:a", 1f, 0.3).SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Cubic).SetDelay(1.0);
+            t.Field("_tween").SetValue(tween);
+        }
+        catch (Exception e)
+        {
+            PatchHelper.Log($"[Portrait] timeline tutorial pass failed: {e.Message}");
+        }
+    }
+}
+
 // The grid select overlays (upgrade, transform, enchant, deck picks) inherit
 // NCardGridSelectionScreen, not NCardsViewScreen, so the deck view's tickbox
 // growth never reached their "View Upgrades" box. AfterOverlayOpened has an
@@ -5238,6 +5299,7 @@ internal static class ProceedButtonPatch
 internal static class PortraitGameOver
 {
     private const string LoopMeta = "Sts2PortraitGameOverLoop";
+    private const float SummaryScale = 1.2f;
 
     internal static void EnsureLoop(Control screen)
     {
@@ -5259,8 +5321,18 @@ internal static class PortraitGameOver
         if (!PortraitDisplay.IsPortrait(canvas))
             return;
         var safeBottom = PortraitDisplay.SafeBottom();
-        var nextBottom = PortraitHudMetrics.ContentBottom(canvas.Y, safeBottom);
-        foreach (var name in new[] { "ContinueButton", "LeaderboardButton" })
+        // The summary (quote, score lines, score bar, discoveries) is a
+        // 1920-wide CenterContainer drawn at 1.0; on the phone it read as a
+        // strip of small print. Scale it about its center; the quote line is
+        // the widest element and still fits the canvas at 1.2.
+        if (PortraitNodes.FindControl(screen, "CenterContainer") is { } summary && summary.Size.X > 1f)
+        {
+            summary.PivotOffset = summary.Size * 0.5f;
+            if (Math.Abs(summary.Scale.X - SummaryScale) > 0.01f)
+                summary.Scale = Vector2.One * SummaryScale;
+        }
+        var nextBottom = PortraitHudMetrics.ContentBottom(canvas.Y, safeBottom) - 60f;
+        foreach (var name in new[] { "ContinueButton", "LeaderboardButton", "ViewRunButton", "MainMenuButton" })
         {
             if (PortraitNodes.FindControl(screen, name) is not { Visible: true } button)
                 continue;
