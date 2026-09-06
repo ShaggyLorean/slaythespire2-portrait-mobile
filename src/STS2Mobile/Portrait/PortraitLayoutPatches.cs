@@ -2635,6 +2635,9 @@ internal static class PortraitTopBar
                 is not Control { Visible: true }
             && PortraitSceneCache.FindByType(bar.GetTree().Root, "NAncientEventLayout")
                 is not Control { Visible: true }
+            // An overlay over the event (card removal grid, rewards) is the
+            // screen being read; the deep plate dimmed its top rows.
+            && PortraitSceneCache.TopOverlay() is null
             && PortraitNodes.FindControl(eventRoom, "Title")?.GetParent() is Control prose
             && prose.IsVisibleInTree())
         {
