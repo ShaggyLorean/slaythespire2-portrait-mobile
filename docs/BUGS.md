@@ -654,3 +654,15 @@ visual collisions and unplayable states are the biggest bug class.
   count, session end into the loot.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-053: loot with five rewards hid the last row
+
+- **Where**: the crystal sphere session pays out four gold rewards and a
+  card; the authored loot panel (526x640) masks a 484-tall list (four and
+  a half rows), so "Add a card" sat behind the mask edge and the Skip
+  plate overlapped the panel's bottom frame.
+- **Fix**: the rewards pass grows the mask and the panel by the missing
+  rows (authored sizes remembered in meta) before scaling to the band.
+  Verified on device: five rows, Skip under the panel.
+- **Status**: verified
+- **Fixed in**: 0.4.0

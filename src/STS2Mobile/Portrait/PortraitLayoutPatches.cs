@@ -4630,6 +4630,7 @@ internal static class ChooseACardScreenPatch
 
 internal static class PortraitRewards
 {
+    private const string AuthoredMeta = "Sts2PortraitRewardsAuthored";
     private const string LoopMeta = "Sts2PortraitRewardsLoop";
 
     // Set by the map pass when it hides a live loot screen under the map;
@@ -4700,8 +4701,32 @@ internal static class PortraitRewards
 
         if (PortraitNodes.FindControl(screen, "Rewards") is { } panel)
         {
-            var baseW = panel.Size.X > 1f ? panel.Size.X : 526f;
-            var baseH = panel.Size.Y > 1f ? panel.Size.Y : 640f;
+            // The authored panel (526x640) masks a 484-tall list: four and a
+            // half rows. A five-reward loot (the crystal sphere's) hid its
+            // last row behind the mask edge. The panel and the mask grow by
+            // the missing rows before the panel is scaled to the band.
+            if (!panel.HasMeta(AuthoredMeta))
+                panel.SetMeta(AuthoredMeta, panel.Size);
+            var authored = panel.GetMeta(AuthoredMeta).AsVector2();
+            var mask = PortraitNodes.FindControl(panel, "RewardContainerMask");
+            var list = PortraitNodes.FindControl(panel, "RewardsContainer");
+            var extra = 0f;
+            if (mask is not null && list is not null)
+            {
+                if (!mask.HasMeta(AuthoredMeta))
+                    mask.SetMeta(AuthoredMeta, mask.Size);
+                var maskAuthored = mask.GetMeta(AuthoredMeta).AsVector2();
+                var needed = list.Size.Y + 70f;
+                extra = Math.Max(0f, needed - maskAuthored.Y);
+                var maskSize = new Vector2(maskAuthored.X, maskAuthored.Y + extra);
+                if (mask.Size.DistanceTo(maskSize) > 0.5f)
+                    mask.Size = maskSize;
+            }
+            var panelSize = new Vector2(authored.X, authored.Y + extra);
+            if (panel.Size.DistanceTo(panelSize) > 0.5f)
+                panel.Size = panelSize;
+            var baseW = panelSize.X > 1f ? panelSize.X : 526f;
+            var baseH = panelSize.Y > 1f ? panelSize.Y : 640f;
             // The proceed strip keeps the lower part of the band.
             var scale = PortraitHudMetrics.FillScale(
                 baseW,
