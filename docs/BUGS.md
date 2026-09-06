@@ -808,3 +808,17 @@ visual collisions and unplayable states are the biggest bug class.
   bottom-left). Verified on device.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-064: Relic Collection list bounced up and down on its own
+
+- **Symptom** (user): the relic collection scrolled itself up and down
+  continuously.
+- **Cause**: the touch pass "lifts" whatever sits in the bottom gesture
+  strip; the scrollable Content reaches the strip by design and its
+  NScrollableContainer drives the position every frame, so the two fought
+  ("lifted 'Content' 1938 units" twice per pass).
+- **Fix**: LiftOutOfGestureStrip skips anything under an
+  NScrollableContainer. Verified on device: two frames a second apart
+  identical, no lift lines in the log.
+- **Status**: verified
+- **Fixed in**: 0.4.0

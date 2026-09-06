@@ -376,6 +376,13 @@ internal static class PortraitTouchPass
         if (overflow <= 1f)
             return;
 
+        // Scrollable content (relic collection, patch notes, ...) reaches the
+        // strip by design and its NScrollableContainer drives the position
+        // every frame; lifting it made the list bounce up and down.
+        for (Node probe = lowest; probe is not null; probe = probe.GetParent())
+            if (probe.GetType().Name == "NScrollableContainer")
+                return;
+
         for (Node node = lowest; node is Control control; node = control.GetParent())
         {
             if (control.GetParent() is Container)
