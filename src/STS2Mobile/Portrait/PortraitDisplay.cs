@@ -238,9 +238,10 @@ internal static class PortraitDisplay
                     }
                     Gates(window, 0);
                 }
-                // sts2_dump: file body names a control; its subtree is logged
-                // (name, type, rect, scale, visibility, clip, text).
-                var dumpTrigger = "user://sts2_dump";
+                // sts2_tree: file body names a control (or type:<Class>); its
+                // subtree is logged (name, type, rect, scale, visibility, clip,
+                // text). sts2_dump belongs to the older region dump.
+                var dumpTrigger = "user://sts2_tree";
                 if (Godot.FileAccess.FileExists(dumpTrigger))
                 {
                     var wanted = Godot.FileAccess.GetFileAsString(dumpTrigger).Trim();

@@ -4041,16 +4041,22 @@ internal static class PortraitAncientEvent
         {
             if (child is not Control option || option.HasMeta(OptionFitMeta))
                 continue;
-            if (option.FindChild("Text", recursive: true, owned: false) is RichTextLabel text)
-            {
-                text.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-                text.CustomMinimumSize = new Vector2(text.Size.X, OptionTextHeight);
-                text.Size = new Vector2(text.Size.X, OptionTextHeight);
-            }
+            if (option.FindChild("Text", recursive: true, owned: false) is not RichTextLabel text)
+                continue;
+            // Only rows with a description need the room; a title-only row
+            // ("Proceed") wrapped into a 150-tall rect came out at half size
+            // from the label's own fitter, so it keeps its authored layout.
+            var lines = text.Text.Split('\n');
+            var hasDescription = lines.Length > 1 && lines[1].Trim().Length > 0;
+            option.SetMeta(OptionFitMeta, true);
+            if (!hasDescription)
+                continue;
+            text.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            text.CustomMinimumSize = new Vector2(text.Size.X, OptionTextHeight);
+            text.Size = new Vector2(text.Size.X, OptionTextHeight);
             // Three text lines run 141 tall; the authored 160 plate put the
             // next row's title on the last line. The plate grows with them.
             option.CustomMinimumSize = new Vector2(option.CustomMinimumSize.X, OptionRowHeight);
-            option.SetMeta(OptionFitMeta, true);
         }
     }
 

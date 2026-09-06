@@ -557,8 +557,11 @@ visual collisions and unplayable states are the biggest bug class.
   off, authored for a wide landscape row; the 1000-wide portrait row has no
   room for the sentence on one line.
 - **Fix**: word wrap on, label 150 tall, option plate min height 180 (width
-  kept), block bottom margin 40. Verified on device: three full sentences,
-  no plate overlap, rows above the safe bottom.
+  kept), block bottom margin 40, only for rows that carry a description: a
+  title-only row ("Proceed") wrapped into the tall rect came out at half
+  size from the label's own fitter, so it keeps its authored layout.
+  Verified on device: three full sentences, no plate overlap, rows above
+  the safe bottom, Proceed at full size.
 - **Status**: verified
 - **Fixed in**: 0.4.0
 
