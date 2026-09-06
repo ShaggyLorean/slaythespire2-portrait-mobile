@@ -738,3 +738,16 @@ visual collisions and unplayable states are the biggest bug class.
   at 1.6x on the footer strip baseline. Verified on device.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-059: game over screen kept the combat bar and End Turn, buttons hidden
+
+- **Symptom**: after a death the expanded combat bar stayed up, the End Turn
+  plate sat half on the summary at the bottom-right, the summary block was
+  small print and the run-end buttons were off the strip.
+- **Fix**: NGameOverScreen visible counts as an eclipse (compact bar, hand
+  and End Turn hidden); the summary CenterContainer scales 1.2 about its
+  center; Continue, View Run, Unlock/Main Menu and Leaderboard stack at
+  1.8x from the strip baseline. Verified on device through a full death
+  (lowhp dev cheat): defeat banner, summary, Unlock/View Run plates.
+- **Status**: verified
+- **Fixed in**: 0.4.0

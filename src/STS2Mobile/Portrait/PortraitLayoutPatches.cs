@@ -4330,7 +4330,7 @@ internal static class PortraitAncientEvent
                 case "Neow":
                     // Flat painting, the face in the right third above the
                     // water; slide it to the center and a little down.
-                    return (1.6f, -800f, 150f);
+                    return (1.6f, -800f, 0f);
             }
         }
         return (1.8f, -400f, 0f);
