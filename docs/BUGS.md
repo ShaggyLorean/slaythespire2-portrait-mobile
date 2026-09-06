@@ -760,3 +760,14 @@ visual collisions and unplayable states are the biggest bug class.
   (lowhp dev cheat): defeat banner, summary, Unlock/View Run plates.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-060: small enemies are hard to drop cards on with a finger
+
+- **Where**: act 1 slimes (a 1/12 hp slime is about 60 units wide).
+- **Symptom**: a drag released a thumb's width off the sprite left the card
+  in targeting mode (arrow up) and the next tap cancelled it; the same drag
+  onto the sprite's body played the card.
+- **Idea**: grow the creature hover/drop hitboxes to a touch minimum on
+  Android (NCreature hitbox control), or accept a release within a margin
+  of the nearest enemy.
+- **Status**: open
