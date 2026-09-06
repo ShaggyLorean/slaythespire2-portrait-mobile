@@ -4346,11 +4346,23 @@ internal static class PortraitCardPick
 [HarmonyPatch(typeof(NMapScreen), "UpdateScrollPosition")]
 internal static class MapScrollRangePatch
 {
-    internal const float PortraitAllowance = 780f;
+    // 780 was measured on the 2596-tall canvas (bottom row just above the
+    // legend); the allowance is the height beyond a 1816-tall canvas so a
+    // 16:9 phone (2098) gets 282 and the row still lands on screen.
+    private const float ReferenceHeight = 1816f;
+
+    internal static float LowerBound()
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return -600f;
+        return -600f + Math.Max(0f, canvas.Y - ReferenceHeight);
+    }
 
     private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
     {
         var portrait = OperatingSystem.IsAndroid();
+        var lowerBound = AccessTools.Method(typeof(MapScrollRangePatch), nameof(LowerBound));
         foreach (var instruction in instructions)
         {
             if (portrait
@@ -4358,7 +4370,7 @@ internal static class MapScrollRangePatch
                 && instruction.operand is float f
                 && Math.Abs(f + 600f) < 0.01f)
             {
-                yield return new CodeInstruction(System.Reflection.Emit.OpCodes.Ldc_R4, -600f + PortraitAllowance);
+                yield return new CodeInstruction(System.Reflection.Emit.OpCodes.Call, lowerBound);
                 continue;
             }
             yield return instruction;
