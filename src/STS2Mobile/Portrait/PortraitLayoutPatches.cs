@@ -554,7 +554,7 @@ internal static class PortraitMainMenu
     // reads as a gap under the logo and a gap over the skyline at once.
     // Raised from 0.36 when the multiplayer row left the menu: four rows at
     // the old bias floated high and left a dead band above the bottom edge.
-    private const float MenuBlockBandBias = 0.62f;
+    private const float MenuBlockBandBias = 0.88f;
     private const float LogoTopRatio = 0.18f;
     private const float LogoScale = 0.42f;
     private const float LogoCenterOffset = 460f;
@@ -4449,7 +4449,22 @@ internal static class GridSelectTickboxPatch
 internal static class CardRewardScreenPatch
 {
     private static void Postfix(object __instance)
-        => PortraitCardPick.EnsureLoop((Control)__instance);
+    {
+        // AfterOverlayOpened tweens the Skip plate's position for 0.5 s with
+        // a Back ease toward its authored spot; the portrait loop re-places
+        // it every frame, and the two writers made the plate bounce up and
+        // down until the tween ended. Drop the tween; the loop places it.
+        try
+        {
+            if (Traverse.Create(__instance).Field("_buttonTween").GetValue() is Tween tween && tween.IsValid())
+                tween.Kill();
+        }
+        catch
+        {
+            // Field gone after a game update: the bounce returns, nothing breaks.
+        }
+        PortraitCardPick.EnsureLoop((Control)__instance);
+    }
 }
 
 [HarmonyPatch(
