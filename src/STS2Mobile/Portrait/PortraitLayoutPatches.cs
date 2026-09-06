@@ -3773,6 +3773,34 @@ internal static class MerchantClosePatch
 {
     private static void Prefix(object __instance)
         => ((Node)__instance).SetMeta("sts2_portrait_shop_closed", true);
+
+    // Close slides the slots to y -1000, the authored panel height; the
+    // portrait panel is about twice that, so its lower half stayed on the
+    // room. Swap the game's tween for one that clears the whole panel.
+    private static void Postfix(object __instance)
+    {
+        if (__instance is not Node inventory || !PortraitDisplay.IsPortrait(PortraitDisplay.CanvasSize))
+            return;
+        try
+        {
+            var t = Traverse.Create(inventory);
+            if (t.Field("_inventoryTween").GetValue() is Tween old && old.IsValid())
+                old.Kill();
+            var slots = t.Field("_slotsContainer").GetValue<Control>();
+            var backstop = t.Field("_backstop").GetValue<Control>();
+            if (slots is null)
+                return;
+            var tween = inventory.GetTree().CreateTween().SetParallel();
+            if (backstop is not null)
+                tween.TweenProperty(backstop, "modulate:a", 0f, 0.8).SetEase(Tween.EaseType.InOut).SetTrans(Tween.TransitionType.Sine);
+            tween.TweenProperty(slots, "position:y", -(slots.Size.Y + 120f), 0.5).SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Cubic);
+            t.Field("_inventoryTween").SetValue(tween);
+        }
+        catch (Exception e)
+        {
+            PatchHelper.Log($"[Portrait] shop close slide failed: {e.Message}");
+        }
+    }
 }
 
 [HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom), "_Ready")]
@@ -3788,6 +3816,19 @@ internal static class MerchantRoomPatch
                 return;
             background.PivotOffset = background.Size * 0.5f;
             background.Scale = Vector2.One * 1.75f;
+            // The inventory parks its slots at y -1000 (its authored height)
+            // whenever it is closed, in _Ready and at the end of Close; the
+            // portrait panel is about 2100 tall, so its lower half hung over
+            // the room. A closed inventory keeps its panel fully above the
+            // screen; the open animation starts from there just the same.
+            if (PortraitNodes.FindByType(room, "NMerchantInventory") is Node inventory
+                && PortraitNodes.FindControl(inventory, "SlotsContainer") is { } slots)
+            {
+                var open = Traverse.Create(inventory).Property("IsOpen").GetValue() is true;
+                var parkY = -(slots.Size.Y + 120f);
+                if (!open && slots.Position.Y > parkY + 0.5f && !inventory.HasMeta("sts2_portrait_shop_loop"))
+                    slots.Position = new Vector2(slots.Position.X, parkY);
+            }
         });
     }
 }

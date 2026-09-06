@@ -701,3 +701,18 @@ visual collisions and unplayable states are the biggest bug class.
   and 16:9 (deck view), smith grid with and without a preview, rest site.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-056: shop panel's lower half stayed over the merchant room
+
+- **Symptom**: after leaving the shop (and right after entering the room
+  on a resume) the lower half of the inventory panel, cards and shelves
+  included, hung over the room scene; Proceed was covered.
+- **Cause**: the inventory parks its slots at y -1000 (its authored
+  height) in _Ready and slides there on Close; the portrait panel is about
+  2100 tall, so 1100 of it stayed on screen.
+- **Fix**: a Close postfix swaps the game's tween for one that slides the
+  panel fully above the screen, and the merchant room loop keeps a closed
+  inventory's panel parked above the screen (resting state after resume).
+  Verified on device: clean room after resume and after open/close.
+- **Status**: verified
+- **Fixed in**: 0.4.0
