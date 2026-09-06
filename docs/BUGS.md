@@ -716,3 +716,11 @@ visual collisions and unplayable states are the biggest bug class.
   Verified on device: clean room after resume and after open/close.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-057: confirmation modals ("Are you sure?") are authored small
+
+- **Where**: main menu Abandon Run confirmation (and, by construction, the
+  other NModal dialogs).
+- **Symptom**: the panel is about 40 percent of the canvas width with two
+  small No/Yes plates; fine for a mouse, small for a thumb.
+- **Status**: open (seen 2026-09-06; not yet measured)
