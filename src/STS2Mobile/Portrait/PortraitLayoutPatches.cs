@@ -2562,8 +2562,14 @@ internal static class PortraitTopBar
         // The map draws OVER the event room without hiding it, and the deep
         // event scrim hung over the map's top third; event depth only applies
         // while the event is actually the screen being read.
+        // Ancient rooms are event rooms too, but their layout has no prose
+        // block; the "Title" found there belonged to the whole layout and
+        // the measured depth covered the screen (every ancient read at 60
+        // percent brightness). They keep the default depth.
         if (PortraitSceneCache.FindByType(bar.GetTree().Root, "NEventRoom") is { Visible: true } eventRoom
             && PortraitSceneCache.FindByType(bar.GetTree().Root, "NMapScreen")
+                is not Control { Visible: true }
+            && PortraitSceneCache.FindByType(bar.GetTree().Root, "NAncientEventLayout")
                 is not Control { Visible: true }
             && PortraitNodes.FindControl(eventRoom, "Title")?.GetParent() is Control prose
             && prose.IsVisibleInTree())

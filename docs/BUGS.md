@@ -561,3 +561,18 @@ visual collisions and unplayable states are the biggest bug class.
   no plate overlap, rows above the safe bottom.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-048: ancient events rendered at 60 percent brightness
+
+- **Symptom**: every act ancient (Neow, Tezcatara) showed a dark scene with
+  grey dialogue and dim option text; the speaker art was barely visible.
+- **Cause**: the top-bar backdrop's event branch measures the event prose
+  block by finding a "Title" node in the event room. Ancient rooms are
+  event rooms too but have no prose block; the "Title" found there sat in
+  the whole layout, so the measured depth covered the full screen (2656)
+  and the scrim dimmed everything under the bar.
+- **Fix**: the prose branch skips rooms with a visible NAncientEventLayout;
+  they keep the bar-band depth. Verified on device: white text (255,246,226)
+  on both the bubble and the options, the scene art lit.
+- **Status**: verified
+- **Fixed in**: 0.4.0
