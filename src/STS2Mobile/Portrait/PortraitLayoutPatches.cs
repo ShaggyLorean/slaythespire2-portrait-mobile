@@ -5001,6 +5001,47 @@ internal static class CreatureHitboxPatch
     }
 }
 
+// Card Library (compendium): the grid starts at the top edge, so its first
+// row sat under the cutout band, and the back tab parked bottom-left. The
+// grid's YOffset moves the first row under the safe inset (no bar on this
+// screen) and the tab goes onto the footer strip baseline.
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.CardLibrary.NCardLibrary), "OnSubmenuOpened")]
+internal static class CardLibraryPatch
+{
+    private static void Postfix(Control __instance)
+    {
+        var canvas = PortraitDisplay.CanvasSize;
+        if (!PortraitDisplay.IsPortrait(canvas))
+            return;
+        try
+        {
+            if (!__instance.HasMeta("Sts2PortraitLibraryOffset")
+                && PortraitNodes.FindControl(__instance, "CardGrid") is { } grid
+                && grid.Size.Y > 1f)
+            {
+                __instance.SetMeta("Sts2PortraitLibraryOffset", true);
+                var contentTop = PortraitDisplay.SafeTop() + 24f;
+                var firstRowTop = grid.GlobalPosition.Y + 80f;
+                var current = (int)(Traverse.Create(grid).Property("YOffset").GetValue() ?? 0);
+                var shift = (int)Math.Max(0f, contentTop - firstRowTop);
+                Traverse.Create(grid).Property("YOffset").SetValue(current + shift);
+                AccessTools.Method(grid.GetType(), "ReflowColumns")?.Invoke(grid, null);
+            }
+            // The sidebar's tickboxes own the bottom-left corner here, so the
+            // tab takes the bottom-right, under the scrollbar's end.
+            if (PortraitNodes.FindControl(__instance, "BackButton") is { } back)
+            {
+                var baseline = PortraitHudMetrics.ContentBottom(canvas.Y, PortraitDisplay.SafeBottom()) - 60f;
+                PortraitNodes.PlaceBackTab(back, new Vector2(canvas.X - 200f - PortraitHudMetrics.EdgeMargin, baseline - 110f));
+            }
+        }
+        catch (Exception e)
+        {
+            PatchHelper.Log($"[Portrait] card library pass failed: {e.Message}");
+        }
+    }
+}
+
 // Timeline intro (first epoch unlock): a full-rect rich label holding one
 // long centered line that ran off both edges, and a 260x58 Proceed plate
 // tweened to y 920, above the text. AnimateTutorial builds one tween for

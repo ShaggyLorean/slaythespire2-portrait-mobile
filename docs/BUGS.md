@@ -799,3 +799,12 @@ visual collisions and unplayable states are the biggest bug class.
   on device.
 - **Status**: verified
 - **Fixed in**: 0.4.0
+
+## BUG-063: Card Library grid started under the cutout, back tab bottom-left
+
+- **Fix**: CardLibraryPatch (OnSubmenuOpened) shifts the grid's YOffset so
+  the first row starts under the safe inset and parks the back tab on the
+  footer strip at the bottom-right (the sidebar's tickboxes own the
+  bottom-left). Verified on device.
+- **Status**: verified
+- **Fixed in**: 0.4.0
