@@ -114,6 +114,8 @@ internal static class PortraitDisplay
                                 if (t.Property("IsAlive").GetValue() is true)
                                 {
                                     t.Property("CurrentHp").SetValue(1);
+                                    // Block would still soak a 1-hp strike.
+                                    try { t.Property("Block").SetValue(0); } catch { }
                                     weakened++;
                                 }
                             }
